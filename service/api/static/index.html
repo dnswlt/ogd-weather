@@ -8,45 +8,52 @@
     <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Vega charts -->
+    <!-- Vega -->
     <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
 
     <!-- htmx -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js"
+        integrity="sha384-Akqfrbj/HpNVo8k11SXBb6TlBWmXXlYQrCSqEWmyKJe+hDm3Z/B2WVG4smwBkRVm"
+        crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/htmx-ext-path-params@2.0.0/path-params.js"></script>
 </head>
 
-<body>
-    <div>
-        <h1>Temperature Chart</h1>
+
+<body class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <main class="w-full max-w-xl space-y-6 bg-white shadow rounded-xl p-6">
+
+        <h1 class="text-2xl font-semibold text-center">Temperature Chart</h1>
 
         <!-- Controls -->
-        <div>
-            <!-- Dropdown -->
-            <div>
-                <label for="station">Select Station</label>
-                <select id="station" name="station" hx-get="/stations" hx-trigger="load" hx-target="#station"
-                    hx-swap="innerHTML">
-                    <option>Loading...</option>
+        <form class="space-y-4" hx-ext="path-params">
+
+            <!-- Station selector -->
+            <div class="grid grid-cols-3 gap-3 items-center">
+                <label for="station" class="col-span-1 font-medium">Station</label>
+
+                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full" hx-get="/stations"
+                    hx-trigger="load" hx-target="#station" hx-swap="innerHTML">
+                    <option>Loading…</option>
                 </select>
             </div>
 
-            <!-- Button -->
-            <div>
-                <button hx-get="/stations/ber/charts/temperature" hx-trigger="click" hx-target="#chart-script"
-                    hx-swap="outerHTML">
-                    Load Chart
-                </button>
-            </div>
-        </div>
+            <!-- Load chart button -->
+            <button type="button" class="w-full py-2 rounded bg-blue-600 text-white disabled:bg-gray-300 transition"
+                hx-get="/stations/{station}/charts/temperature" hx-target="#chart-script" hx-swap="outerHTML"
+                hx-include="closest form">
+                Load Chart
+            </button>
+        </form>
 
         <!-- Chart area -->
         <div>
             <div id="chart-script"></div>
-            <div id="chart"></div>
+            <div id="chart" class="w-full"></div>
         </div>
-    </div>
+
+    </main>
 
 </body>
 
