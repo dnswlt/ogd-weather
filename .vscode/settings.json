@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": "service/charts/.venv/bin/python3",
+  "[python]": {
+    "editor.formatOnSave": true
+  }
+}

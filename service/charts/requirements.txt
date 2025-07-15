@@ -1,0 +1,6 @@
+altair
+fastapi
+numpy
+pandas
+requests
+uvicorn[standard]
