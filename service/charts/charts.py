@@ -13,6 +13,10 @@ class StationNotFoundError(ValueError):
     """Raised when a requested station doesn't exist."""
 
 
+class NoDataError(ValueError):
+    """Raised when a request is valid, but no data is available."""
+
+
 def read_timeseries_csv(filename: str) -> pd.DataFrame:
     """Reads a CSV file from Swiss Meteo, parsing date columns and using the right (cp1252) encoding."""
     df = pd.read_csv(
@@ -26,7 +30,7 @@ def read_timeseries_csv(filename: str) -> pd.DataFrame:
 
 
 @functools.cache
-def read_meta_stations(filename: str) -> list[models.Station]:
+def read_stations(filename: str) -> list[models.Station]:
     """Reads the metadata CSV (typically ogd-smn_meta_stations.csv) and returns the station_abbr column."""
     df = pd.read_csv(filename, sep=";", encoding="cp1252")
     stations = [
@@ -40,7 +44,7 @@ def read_meta_stations(filename: str) -> list[models.Station]:
     return sorted(stations, key=attrgetter("abbr"))
 
 
-def read_station(base_dir: str, station_abbr: str = "ber") -> pd.DataFrame:
+def read_station_data(base_dir: str, station_abbr: str = "ber") -> pd.DataFrame:
     filename = os.path.join(
         base_dir, f"ogd-smn_{station_abbr.lower()}_d_historical.csv"
     )
@@ -56,12 +60,12 @@ def extract_temperature(df: pd.DataFrame) -> pd.DataFrame:
         "tre200dx": "temp_2m_max",
         "tre200dn": "temp_2m_min",
     }
-    return df.rename(columns=column_renames)
+    return df.rename(columns=column_renames).dropna()
 
 
 def extract_precipitation(df):
     df = df[["rka150d0"]]
-    return df.rename(columns={"rka150d0": "precip_mm"})
+    return df.rename(columns={"rka150d0": "precip_mm"}).dropna()
 
 
 def annual_agg(df, func):
@@ -134,15 +138,22 @@ def create_chart(
     chart = (
         (lines + trend)
         .add_params(highlight)
-        .properties(width=800, height=400, title=title)
+        .properties(
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+            title=title,
+        )
     )
 
     return chart
 
 
 def temperature_chart(station_abbr: str, month: int = 6):
-    data = read_station(BASE_DIR, station_abbr)
+    data = read_station_data(BASE_DIR, station_abbr)
     temp = extract_temperature(data)
+    if temp.empty:
+        raise NoDataError(f"No temperature data for {station_abbr}")
+
     temp_m = monthly_average(temp, month)
 
     trend = polyfit_columns(temp_m, deg=1)
@@ -158,9 +169,7 @@ def temperature_chart(station_abbr: str, month: int = 6):
 
 
 def list_stations(cantons: list[str] = None):
-    all_stations = read_meta_stations(
-        os.path.join(BASE_DIR, "ogd-smn_meta_stations.csv")
-    )
+    all_stations = read_stations(os.path.join(BASE_DIR, "ogd-smn_meta_stations.csv"))
     if not cantons:
         return all_stations
     cantons = set(c.upper() for c in cantons)

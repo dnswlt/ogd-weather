@@ -22,6 +22,14 @@ async def station_not_found_handler(request, exc: charts.StationNotFoundError):
     )
 
 
+@app.exception_handler(charts.NoDataError)
+async def station_not_found_handler(request, exc: charts.NoDataError):
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": str(exc)},
+    )
+
+
 @app.get("/stations/{station_abbr}/charts/{chart_type}")
 async def get_chart(station_abbr: str, chart_type: str):
     if chart_type == "temperature":

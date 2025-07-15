@@ -71,6 +71,9 @@ func (s *Server) serveChartSnippet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		http.Error(w, "", resp.StatusCode)
+	}
 
 	spec, err := io.ReadAll(resp.Body)
 	if err != nil {
