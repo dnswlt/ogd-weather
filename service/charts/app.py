@@ -32,3 +32,13 @@ async def get_chart(station_abbr: str, chart_type: str):
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f"Invalid chart type (must be one of [{','.join(valid_charts)}])",
     )
+
+
+@app.get("/stations")
+async def list_stations(cantons: str = None):
+    if cantons:
+        cantons = cantons.split(",")
+    stations = charts.list_stations(cantons=cantons)
+    return {
+        "stations": stations,
+    }

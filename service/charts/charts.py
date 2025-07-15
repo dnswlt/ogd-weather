@@ -1,9 +1,10 @@
+from operator import attrgetter
 import altair as alt
-from concurrent.futures import ThreadPoolExecutor
+import functools
 import numpy as np
 import os
 import pandas as pd
-from urllib.parse import urlparse
+from . import models
 
 BASE_DIR = os.environ.get("OGD_BASE_DIR", ".")
 
@@ -22,6 +23,21 @@ def read_timeseries_csv(filename: str) -> pd.DataFrame:
         date_format="%d.%m.%Y %H:%M",
     )
     return df.set_index("reference_timestamp").sort_index()
+
+
+@functools.cache
+def read_meta_stations(filename: str) -> list[models.Station]:
+    """Reads the metadata CSV (typically ogd-smn_meta_stations.csv) and returns the station_abbr column."""
+    df = pd.read_csv(filename, sep=";", encoding="cp1252")
+    stations = [
+        models.Station(
+            abbr=row["station_abbr"],
+            name=row["station_name"],
+            canton=row["station_canton"],
+        )
+        for _, row in df.iterrows()
+    ]
+    return sorted(stations, key=attrgetter("abbr"))
 
 
 def read_station(base_dir: str, station_abbr: str = "ber") -> pd.DataFrame:
@@ -139,3 +155,13 @@ def temperature_chart(station_abbr: str, month: int = 6):
         title="Temperatures in given month (5y rolling avg + trendline)",
         y_label="temperature",
     ).to_dict()
+
+
+def list_stations(cantons: list[str] = None):
+    all_stations = read_meta_stations(
+        os.path.join(BASE_DIR, "ogd-smn_meta_stations.csv")
+    )
+    if not cantons:
+        return all_stations
+    cantons = set(c.upper() for c in cantons)
+    return [s for s in all_stations if s.canton in cantons]

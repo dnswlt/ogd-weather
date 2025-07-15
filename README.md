@@ -1,2 +1,3 @@
 # ogd-weather
-Fun with Open Data from MeteoSwiss
+
+Fun with Open Data from MeteoSwiss.
