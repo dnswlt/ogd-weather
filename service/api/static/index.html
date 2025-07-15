@@ -1,37 +1,53 @@
 <!DOCTYPE html>
-<html>
-  <head>
+<html lang="en">
+
+<head>
     <meta charset="utf-8" />
     <title>Temperature Chart</title>
+
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
     <!-- Vega charts -->
     <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+
     <!-- htmx -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-  </head>
-  <body>
-    <h1>Temperature Chart</h1>
+</head>
 
-    <!-- Dropdown to select station -->
-    <select id="station" name="station">
-      <option value="ber">BER</option>
-      <option value="zrh">ZRH</option>
-    </select>
+<body>
+    <div>
+        <h1>Temperature Chart</h1>
 
-    <!-- Button fetches JSON dynamically -->
-    <button
-      hx-get="/stations/ber/charts/temperature"
-      hx-trigger="click"
-      hx-target="#chart-script"
-      hx-swap="outerHTML">
-      Load Chart
-    </button>
+        <!-- Controls -->
+        <div>
+            <!-- Dropdown -->
+            <div>
+                <label for="station">Select Station</label>
+                <select id="station" name="station" hx-get="/stations" hx-trigger="load" hx-target="#station"
+                    hx-swap="innerHTML">
+                    <option>Loading...</option>
+                </select>
+            </div>
 
-    <!-- This will get replaced with a <script> by htmx -->
-    <div id="chart-script"></div>
+            <!-- Button -->
+            <div>
+                <button hx-get="/stations/ber/charts/temperature" hx-trigger="click" hx-target="#chart-script"
+                    hx-swap="outerHTML">
+                    Load Chart
+                </button>
+            </div>
+        </div>
 
-    <!-- Container for Vega -->
-    <div id="chart"></div>
-  </body>
+        <!-- Chart area -->
+        <div>
+            <div id="chart-script"></div>
+            <div id="chart"></div>
+        </div>
+    </div>
+
+</body>
+
 </html>
