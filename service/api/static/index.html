@@ -3,23 +3,35 @@
   <head>
     <meta charset="utf-8" />
     <title>Temperature Chart</title>
+    <!-- Vega charts -->
     <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+    <!-- htmx -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   </head>
   <body>
-    <h1>Temperature Chart for BER</h1>
+    <h1>Temperature Chart</h1>
+
+    <!-- Dropdown to select station -->
+    <select id="station" name="station">
+      <option value="ber">BER</option>
+      <option value="zrh">ZRH</option>
+    </select>
+
+    <!-- Button fetches JSON dynamically -->
+    <button
+      hx-get="/stations/ber/charts/temperature"
+      hx-trigger="click"
+      hx-target="#chart-script"
+      hx-swap="outerHTML">
+      Load Chart
+    </button>
+
+    <!-- This will get replaced with a <script> by htmx -->
+    <div id="chart-script"></div>
+
+    <!-- Container for Vega -->
     <div id="chart"></div>
-
-    <script>
-      const chartUrl = "/stations/ber/charts/temperature";
-
-      fetch(chartUrl)
-        .then((response) => response.json())
-        .then((spec) => {
-          vegaEmbed("#chart", spec, { actions: false });
-        })
-        .catch((err) => console.error("Failed to load chart:", err));
-    </script>
   </body>
 </html>

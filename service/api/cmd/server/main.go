@@ -2,22 +2,15 @@ package main
 
 import (
 	"log"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
+
+	"github.com/dnswlt/ogd-weather/service/api"
 )
 
 func main() {
-	// Static file handler
-	fs := http.FileServer(http.Dir("static"))
-	http.Handle("/", fs)
+	server, err := api.NewServer("127.0.0.1:8080", "http://127.0.0.1:8000")
+	if err != nil {
+		log.Fatalf("Error creating server: %v", err)
 
-	// Reverse proxy to FastAPI for /stations/*
-	target, _ := url.Parse("http://127.0.0.1:8000")
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	http.Handle("/stations/", proxy)
-
-	log.Println("Go API server on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	}
+	log.Fatal(server.Serve())
 }
