@@ -143,6 +143,7 @@ def create_chart(
             autosize={"type": "fit", "contains": "padding"},
             title=title,
         )
+        .interactive()
     )
 
     return chart

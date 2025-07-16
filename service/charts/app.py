@@ -31,9 +31,9 @@ async def station_not_found_handler(request, exc: charts.NoDataError):
 
 
 @app.get("/stations/{station_abbr}/charts/{chart_type}")
-async def get_chart(station_abbr: str, chart_type: str):
+async def get_chart(station_abbr: str, chart_type: str, month: int = 6):
     if chart_type == "temperature":
-        return charts.temperature_chart(station_abbr, month=6)
+        return charts.temperature_chart(station_abbr, month=month)
 
     valid_charts = ["temperature"]
     raise HTTPException(

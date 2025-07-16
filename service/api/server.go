@@ -65,7 +65,10 @@ func acceptsHTML(accept string) bool {
 
 func (s *Server) serveChartSnippet(w http.ResponseWriter, r *http.Request) {
 	// Call the Python backend to get the JSON Vega spec
-	resp, err := http.Get(s.chartServiceEndpoint.String() + r.URL.Path)
+	u := *s.chartServiceEndpoint
+	u.Path = r.URL.Path
+	u.RawQuery = r.URL.RawQuery
+	resp, err := http.Get(u.String())
 	if err != nil {
 		http.Error(w, "Backend error", http.StatusInternalServerError)
 		return
