@@ -1,0 +1,3 @@
+{{range $index, $s := .Stations}}
+<option value="{{$s.Abbr}}" {{if eq $index 0}}selected{{end}}>{{$s.Name}} {{$s.Canton}} ({{$s.Abbr}})</option>
+{{end}}

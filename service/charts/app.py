@@ -34,8 +34,10 @@ async def station_not_found_handler(request, exc: charts.NoDataError):
 async def get_chart(station_abbr: str, chart_type: str, month: int = 6):
     if chart_type == "temperature":
         return charts.temperature_chart(station_abbr, month=month)
+    elif chart_type == "precipitation":
+        return charts.precipitation_chart(station_abbr, month=month)
 
-    valid_charts = ["temperature"]
+    valid_charts = ["temperature", "precipitation"]
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f"Invalid chart type (must be one of [{','.join(valid_charts)}])",

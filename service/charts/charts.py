@@ -54,6 +54,13 @@ def read_station_data(base_dir: str, station_abbr: str = "ber") -> pd.DataFrame:
 
 
 def extract_temperature(df: pd.DataFrame) -> pd.DataFrame:
+    """Returns temperature min/mean/max data from df.
+
+    Columns names are:
+        * temp_2m_min - the daily min temperature at 2 meters
+        * temp_2m_mean - the daily mean temperature at 2 meters
+        * temp_2m_max - the daily max temperature at 2 meters
+    """
     df = df[["tre200d0", "tre200dx", "tre200dn"]]
     column_renames = {
         "tre200d0": "temp_2m_mean",
@@ -64,6 +71,7 @@ def extract_temperature(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def extract_precipitation(df):
+    """Returns precipitation data from df in columns ["precip_mm"]."""
     df = df[["rka150d0"]]
     return df.rename(columns={"rka150d0": "precip_mm"}).dropna()
 
@@ -83,6 +91,11 @@ def monthly_average(df, month):
 def monthly_sum(df, month):
     """Returns a DataFrame with one row per year containing cumulative values for the given month (1 = January)."""
     return annual_agg(df[df.index.month == month], "sum")
+
+
+def long_format(df):
+    index_name = df.index.name
+    return df.reset_index().melt(id_vars=index_name)
 
 
 def rolling_mean_long(df, window=5):
@@ -105,7 +118,7 @@ def polyfit_columns(df, deg=1):
     return pd.DataFrame(trend, index=df.index)
 
 
-def create_chart(
+def create_chart_trendline(
     values_long, trend_long, y_label="value", title="Untitled chart"
 ) -> alt.LayerChart:
     highlight = alt.selection_point(fields=["variable"], bind="legend")
@@ -149,7 +162,27 @@ def create_chart(
     return chart
 
 
+MONTH_NAMES = [
+    "",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
+
 def temperature_chart(station_abbr: str, month: int = 6):
+    if month < 1 or month > 12:
+        raise ValueError(f"Invalid month: {month}")
+
     data = read_station_data(BASE_DIR, station_abbr)
     temp = extract_temperature(data)
     if temp.empty:
@@ -161,12 +194,80 @@ def temperature_chart(station_abbr: str, month: int = 6):
     trend_long = trend.reset_index().melt(id_vars="year")
     rolling_long = rolling_mean_long(temp_m)
 
-    return create_chart(
+    return create_chart_trendline(
         rolling_long,
         trend_long,
-        title="Temperatures in given month (5y rolling avg + trendline)",
+        title=f"Temperatures in {MONTH_NAMES[month]} (5y rolling avg + trendline)",
         y_label="temperature",
     ).to_dict()
+
+
+def precipitation_chart(station_abbr: str, month: int = 6):
+    if month < 1 or month > 12:
+        raise ValueError(f"Invalid month: {month}")
+
+    data = read_station_data(BASE_DIR, station_abbr)
+    temp = extract_temperature(data)[["temp_2m_mean"]]
+    precip = extract_precipitation(data)
+
+    if temp.empty:
+        raise NoDataError(f"No temperature data for {station_abbr}")
+    if precip.empty:
+        raise NoDataError(f"No precipitation data for {station_abbr}")
+
+    temp_long = long_format(monthly_average(temp, month))
+    precip_long = long_format(monthly_average(precip, month))
+
+    min_year = max(temp_long["year"].min(), precip_long["year"].min())
+    temp_long = temp_long[temp_long["year"] >= min_year]
+    precip_long = precip_long[precip_long["year"] >= min_year]
+
+    highlight = alt.selection_point(fields=["variable"], bind="legend")
+
+    color_scale = alt.Scale(
+        domain=["precip_mm", "temp_2m_mean"], range=["steelblue", "firebrick"]
+    )
+
+    precip_bars = (
+        alt.Chart(precip_long)
+        .mark_bar(size=10)  # make bars a little wider
+        .encode(
+            x=alt.X("year:Q").axis(format="d"),
+            y=alt.Y("value:Q").axis(title="Precipitation (mm)"),
+            color=alt.Color(
+                "variable:N", scale=color_scale, legend=alt.Legend(title="Variable")
+            ),
+            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
+            tooltip=["year:Q", "variable:N", "value:Q"],
+        )
+    )
+
+    print(temp_long)
+    temp_lines = (
+        alt.Chart(temp_long)
+        .mark_line()
+        .encode(
+            x=alt.X("year:Q").axis(format="d"),
+            y=alt.Y("value:Q").axis(title="Mean Temp (°C)"),
+            color=alt.Color("variable:N", scale=color_scale, legend=None),
+            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
+            tooltip=["year:Q", "variable:N", "value:Q"],
+        )
+    )
+
+    chart = (
+        alt.layer(precip_bars, temp_lines)
+        .resolve_scale(y="independent")
+        .add_params(highlight)
+        .properties(
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+            title=f"Monthly precipitation in {MONTH_NAMES[month]}",
+        )
+        .interactive()
+    )
+
+    return chart.to_dict()
 
 
 def list_stations(cantons: list[str] = None):

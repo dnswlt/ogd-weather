@@ -25,8 +25,7 @@
         <h1 class="text-2xl font-semibold text-center">Temperature Chart</h1>
 
         <!-- controls -->
-        <form class="space-y-4" hx-ext="path-params" hx-get="/stations/{station}/charts/temperature"
-            hx-trigger="change from:#station, change from:#month" hx-target="#chart-script" hx-swap="outerHTML">
+        <form class="space-y-4" id="chart-controls">
 
             <!-- Station -->
             <div class="grid grid-cols-3 gap-3 items-center">
@@ -34,7 +33,7 @@
 
                 <select id="station" name="station" class="col-span-2 border rounded p-2 w-full" hx-get="/stations"
                     hx-trigger="load" hx-target="#station" hx-swap="innerHTML">
-                    <option>Loading...</option>
+                    <option value="">Loading...</option>
                 </select>
             </div>
 
@@ -59,13 +58,52 @@
             </div>
         </form>
 
-        <!-- chart area -->
+        <!-- charts -->
         <div>
-            <div id="chart-script" hx-get="/stations/ABO/charts/temperature" hx-trigger="load"></div>
-            <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-            <div id="chart" class="w-full overflow-hidden"></div>
+            <div>
+                <div id="temperature-chart-script-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
+                    hx-trigger="change from:#station, change from:#month"
+                    hx-get="/stations/{station}/charts/temperature">
+                    <!-- <script> element with Vega from the backend goes here. -->
+                </div>
+                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
+                <div id="temperature-chart" class="w-full overflow-hidden">
+                    <!-- Under Vega's control. Chart goes here. -->
+                </div>
+            </div>
+            <div>
+                <div id="precipitation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
+                    hx-trigger="change from:#station, change from:#month"
+                    hx-get="/stations/{station}/charts/precipitation">
+                    <!-- <script> element with Vega code from the backend goes here. -->
+                </div>
+                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
+                <div id="precipitation-chart" class="w-full overflow-hidden">
+                    <!-- Under Vega's control. Chart goes here. -->
+                </div>
+            </div>
         </div>
     </main>
+
+    <script>
+        // Auto-load once station options arrive
+        document.body.addEventListener('htmx:afterSwap', function (evt) {
+            if (evt.target.id === 'station') {
+                const sel = document.getElementById('station');
+                if (!sel) return;
+
+                // Prefer server-selected; else first non-empty option
+                let opt = sel.querySelector('option[selected]');
+                if (!opt) {
+                    opt = Array.from(sel.options).find(o => o.value.trim() !== '');
+                }
+                if (opt) {
+                    sel.value = opt.value;
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        });
+    </script>
 </body>
 
 </html>
