@@ -216,7 +216,7 @@ def precipitation_chart(station_abbr: str, month: int = 6):
         raise NoDataError(f"No precipitation data for {station_abbr}")
 
     temp_long = long_format(monthly_average(temp, month))
-    precip_long = long_format(monthly_average(precip, month))
+    precip_long = long_format(monthly_sum(precip, month))
 
     min_year = max(temp_long["year"].min(), precip_long["year"].min())
     temp_long = temp_long[temp_long["year"] >= min_year]
