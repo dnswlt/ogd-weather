@@ -267,11 +267,3 @@ def precipitation_chart(station_abbr: str, month: int = 6):
     )
 
     return chart.to_dict()
-
-
-def list_stations(cantons: list[str] = None):
-    all_stations = read_stations(os.path.join(BASE_DIR, "ogd-smn_meta_stations.csv"))
-    if not cantons:
-        return all_stations
-    cantons = set(c.upper() for c in cantons)
-    return [s for s in all_stations if s.canton in cantons]

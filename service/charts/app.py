@@ -1,7 +1,12 @@
+from contextlib import asynccontextmanager
+import logging
+import os
+import sqlite3
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from . import charts
+from . import db
 
 
 class ChartRequest(BaseModel):
@@ -9,8 +14,35 @@ class ChartRequest(BaseModel):
     chart_type: str
 
 
+# Global logging config
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("app")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: open SQLite connection once
+    base_dir = os.environ.get("OGD_BASE_DIR", ".")
+    db_path = os.path.join(base_dir, "swissmetnet.sqlite")
+    conn = sqlite3.connect(db_path, check_same_thread=True)
+    logger.info("Connected to sqlite3 at %s", db_path)
+    conn.row_factory = sqlite3.Row
+    app.state.db = conn
+
+    # If charts module needs to initialize something
+    # charts.init_db(conn)
+
+    yield
+
+    # Shutdown: close DB connection cleanly
+    conn.close()
+
+
 # Always create the app, we're running this thing with uvicorn ONLY.
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 
 @app.exception_handler(charts.StationNotFoundError)
@@ -44,10 +76,11 @@ async def get_chart(station_abbr: str, chart_type: str, month: int = 6):
 
 
 @app.get("/stations")
-async def list_stations(cantons: str = None):
+async def list_stations(cantons: str | None = None):
     if cantons:
         cantons = cantons.split(",")
-    stations = charts.list_stations(cantons=cantons)
+
+    stations = db.read_stations(app.state.db, cantons=cantons, exclude_empty=True)
     return {
         "stations": stations,
     }

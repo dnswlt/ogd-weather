@@ -127,6 +127,7 @@ func (s *Server) serveChartSnippet(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serveStationOptions(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.Get(s.chartServiceEndpoint.String() + r.URL.Path)
 	if err != nil {
+		log.Printf("Backend error trying to get stations: %v", err)
 		http.Error(w, "Backend error", http.StatusInternalServerError)
 		return
 	}
@@ -141,6 +142,7 @@ func (s *Server) serveStationOptions(w http.ResponseWriter, r *http.Request) {
 	// Parse JSON
 	var data StationsResponse
 	if err := json.Unmarshal(body, &data); err != nil {
+		log.Printf("Error parsing stations JSON: %v", err)
 		http.Error(w, "Parse backend JSON error", http.StatusInternalServerError)
 		return
 	}
