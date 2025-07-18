@@ -242,7 +242,6 @@ def precipitation_chart(station_abbr: str, month: int = 6):
         )
     )
 
-    print(temp_long)
     temp_lines = (
         alt.Chart(temp_long)
         .mark_line()
