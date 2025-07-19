@@ -15,4 +15,7 @@ class WeatherStats(BaseModel):
     last_date: date
     annual_temp_increase: float
     annual_precip_increase: float
+    coldest_year: int | None = None
     hottest_year: int | None = None
+    driest_year: int | None = None
+    wettest_year: int | None = None

@@ -23,6 +23,22 @@ MEASUREMENT_NAMES = {
     db.PRECIP_DAILY_MM: "precip_mm",
 }
 
+MONTH_NAMES = [
+    "",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
 
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Renames all well-known columns from their ODG SwissMetNet (smn) names to human-readable names.
@@ -125,23 +141,6 @@ def create_chart_trendline(
     return chart
 
 
-MONTH_NAMES = [
-    "",
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-]
-
-
 def temperature_chart(df: pd.DataFrame, station_abbr: str, month: int = 6):
     if month < 1 or month > 12:
         raise ValueError(f"Invalid month: {month}")
@@ -208,7 +207,13 @@ def weather_stats(df: pd.DataFrame, station_abbr: str, month: int = 6):
     first_date = df.index.min().to_pydatetime().date()
     last_date = df.index.max().to_pydatetime().date()
     df_m = monthly_average(df, month)
-    hottest_year = df_m[db.TEMP_DAILY_MEAN].idxmax()
+    min_values = df_m.idxmin()
+    max_values = df_m.idxmax()
+    coldest_year = min_values[db.TEMP_DAILY_MEAN]
+    hottest_year = max_values[db.TEMP_DAILY_MEAN]
+    driest_year = min_values[db.PRECIP_DAILY_MM]
+    wettest_year = max_values[db.PRECIP_DAILY_MM]
+
     coeffs, _ = polyfit_columns(df_m, deg=1)
     return models.WeatherStats(
         station_abbr=station_abbr,
@@ -217,5 +222,8 @@ def weather_stats(df: pd.DataFrame, station_abbr: str, month: int = 6):
         annual_precip_increase=coeffs[db.PRECIP_DAILY_MM].iloc[0],
         first_date=first_date,
         last_date=last_date,
+        coldest_year=coldest_year,
         hottest_year=hottest_year,
+        driest_year=driest_year,
+        wettest_year=wettest_year,
     )
