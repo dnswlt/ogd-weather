@@ -1,9 +1,17 @@
+import re
+import sqlite3
+
+import pandas as pd
+from . import models
+
 import sqlite3
 from . import models
 
-from typing import Optional
-import sqlite3
-from . import models  # Station BaseModel
+# Column names for temperature and precipitation measurements.
+TEMP_DAILY_MEAN = "tre200d0"
+TEMP_DAILY_MIN = "tre200dn"
+TEMP_DAILY_MAX = "tre200dx"
+PRECIP_DAILY_MM = "rre150d0"
 
 
 def read_stations(
@@ -21,8 +29,8 @@ def read_stations(
         SELECT station_abbr, station_name, station_canton
         FROM ogd_smn_station_data_summary
     """
-    filters: list[str] = []
-    params: list = []
+    filters = []
+    params = []
 
     # Canton filter
     if cantons:
@@ -51,3 +59,53 @@ def read_stations(
         )
         for row in rows
     ]
+
+
+def read_daily_historical(
+    conn: sqlite3.Connection,
+    station_abbr: str,
+    columns: list[str] | None = None,
+    month: int | None = None,
+    from_year: int | None = None,
+    to_year: int | None = None,
+) -> pd.DataFrame:
+    if columns is None:
+        columns = [TEMP_DAILY_MEAN, TEMP_DAILY_MIN, TEMP_DAILY_MAX, PRECIP_DAILY_MM]
+
+    # Validate column names to prevent SQL injection
+    if not all(re.search(r"^[a-z][a-zA-Z0-9_]*$", c) for c in columns):
+        raise ValueError(f"Invalid columns: {','.join(columns)}")
+
+    select_columns = ["station_abbr", "reference_timestamp"] + columns
+    sql = f"""
+        SELECT {', '.join(select_columns)}
+        FROM ogd_smn_d_historical
+    """
+    # Filter by station.
+    filters = ["station_abbr = ?"]
+    params = [station_abbr]
+
+    # Filter by month.
+    if month is not None:
+        filters.append(f"strftime('%m', reference_timestamp) = '{month:02d}'")
+
+    if from_year is not None:
+        filters.append(f"date(reference_timestamp) >= date('{from_year:04d}-01-01')")
+    if to_year is not None:
+        filters.append(f"date(reference_timestamp) < date('{to_year+1:04d}-01-01')")
+
+    # Filter out any row that has only NULL measurements.
+    if columns:
+        non_null = " OR ".join(f"{c} IS NOT NULL" for c in columns)
+        filters.append(f"({non_null})")
+
+    sql += " WHERE " + " AND ".join(filters)
+    sql += " ORDER BY reference_timestamp ASC"
+
+    return pd.read_sql(
+        sql,
+        conn,
+        params=params,
+        parse_dates=["reference_timestamp"],
+        index_col="reference_timestamp",
+    )

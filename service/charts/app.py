@@ -54,7 +54,7 @@ async def station_not_found_handler(request, exc: charts.StationNotFoundError):
 
 
 @app.exception_handler(charts.NoDataError)
-async def station_not_found_handler(request, exc: charts.NoDataError):
+async def no_data_error_handler(request, exc: charts.NoDataError):
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": str(exc)},
@@ -63,10 +63,20 @@ async def station_not_found_handler(request, exc: charts.NoDataError):
 
 @app.get("/stations/{station_abbr}/charts/{chart_type}")
 async def get_chart(station_abbr: str, chart_type: str, month: int = 6):
+    station_abbr = station_abbr.upper()
     if chart_type == "temperature":
-        return charts.temperature_chart(station_abbr, month=month)
+        df = db.read_daily_historical(
+            app.state.db,
+            station_abbr,
+            month=month,
+            columns=[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX],
+        )
+        return charts.temperature_chart(df, station_abbr, month=month)
     elif chart_type == "precipitation":
-        return charts.precipitation_chart(station_abbr, month=month)
+        df = db.read_daily_historical(
+            app.state.db, station_abbr, month=month, columns=[db.PRECIP_DAILY_MM]
+        )
+        return charts.precipitation_chart(df, station_abbr, month=month)
 
     valid_charts = ["temperature", "precipitation"]
     raise HTTPException(
@@ -75,12 +85,39 @@ async def get_chart(station_abbr: str, chart_type: str, month: int = 6):
     )
 
 
+@app.get("/stations/{station_abbr}/stats")
+async def get_stats(
+    station_abbr: str,
+    month: int = 6,
+    from_year: int | None = None,
+    to_year: int | None = None,
+):
+    station_abbr = station_abbr.upper()
+    df = db.read_daily_historical(
+        app.state.db,
+        station_abbr,
+        month=month,
+        columns=[
+            db.TEMP_DAILY_MIN,
+            db.TEMP_DAILY_MEAN,
+            db.TEMP_DAILY_MAX,
+            db.PRECIP_DAILY_MM,
+        ],
+        from_year=from_year,
+        to_year=to_year,
+    )
+    return {
+        "stats": charts.weather_stats(df, station_abbr, month=month),
+    }
+
+
 @app.get("/stations")
 async def list_stations(cantons: str | None = None):
+    cantons_list = None
     if cantons:
-        cantons = cantons.split(",")
+        cantons_list = cantons.split(",")
 
-    stations = db.read_stations(app.state.db, cantons=cantons, exclude_empty=True)
+    stations = db.read_stations(app.state.db, cantons=cantons_list, exclude_empty=True)
     return {
         "stations": stations,
     }
