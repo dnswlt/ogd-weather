@@ -1,25 +1,39 @@
 {{with .Response.Summary}}
-<table id="station-summary">
+<table id="station-summary" class="w-full table-auto border-collapse text-sm">
     <tbody>
-        <tr>
-            <td>Station</td>
-            <td>{{.StationAbbr}}</td>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Station
+            </td>
+            <td class="py-2 text-gray-800">{{.StationAbbr}}</td>
+        </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Date range
+            </td>
+            <td class="py-2 text-gray-800">{{.FirstDate}} &ndash; {{.LastDate}}</td>
+        </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. annual temp. increase
+            </td>
+            <td class="py-2 text-gray-800">{{printf "%.2f" .AnnualTempIncrease}} &deg;C</td>
+        </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Coldest year (daily mean)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{.ColdestYear}} ({{printf "%.1f" .ColdestYearTemp}} &deg;C)
+            </td>
         </tr>
         <tr>
-            <td>Date range</td>
-            <td>{{.FirstDate}} &ndash; {{.LastDate}}</td>
-        </tr>
-        <tr>
-            <td>Avg. annual temp. increase</td>
-            <td>{{printf "%.2f" .AnnualTempIncrease}} &deg;C</td>
-        </tr>
-        <tr>
-            <td>Coldest year (daily mean)</td>
-            <td>{{.ColdestYear}} ({{printf "%.1f" .ColdestYearTemp}} &deg;C)</td>
-        </tr>
-        <tr>
-            <td>Warmest year (daily mean)</td>
-            <td>{{.WarmestYear}} ({{printf "%.1f" .WarmestYearTemp}} &deg;C)</td>
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Warmest year (daily mean)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{.WarmestYear}} ({{printf "%.1f" .WarmestYearTemp}} &deg;C)
+            </td>
         </tr>
     </tbody>
 </table>
