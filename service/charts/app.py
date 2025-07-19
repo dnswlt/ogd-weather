@@ -85,8 +85,8 @@ async def get_chart(station_abbr: str, chart_type: str, month: int = 6):
     )
 
 
-@app.get("/stations/{station_abbr}/stats")
-async def get_stats(
+@app.get("/stations/{station_abbr}/summary")
+async def get_summary(
     station_abbr: str,
     month: int = 6,
     from_year: int | None = None,
@@ -107,7 +107,7 @@ async def get_stats(
         to_year=to_year,
     )
     return {
-        "stats": charts.weather_stats(df, station_abbr, month=month),
+        "summary": charts.station_summary(df, station_abbr, month=month),
     }
 
 

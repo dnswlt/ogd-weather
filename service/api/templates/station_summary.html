@@ -1,0 +1,26 @@
+{{with .Response.Summary}}
+<table id="station-summary">
+    <tbody>
+        <tr>
+            <td>Station</td>
+            <td>{{.StationAbbr}}</td>
+        </tr>
+        <tr>
+            <td>Date range</td>
+            <td>{{.FirstDate}} &ndash; {{.LastDate}}</td>
+        </tr>
+        <tr>
+            <td>Avg. annual temp. increase</td>
+            <td>{{printf "%.2f" .AnnualTempIncrease}} &deg;C</td>
+        </tr>
+        <tr>
+            <td>Coldest year (daily mean)</td>
+            <td>{{.ColdestYear}} ({{printf "%.1f" .ColdestYearTemp}} &deg;C)</td>
+        </tr>
+        <tr>
+            <td>Warmest year (daily mean)</td>
+            <td>{{.WarmestYear}} ({{printf "%.1f" .WarmestYearTemp}} &deg;C)</td>
+        </tr>
+    </tbody>
+</table>
+{{end}}

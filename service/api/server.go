@@ -53,7 +53,15 @@ func (s *Server) Serve() error {
 	mux.HandleFunc("GET /stations/{stationID}/charts/{chartType}",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
-				s.serveChartSnippet(w, r)
+				s.serveStationsChartSnippet(w, r)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
+	mux.HandleFunc("GET /stations/{stationID}/summary",
+		func(w http.ResponseWriter, r *http.Request) {
+			if acceptsHTML(r.Header.Get("Accept")) {
+				s.serveSummarySnippet(w, r)
 				return
 			}
 			proxy.ServeHTTP(w, r)
@@ -63,7 +71,7 @@ func (s *Server) Serve() error {
 			accept := r.Header.Get("Accept")
 			if acceptsHTML(accept) {
 				// Serve <option> elements for htmx
-				s.serveStationOptions(w, r)
+				s.serveStationsSnippet(w, r)
 				return
 			}
 			// Otherwise just proxy JSON
@@ -80,15 +88,23 @@ func acceptsHTML(accept string) bool {
 		strings.Contains(accept, "*/*")
 }
 
-func (s *Server) serveChartSnippet(w http.ResponseWriter, r *http.Request) {
+// chartServiceURL creates the forwarding URL to the chart service endpoint
+// for the given original URL targeting this server.
+func (s *Server) chartServiceURL(originalURL *url.URL) *url.URL {
+	u := *s.chartServiceEndpoint
+	u.Path = originalURL.Path
+	u.RawQuery = originalURL.RawQuery
+	return &u
+}
+
+func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Request) {
 	chartType := r.PathValue("chartType")
 
 	// Call the Python backend to get the JSON Vega spec
-	u := *s.chartServiceEndpoint
-	u.Path = r.URL.Path
-	u.RawQuery = r.URL.RawQuery
+	u := s.chartServiceURL(r.URL)
 	resp, err := http.Get(u.String())
 	if err != nil {
+		log.Printf("Backend error for %s: %v", r.URL.Path, err)
 		http.Error(w, "Backend error", http.StatusInternalServerError)
 		return
 	}
@@ -124,10 +140,61 @@ func (s *Server) serveChartSnippet(w http.ResponseWriter, r *http.Request) {
 	w.Write(output.Bytes())
 }
 
-func (s *Server) serveStationOptions(w http.ResponseWriter, r *http.Request) {
+func serveChartServiceURL[Response any](
+	s *Server,
+	w http.ResponseWriter,
+	r *http.Request,
+	templateName string,
+	params map[string]any) {
+
+	u := s.chartServiceURL(r.URL)
+	resp, err := http.Get(u.String())
+	if err != nil {
+		log.Printf("Backend error for %s: %v", r.URL.Path, err)
+		http.Error(w, "Backend error", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		log.Printf("Backend returned status %s for %s.", resp.Status, u.String())
+		http.Error(w, "", resp.StatusCode)
+		return
+	}
+
+	var response Response
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		log.Printf("Chart server returned invalid JSON (want %T): %v", response, err)
+		http.Error(w, "Read backend error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+
+	var output bytes.Buffer
+	templateData := map[string]any{
+		"Response": response,
+	}
+	for k, v := range params {
+		templateData[k] = v
+	}
+	err = s.template.ExecuteTemplate(&output, templateName, templateData)
+	if err != nil {
+		log.Printf("Failed to render template %q: %v", templateName, err)
+		http.Error(w, "Template rendering error", http.StatusInternalServerError)
+		return
+	}
+	w.Write(output.Bytes())
+}
+
+func (s *Server) serveSummarySnippet(w http.ResponseWriter, r *http.Request) {
+	serveChartServiceURL[StationSummaryResponse](s, w, r, "station_summary.html", nil)
+}
+
+func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.Get(s.chartServiceEndpoint.String() + r.URL.Path)
 	if err != nil {
-		log.Printf("Backend error trying to get stations: %v", err)
+		log.Printf("Backend error for %s: %v", r.URL.Path, err)
 		http.Error(w, "Backend error", http.StatusInternalServerError)
 		return
 	}

@@ -24,7 +24,7 @@
     <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
         <h1 class="text-2xl font-semibold text-center">Temperature Chart</h1>
 
-        <!-- controls -->
+        <!-- Controls -->
         <form class="space-y-4" id="chart-controls">
 
             <!-- Station -->
@@ -58,11 +58,20 @@
             </div>
         </form>
 
-        <!-- charts -->
+        <!-- Summary -->
+        <div>
+            <div id="station-summary-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
+                hx-trigger="change from:#station, change from:#month" hx-get="/stations/{station}/summary">
+                <!-- <table> with station weather summary goes here -->
+            </div>
+        </div>
+
+
+        <!-- Charts -->
         <div>
             <div>
-                <div id="temperature-chart-script-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#station, change from:#month"
+                <div id="temperature-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
+                    hx-swap="innerHTML" hx-trigger="change from:#station, change from:#month"
                     hx-get="/stations/{station}/charts/temperature">
                     <!-- <script> element with Vega from the backend goes here. -->
                 </div>
@@ -72,8 +81,8 @@
                 </div>
             </div>
             <div>
-                <div id="precipitation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#station, change from:#month"
+                <div id="precipitation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
+                    hx-swap="innerHTML" hx-trigger="change from:#station, change from:#month"
                     hx-get="/stations/{station}/charts/precipitation">
                     <!-- <script> element with Vega code from the backend goes here. -->
                 </div>

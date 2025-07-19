@@ -193,7 +193,7 @@ def precipitation_chart(df: pd.DataFrame, station_abbr: str, month: int = 6):
     ).to_dict()
 
 
-def weather_stats(df: pd.DataFrame, station_abbr: str, month: int = 6):
+def station_summary(df: pd.DataFrame, station_abbr: str, month: int = 6):
     if month < 1 or month > 12:
         raise ValueError(f"Invalid month: {month}")
     if not (df["station_abbr"] == station_abbr).all():
@@ -207,15 +207,15 @@ def weather_stats(df: pd.DataFrame, station_abbr: str, month: int = 6):
     first_date = df.index.min().to_pydatetime().date()
     last_date = df.index.max().to_pydatetime().date()
     df_m = monthly_average(df, month)
-    min_values = df_m.idxmin()
-    max_values = df_m.idxmax()
-    coldest_year = min_values[db.TEMP_DAILY_MEAN]
-    hottest_year = max_values[db.TEMP_DAILY_MEAN]
-    driest_year = min_values[db.PRECIP_DAILY_MM]
-    wettest_year = max_values[db.PRECIP_DAILY_MM]
+    coldest_year = df_m[db.TEMP_DAILY_MEAN].idxmin()
+    coldest_year_temp = df_m[db.TEMP_DAILY_MEAN].min()
+    warmest_year = df_m[db.TEMP_DAILY_MEAN].idxmax()
+    warmest_year_temp = df_m[db.TEMP_DAILY_MEAN].max()
+    driest_year = df_m[db.PRECIP_DAILY_MM].idxmin()
+    wettest_year = df_m[db.PRECIP_DAILY_MM].idxmax()
 
     coeffs, _ = polyfit_columns(df_m, deg=1)
-    return models.WeatherStats(
+    return models.StationSummary(
         station_abbr=station_abbr,
         month=month,
         annual_temp_increase=coeffs[db.TEMP_DAILY_MEAN].iloc[0],
@@ -223,7 +223,9 @@ def weather_stats(df: pd.DataFrame, station_abbr: str, month: int = 6):
         first_date=first_date,
         last_date=last_date,
         coldest_year=coldest_year,
-        hottest_year=hottest_year,
+        coldest_year_temp=coldest_year_temp,
+        warmest_year=warmest_year,
+        warmest_year_temp=warmest_year_temp,
         driest_year=driest_year,
         wettest_year=wettest_year,
     )

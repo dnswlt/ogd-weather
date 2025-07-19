@@ -8,7 +8,7 @@ class Station(BaseModel):
     canton: str
 
 
-class WeatherStats(BaseModel):
+class StationSummary(BaseModel):
     station_abbr: str
     month: int
     first_date: date
@@ -16,6 +16,8 @@ class WeatherStats(BaseModel):
     annual_temp_increase: float
     annual_precip_increase: float
     coldest_year: int | None = None
-    hottest_year: int | None = None
+    coldest_year_temp: float | None = None
+    warmest_year: int | None = None
+    warmest_year_temp: float | None = None
     driest_year: int | None = None
     wettest_year: int | None = None
