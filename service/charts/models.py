@@ -10,7 +10,7 @@ class Station(BaseModel):
 
 class StationSummary(BaseModel):
     station_abbr: str
-    month: int
+    period: str
     first_date: date
     last_date: date
     annual_temp_increase: float

@@ -17,7 +17,7 @@ type StationsResponse struct {
 
 type StationSummary struct {
 	StationAbbr          string  `json:"station_abbr"`
-	Month                int     `json:"month"`
+	Period               string  `json:"period"`
 	FirstDate            Date    `json:"first_date"`
 	LastDate             Date    `json:"last_date"`
 	AnnualTempIncrease   float64 `json:"annual_temp_increase"`

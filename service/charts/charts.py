@@ -23,21 +23,37 @@ MEASUREMENT_NAMES = {
     db.PRECIP_DAILY_MM: "precip_mm",
 }
 
-MONTH_NAMES = [
-    "",
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-]
+MONTH_NAMES = {
+    1: "January",
+    2: "February",
+    3: "March",
+    4: "April",
+    5: "May",
+    6: "June",
+    7: "July",
+    8: "August",
+    9: "September",
+    10: "October",
+    11: "November",
+    12: "December",
+}
+
+SEASON_NAMES = {
+    "spring": "Spring (Mar-May)",
+    "summer": "Summer (Jun-Aug)",
+    "autumn": "Autumn (Sep-Nov)",
+    "winter": "Winter (Dec-Feb)",
+}
+
+
+def period_to_title(period: str) -> str:
+    if period.isdigit():
+        return MONTH_NAMES[int(period)]
+    elif period in SEASON_NAMES:
+        return SEASON_NAMES[period]
+    elif period == "all":
+        return "Whole Year"
+    return "Unknown Period"
 
 
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -55,14 +71,14 @@ def annual_agg(df, func):
     return df_y
 
 
-def monthly_average(df, month):
-    """Returns a DataFrame with one row per year containing average values for the given month (1 = January)."""
-    return annual_agg(df[df.index.month == month], "mean")
+def period_average(df, period):
+    """Returns a DataFrame with one row per year containing average values for the given period."""
+    return annual_agg(df, "mean")
 
 
-def monthly_sum(df, month):
-    """Returns a DataFrame with one row per year containing cumulative values for the given month (1 = January)."""
-    return annual_agg(df[df.index.month == month], "sum")
+def period_sum(df, period):
+    """Returns a DataFrame with one row per year containing cumulative values for the given period."""
+    return annual_agg(df, "sum")
 
 
 def long_format(df):
@@ -141,9 +157,7 @@ def create_chart_trendline(
     return chart
 
 
-def temperature_chart(df: pd.DataFrame, station_abbr: str, month: int = 6):
-    if month < 1 or month > 12:
-        raise ValueError(f"Invalid month: {month}")
+def temperature_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -153,24 +167,23 @@ def temperature_chart(df: pd.DataFrame, station_abbr: str, month: int = 6):
         df[[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]]
     )
 
-    temp_m = monthly_average(temp, month)
+    temp_m = period_average(temp, period)
 
     _, trend = polyfit_columns(temp_m, deg=1)
     trend_long = trend.reset_index().melt(id_vars="year").dropna()
     rolling_long = rolling_mean_long(temp_m)
 
+    title = f"Temperatures in {period_to_title(period)} (5y rolling avg. + trendline)"
     return create_chart_trendline(
         rolling_long,
         trend_long,
         typ="line",
-        title=f"Temperatures in {MONTH_NAMES[month]} (5y rolling avg. + trendline)",
+        title=title,
         y_label="°C",
     ).to_dict()
 
 
-def precipitation_chart(df: pd.DataFrame, station_abbr: str, month: int = 6):
-    if month < 1 or month > 12:
-        raise ValueError(f"Invalid month: {month}")
+def precipitation_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -178,24 +191,23 @@ def precipitation_chart(df: pd.DataFrame, station_abbr: str, month: int = 6):
 
     precip = rename_columns(df[[db.PRECIP_DAILY_MM]])
 
-    precip_m = monthly_sum(precip, month)
+    precip_m = period_sum(precip, period)
     precip_long = long_format(precip_m).dropna()
 
     _, trend = polyfit_columns(precip_m, deg=1)
     trend_long = long_format(trend).dropna()
 
+    title = f"Monthly precipitation in {period_to_title(period)}"
     return create_chart_trendline(
         precip_long,
         trend_long,
         typ="bar",
-        title=f"Monthly precipitation in {MONTH_NAMES[month]}",
-        y_label="°C",
+        title=title,
+        y_label="mm",
     ).to_dict()
 
 
-def station_summary(df: pd.DataFrame, station_abbr: str, month: int = 6):
-    if month < 1 or month > 12:
-        raise ValueError(f"Invalid month: {month}")
+def station_summary(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -206,7 +218,7 @@ def station_summary(df: pd.DataFrame, station_abbr: str, month: int = 6):
     ]
     first_date = df.index.min().to_pydatetime().date()
     last_date = df.index.max().to_pydatetime().date()
-    df_m = monthly_average(df, month)
+    df_m = period_average(df, period)
     coldest_year = df_m[db.TEMP_DAILY_MEAN].idxmin()
     coldest_year_temp = df_m[db.TEMP_DAILY_MEAN].min()
     warmest_year = df_m[db.TEMP_DAILY_MEAN].idxmax()
@@ -217,7 +229,7 @@ def station_summary(df: pd.DataFrame, station_abbr: str, month: int = 6):
     coeffs, _ = polyfit_columns(df_m, deg=1)
     return models.StationSummary(
         station_abbr=station_abbr,
-        month=month,
+        period=period,
         annual_temp_increase=coeffs[db.TEMP_DAILY_MEAN].iloc[0],
         annual_precip_increase=coeffs[db.PRECIP_DAILY_MM].iloc[0],
         first_date=first_date,

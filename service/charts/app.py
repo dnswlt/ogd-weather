@@ -62,21 +62,21 @@ async def no_data_error_handler(request, exc: charts.NoDataError):
 
 
 @app.get("/stations/{station_abbr}/charts/{chart_type}")
-async def get_chart(station_abbr: str, chart_type: str, month: int = 6):
+async def get_chart(station_abbr: str, chart_type: str, period: str = "6"):
     station_abbr = station_abbr.upper()
     if chart_type == "temperature":
         df = db.read_daily_historical(
             app.state.db,
             station_abbr,
-            month=month,
+            period=period,
             columns=[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX],
         )
-        return charts.temperature_chart(df, station_abbr, month=month)
+        return charts.temperature_chart(df, station_abbr, period=period)
     elif chart_type == "precipitation":
         df = db.read_daily_historical(
-            app.state.db, station_abbr, month=month, columns=[db.PRECIP_DAILY_MM]
+            app.state.db, station_abbr, period=period, columns=[db.PRECIP_DAILY_MM]
         )
-        return charts.precipitation_chart(df, station_abbr, month=month)
+        return charts.precipitation_chart(df, station_abbr, period=period)
 
     valid_charts = ["temperature", "precipitation"]
     raise HTTPException(
@@ -88,7 +88,7 @@ async def get_chart(station_abbr: str, chart_type: str, month: int = 6):
 @app.get("/stations/{station_abbr}/summary")
 async def get_summary(
     station_abbr: str,
-    month: int = 6,
+    period: str = "6",
     from_year: int | None = None,
     to_year: int | None = None,
 ):
@@ -96,7 +96,7 @@ async def get_summary(
     df = db.read_daily_historical(
         app.state.db,
         station_abbr,
-        month=month,
+        period=period,
         columns=[
             db.TEMP_DAILY_MIN,
             db.TEMP_DAILY_MEAN,
@@ -107,7 +107,7 @@ async def get_summary(
         to_year=to_year,
     )
     return {
-        "summary": charts.station_summary(df, station_abbr, month=month),
+        "summary": charts.station_summary(df, station_abbr, period=period),
     }
 
 

@@ -65,7 +65,7 @@ def read_daily_historical(
     conn: sqlite3.Connection,
     station_abbr: str,
     columns: list[str] | None = None,
-    month: int | None = None,
+    period: str | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
 ) -> pd.DataFrame:
@@ -85,9 +85,20 @@ def read_daily_historical(
     filters = ["station_abbr = ?"]
     params = [station_abbr]
 
-    # Filter by month.
-    if month is not None:
-        filters.append(f"strftime('%m', reference_timestamp) = '{month:02d}'")
+    # Filter by period.
+    if period is not None:
+        if period.isdigit():
+            filters.append(f"strftime('%m', reference_timestamp) = '{int(period):02d}'")
+        elif period == "spring":
+            filters.append("strftime('%m', reference_timestamp) IN ('03', '04', '05')")
+        elif period == "summer":
+            filters.append("strftime('%m', reference_timestamp) IN ('06', '07', '08')")
+        elif period == "autumn":
+            filters.append("strftime('%m', reference_timestamp) IN ('09', '10', '11')")
+        elif period == "winter":
+            filters.append("strftime('%m', reference_timestamp) IN ('12', '01', '02')")
+        elif period == "all":
+            pass  # No month filter
 
     if from_year is not None:
         filters.append(f"date(reference_timestamp) >= date('{from_year:04d}-01-01')")
