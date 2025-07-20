@@ -7,20 +7,19 @@ from . import db
 from . import models
 
 
-class TestDbStations(unittest.TestCase):
+class TestDb(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.conn = sqlite3.connect(":memory:")
         cls.conn.row_factory = sqlite3.Row
-        cls._create_station_tables()
-        cls._insert_station_test_data()
+        cls._create_all_tables()
 
     @classmethod
     def tearDownClass(cls):
         cls.conn.close()
 
     @classmethod
-    def _create_station_tables(cls):
+    def _create_all_tables(cls):
         cursor = cls.conn.cursor()
         cursor.execute(
             """
@@ -37,7 +36,26 @@ class TestDbStations(unittest.TestCase):
             )
         """
         )
+        cursor.execute(
+            """
+            CREATE TABLE ogd_smn_d_historical (
+                station_abbr TEXT,
+                reference_timestamp TEXT,
+                tre200d0 REAL,
+                tre200dn REAL,
+                tre200dx REAL,
+                rre150d0 REAL
+            )
+        """
+        )
         cls.conn.commit()
+
+
+class TestDbStations(TestDb):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._insert_station_test_data()
 
     @classmethod
     def _insert_station_test_data(cls):
@@ -166,34 +184,11 @@ class TestDbStations(unittest.TestCase):
         self.assertEqual(stations[0].abbr, "ABO")
 
 
-class TestDbHistory(unittest.TestCase):
+class TestDbHistory(TestDb):
     @classmethod
     def setUpClass(cls):
-        cls.conn = sqlite3.connect(":memory:")
-        cls.conn.row_factory = sqlite3.Row
-        cls._create_history_tables()
+        super().setUpClass()
         cls._insert_history_test_data()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
-
-    @classmethod
-    def _create_history_tables(cls):
-        cursor = cls.conn.cursor()
-        cursor.execute(
-            """
-            CREATE TABLE ogd_smn_d_historical (
-                station_abbr TEXT,
-                reference_timestamp TEXT,
-                tre200d0 REAL,
-                tre200dn REAL,
-                tre200dx REAL,
-                rre150d0 REAL
-            )
-        """
-        )
-        cls.conn.commit()
 
     @classmethod
     def _insert_history_test_data(cls):

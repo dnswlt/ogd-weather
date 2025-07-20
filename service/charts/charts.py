@@ -110,12 +110,9 @@ def long_format(df):
     return df.reset_index().melt(id_vars=index_name)
 
 
-def rolling_mean_long(df, window=5):
-    # Compute rolling mean. Drop initial rows that don't have enough periods.
-    rolling = df.rolling(window=window, min_periods=window).mean()
-
-    # Convert to long format
-    return rolling.reset_index(names="year").melt(id_vars="year").dropna()
+def rolling_mean(df: pd.DataFrame, window: int = 5):
+    """Compute rolling mean. Drop initial rows that don't have enough periods."""
+    return df.rolling(window=window, min_periods=window).mean()
 
 
 def polyfit_columns(df: pd.DataFrame, deg: int = 1) -> tuple[np.ndarray, pd.DataFrame]:
@@ -193,14 +190,15 @@ def temperature_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     )
 
     temp_m = annual_agg(temp, "mean")
+    temp_m_rolling = rolling_mean(temp_m, window=5)
+    temp_long = long_format(temp_m_rolling).dropna()
 
     _, trend = polyfit_columns(temp_m, deg=1)
     trend_long = trend.reset_index().melt(id_vars="year").dropna()
-    rolling_long = rolling_mean_long(temp_m)
 
     title = f"Temperatures in {period_to_title(period)} (5y rolling avg. + trendline)"
     return create_chart_trendline(
-        rolling_long,
+        temp_long,
         trend_long,
         typ="line",
         title=title,
