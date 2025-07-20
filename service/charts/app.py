@@ -69,11 +69,13 @@ async def get_chart(
     period: str = "6",
     from_year: str | None = None,
     to_year: str | None = None,
+    window: str | None = None,
 ):
     station_abbr = station_abbr.upper()
 
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
     to_year_int = int(to_year) if to_year and to_year.isdigit() else None
+    window_int = int(window) if window and window.isdigit() else None
 
     if chart_type == "temperature":
         df = db.read_daily_historical(
@@ -85,7 +87,9 @@ async def get_chart(
             to_year=to_year_int,
         )
         return {
-            "vega_spec": charts.temperature_chart(df, station_abbr, period=period),
+            "vega_spec": charts.temperature_chart(
+                df, station_abbr, period=period, window=window_int
+            ),
         }
     elif chart_type == "precipitation":
         df = db.read_daily_historical(
@@ -97,7 +101,9 @@ async def get_chart(
             to_year=to_year_int,
         )
         return {
-            "vega_spec": charts.precipitation_chart(df, station_abbr, period=period),
+            "vega_spec": charts.precipitation_chart(
+                df, station_abbr, period=period, window=window_int
+            ),
         }
 
     valid_charts = ["temperature", "precipitation"]

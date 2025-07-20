@@ -178,7 +178,9 @@ def create_chart_trendline(
     return chart
 
 
-def temperature_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+def temperature_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
+):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -190,8 +192,10 @@ def temperature_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     )
 
     temp_m = annual_agg(temp, "mean")
-    temp_m_rolling = rolling_mean(temp_m, window=5)
-    temp_long = long_format(temp_m_rolling).dropna()
+    if window and window > 1:
+        temp_m = rolling_mean(temp_m, window=window)
+
+    temp_long = long_format(temp_m).dropna()
 
     _, trend = polyfit_columns(temp_m, deg=1)
     trend_long = trend.reset_index().melt(id_vars="year").dropna()
@@ -206,7 +210,9 @@ def temperature_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     ).to_dict()
 
 
-def precipitation_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+def precipitation_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
+):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -216,6 +222,9 @@ def precipitation_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     precip = rename_columns(df[[db.PRECIP_DAILY_MM]])
 
     precip_m = annual_agg(precip, "sum")
+    if window and window > 1:
+        precip_m = rolling_mean(precip_m, window=window)
+
     precip_long = long_format(precip_m).dropna()
 
     _, trend = polyfit_columns(precip_m, deg=1)

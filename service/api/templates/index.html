@@ -72,12 +72,27 @@
                     <input type="number" id="to_year" name="to_year" placeholder="To" class="border rounded p-2 w-full">
                 </div>
             </div>
+
+            <!-- Smoothing Window -->
+            <div class="grid grid-cols-3 gap-3 items-center">
+                <label class="col-span-1 font-medium">Smoothing</label>
+                <div class="col-span-2 flex items-center space-x-4">
+                    <label class="inline-flex items-center border rounded p-2 w-full">
+                        <input type="radio" name="window" value="" class="form-radio" checked>
+                        <span class="ml-2">Annual</span>
+                    </label>
+                    <label class="inline-flex items-center border rounded p-2 w-full">
+                        <input type="radio" name="window" value="5" class="form-radio">
+                        <span class="ml-2">5-year rolling avg.</span>
+                    </label>
+                </div>
+            </div>
         </form>
 
         <!-- Summary -->
         <div>
             <div id="station-summary-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year" hx-get="/stations/{station}/summary">
+                hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']" hx-get="/stations/{station}/summary">
                 <!-- <table> with station weather summary goes here -->
                 <!-- #include "../templates/station_summary.html" -->
             </div>
@@ -88,7 +103,7 @@
         <div>
             <div>
                 <div id="temperature-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
-                    hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year"
+                    hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
                     hx-get="/stations/{station}/charts/temperature">
                     <!-- <script> element with Vega from the backend goes here. -->
                 </div>
@@ -100,7 +115,7 @@
             </div>
             <div>
                 <div id="precipitation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
-                    hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year"
+                    hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
                     hx-get="/stations/{station}/charts/precipitation">
                     <!-- <script> element with Vega code from the backend goes here. -->
                 </div>
