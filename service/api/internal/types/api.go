@@ -1,4 +1,4 @@
-package api
+package types
 
 import (
 	"encoding/json"
@@ -6,20 +6,21 @@ import (
 )
 
 type Station struct {
-	Abbr   string `json:"abbr"`
-	Name   string `json:"name"`
-	Canton string `json:"canton"`
+	Abbr               string `json:"abbr"`
+	Name               string `json:"name"`
+	Canton             string `json:"canton"`
+	FirstAvailableDate *Date  `json:"first_available_date,omitempty"`
+	LastAvailableDate  *Date  `json:"last_available_date,omitempty"`
 }
 
 type StationsResponse struct {
 	Stations []*Station `json:"stations"`
 }
 
-type StationSummary struct {
-	StationAbbr          string  `json:"station_abbr"`
-	Period               string  `json:"period"`
+type StationStats struct {
 	FirstDate            Date    `json:"first_date"`
 	LastDate             Date    `json:"last_date"`
+	Period               string  `json:"period"`
 	AnnualTempIncrease   float64 `json:"annual_temp_increase"`
 	AnnualPrecipIncrease float64 `json:"annual_precip_increase"`
 	ColdestYear          int     `json:"coldest_year,omitempty"`
@@ -28,6 +29,11 @@ type StationSummary struct {
 	WarmestYearTemp      float64 `json:"warmest_year_temp,omitempty"`
 	DriestYear           int     `json:"driest_year,omitempty"`
 	WettestYear          int     `json:"wettest_year,omitempty"`
+}
+
+type StationSummary struct {
+	Station *Station
+	Stats   *StationStats
 }
 
 type StationSummaryResponse struct {

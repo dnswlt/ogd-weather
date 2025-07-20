@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from . import charts
 from . import db
+from . import models
 
 
 class ChartRequest(BaseModel):
@@ -62,19 +63,36 @@ async def no_data_error_handler(request, exc: charts.NoDataError):
 
 
 @app.get("/stations/{station_abbr}/charts/{chart_type}")
-async def get_chart(station_abbr: str, chart_type: str, period: str = "6"):
+async def get_chart(
+    station_abbr: str,
+    chart_type: str,
+    period: str = "6",
+    from_year: str | None = None,
+    to_year: str | None = None,
+):
     station_abbr = station_abbr.upper()
+
+    from_year_int = int(from_year) if from_year and from_year.isdigit() else None
+    to_year_int = int(to_year) if to_year and to_year.isdigit() else None
+
     if chart_type == "temperature":
         df = db.read_daily_historical(
             app.state.db,
             station_abbr,
             period=period,
             columns=[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX],
+            from_year=from_year_int,
+            to_year=to_year_int,
         )
         return charts.temperature_chart(df, station_abbr, period=period)
     elif chart_type == "precipitation":
         df = db.read_daily_historical(
-            app.state.db, station_abbr, period=period, columns=[db.PRECIP_DAILY_MM]
+            app.state.db,
+            station_abbr,
+            period=period,
+            columns=[db.PRECIP_DAILY_MM],
+            from_year=from_year_int,
+            to_year=to_year_int,
         )
         return charts.precipitation_chart(df, station_abbr, period=period)
 
@@ -89,10 +107,14 @@ async def get_chart(station_abbr: str, chart_type: str, period: str = "6"):
 async def get_summary(
     station_abbr: str,
     period: str = "6",
-    from_year: int | None = None,
-    to_year: int | None = None,
+    from_year: str | None = None,
+    to_year: str | None = None,
 ):
     station_abbr = station_abbr.upper()
+
+    from_year_int = int(from_year) if from_year and from_year.isdigit() else None
+    to_year_int = int(to_year) if to_year and to_year.isdigit() else None
+
     df = db.read_daily_historical(
         app.state.db,
         station_abbr,
@@ -103,11 +125,18 @@ async def get_summary(
             db.TEMP_DAILY_MAX,
             db.PRECIP_DAILY_MM,
         ],
-        from_year=from_year,
-        to_year=to_year,
+        from_year=from_year_int,
+        to_year=to_year_int,
     )
+    stats = charts.station_stats(df, station_abbr, period=period)
+
+    station = db.read_station(app.state.db, station_abbr)
+
     return {
-        "summary": charts.station_summary(df, station_abbr, period=period),
+        "summary": models.StationSummary(
+            station=station,
+            stats=stats,
+        ),
     }
 
 

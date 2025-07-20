@@ -12,6 +12,9 @@ import (
 	"net/url"
 	"path"
 	"strings"
+
+	"github.com/dnswlt/ogd-weather/service/api/internal/types"
+	"github.com/dnswlt/ogd-weather/service/api/internal/ui"
 )
 
 type Server struct {
@@ -31,7 +34,12 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid chartServiceEndpoint URL: %v", err)
 	}
-	tmpl, err := template.ParseGlob(path.Join(opts.TemplateDir, "*.html"))
+	tmpl := template.New("root")
+	tmpl = tmpl.Funcs(map[string]any{
+		"datefmt": ui.DateFmt,
+	})
+	tmpl, err = tmpl.ParseGlob(path.Join(opts.TemplateDir, "*.html"))
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to read templates: %w", err)
 	}
@@ -188,7 +196,7 @@ func serveChartServiceURL[Response any](
 }
 
 func (s *Server) serveSummarySnippet(w http.ResponseWriter, r *http.Request) {
-	serveChartServiceURL[StationSummaryResponse](s, w, r, "station_summary.html", nil)
+	serveChartServiceURL[types.StationSummaryResponse](s, w, r, "station_summary.html", nil)
 }
 
 func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +215,7 @@ func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse JSON
-	var data StationsResponse
+	var data types.StationsResponse
 	if err := json.Unmarshal(body, &data); err != nil {
 		log.Printf("Error parsing stations JSON: %v", err)
 		http.Error(w, "Parse backend JSON error", http.StatusInternalServerError)

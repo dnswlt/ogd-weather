@@ -233,7 +233,9 @@ def precipitation_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     ).to_dict()
 
 
-def station_summary(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+def station_stats(
+    df: pd.DataFrame, station_abbr: str, period: str = "6"
+) -> models.StationStats:
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -254,13 +256,12 @@ def station_summary(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     wettest_year = df_m[db.PRECIP_DAILY_MM].idxmax()
 
     coeffs, _ = polyfit_columns(df_m, deg=1)
-    return models.StationSummary(
-        station_abbr=station_abbr,
-        period=period,
-        annual_temp_increase=coeffs[db.TEMP_DAILY_MEAN].iloc[0],
-        annual_precip_increase=coeffs[db.PRECIP_DAILY_MM].iloc[0],
+    return models.StationStats(
         first_date=first_date,
         last_date=last_date,
+        period=period_to_title(period),
+        annual_temp_increase=coeffs[db.TEMP_DAILY_MEAN].iloc[0],
+        annual_precip_increase=coeffs[db.PRECIP_DAILY_MM].iloc[0],
         coldest_year=coldest_year,
         coldest_year_temp=coldest_year_temp,
         warmest_year=warmest_year,

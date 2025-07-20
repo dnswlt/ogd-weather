@@ -5,26 +5,26 @@
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Station
             </td>
-            <td class="py-2 text-gray-800">{{.StationAbbr}}</td>
+            <td class="py-2 text-gray-800">{{.Station.Name}} {{.Station.Canton}} ({{.Station.Abbr}})</td>
         </tr>
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Date range
             </td>
-            <td class="py-2 text-gray-800">{{.FirstDate}} &ndash; {{.LastDate}}</td>
+            <td class="py-2 text-gray-800">{{.Stats.FirstDate}} &ndash; {{.Stats.LastDate}}</td>
         </tr>
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. annual temp. increase
             </td>
-            <td class="py-2 text-gray-800">{{printf "%.2f" .AnnualTempIncrease}} &deg;C</td>
+            <td class="py-2 text-gray-800">{{printf "%.2f" .Stats.AnnualTempIncrease}} &deg;C</td>
         </tr>
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Coldest year (daily mean)
             </td>
             <td class="py-2 text-gray-800">
-                {{.ColdestYear}} ({{printf "%.1f" .ColdestYearTemp}} &deg;C)
+                {{.Stats.ColdestYear}} ({{printf "%.1f" .Stats.ColdestYearTemp}} &deg;C)
             </td>
         </tr>
         <tr>
@@ -32,9 +32,19 @@
                 Warmest year (daily mean)
             </td>
             <td class="py-2 text-gray-800">
-                {{.WarmestYear}} ({{printf "%.1f" .WarmestYearTemp}} &deg;C)
+                {{.Stats.WarmestYear}} ({{printf "%.1f" .Stats.WarmestYearTemp}} &deg;C)
             </td>
         </tr>
     </tbody>
 </table>
+
+<!-- OOB swap to update the year inputs -->
+<script>
+    document.getElementById('from_year').value = {{.Stats.FirstDate.Year }};
+    document.getElementById('to_year').value = {{.Stats.LastDate.Year }};
+    document.getElementById('from_year').min = {{datefmt "Y" .Station.FirstAvailableDate }};
+    document.getElementById('to_year').min = {{datefmt "Y" .Station.FirstAvailableDate }};
+    document.getElementById('from_year').max = {{datefmt "Y" .Station.LastAvailableDate }};
+    document.getElementById('to_year').max = {{datefmt "Y" .Station.LastAvailableDate }};
+</script>
 {{end}}

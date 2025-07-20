@@ -1,5 +1,7 @@
+import datetime
 import re
 import sqlite3
+from typing import Callable, Iterable, TypeVar
 
 import pandas as pd
 from . import models
@@ -12,6 +14,58 @@ TEMP_DAILY_MEAN = "tre200d0"
 TEMP_DAILY_MIN = "tre200dn"
 TEMP_DAILY_MAX = "tre200dx"
 PRECIP_DAILY_MM = "rre150d0"
+
+
+T = TypeVar("T")
+
+
+def agg_none(func: Callable[[Iterable[T]], T], items: Iterable[T | None]) -> T | None:
+    """Apply func (e.g. min or max) to items, ignoring None.
+    Returns None if all values are None."""
+    filtered = [x for x in items if x is not None]
+    return func(filtered) if filtered else None
+
+
+def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
+    """Returns data for the given station."""
+
+    sql = """
+        SELECT
+            station_abbr,
+            station_name,
+            station_canton,
+            tre200d0_min_date,
+            tre200d0_max_date,
+            rre150d0_min_date,
+            rre150d0_max_date
+        FROM ogd_smn_station_data_summary
+        WHERE station_abbr = ?
+    """
+    cur = conn.execute(sql, [station_abbr])
+    row = cur.fetchone()
+    if row is None:
+        raise ValueError(f"No station found with abbr={station_abbr!r}")
+
+    # Parse possible date strings into actual dates (None stays None)
+    def d(key: str) -> datetime.date | None:
+        v = row[key]
+        return datetime.date.fromisoformat(v) if v else None
+
+    # Pick overall min/max if any exist
+    first_available_date = agg_none(
+        min, [d("tre200d0_min_date"), d("rre150d0_min_date")]
+    )
+    last_available_date = agg_none(
+        max, [d("tre200d0_max_date"), d("rre150d0_max_date")]
+    )
+
+    return models.Station(
+        abbr=row["station_abbr"],
+        name=row["station_name"],
+        canton=row["station_canton"],
+        first_available_date=first_available_date,
+        last_available_date=last_available_date,
+    )
 
 
 def read_stations(
