@@ -45,6 +45,13 @@ SEASON_NAMES = {
     "winter": "Winter (Dec-Feb)",
 }
 
+SEASONS = {
+    "spring": [3, 4, 5],
+    "summer": [6, 7, 8],
+    "autumn": [9, 10, 11],
+    "winter": [12, 1, 2],
+}
+
 
 def period_to_title(period: str) -> str:
     if period.isdigit():
@@ -54,6 +61,33 @@ def period_to_title(period: str) -> str:
     elif period == "all":
         return "Whole Year"
     return "Unknown Period"
+
+
+def verify_period(df: pd.DataFrame, period: str):
+    """Verifies that all dates in the DataFrame match the given period."""
+    if df.empty:
+        return
+
+    months_in_df = df.index.month.unique()
+
+    if period.isdigit():
+        expected_month = int(period)
+        if not (months_in_df.size == 1 and months_in_df[0] == expected_month):
+            raise ValueError(
+                f"Data contains months other than the expected month {expected_month} for period '{period}'"
+            )
+    elif period in SEASONS:
+        expected_months = set(SEASONS[period])
+        if not set(months_in_df).issubset(expected_months):
+            raise ValueError(
+                f"Data contains months outside the expected season {period} ({expected_months})"
+            )
+    elif period == "all":
+        # All months are fine
+        pass
+    else:
+        # Should not happen if validation is done before, but good to have
+        raise ValueError(f"Unknown period: {period}")
 
 
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -69,16 +103,6 @@ def annual_agg(df, func):
     df_y = df.groupby(df.index.year).agg(func)
     df_y.index.name = "year"
     return df_y
-
-
-def period_average(df, period):
-    """Returns a DataFrame with one row per year containing average values for the given period."""
-    return annual_agg(df, "mean")
-
-
-def period_sum(df, period):
-    """Returns a DataFrame with one row per year containing cumulative values for the given period."""
-    return annual_agg(df, "sum")
 
 
 def long_format(df):
@@ -162,12 +186,13 @@ def temperature_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
         raise NoDataError(f"No temperature data for {station_abbr}")
+    verify_period(df, period)
 
     temp = rename_columns(
         df[[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]]
     )
 
-    temp_m = period_average(temp, period)
+    temp_m = annual_agg(temp, "mean")
 
     _, trend = polyfit_columns(temp_m, deg=1)
     trend_long = trend.reset_index().melt(id_vars="year").dropna()
@@ -188,10 +213,11 @@ def precipitation_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
         raise NoDataError(f"No precipitation data for {station_abbr}")
+    verify_period(df, period)
 
     precip = rename_columns(df[[db.PRECIP_DAILY_MM]])
 
-    precip_m = period_sum(precip, period)
+    precip_m = annual_agg(precip, "sum")
     precip_long = long_format(precip_m).dropna()
 
     _, trend = polyfit_columns(precip_m, deg=1)
@@ -212,13 +238,14 @@ def station_summary(df: pd.DataFrame, station_abbr: str, period: str = "6"):
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
         raise NoDataError(f"No temperature data for {station_abbr}")
+    verify_period(df, period)
 
     df = df[
         [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX, db.PRECIP_DAILY_MM]
     ]
     first_date = df.index.min().to_pydatetime().date()
     last_date = df.index.max().to_pydatetime().date()
-    df_m = period_average(df, period)
+    df_m = annual_agg(df, "mean")
     coldest_year = df_m[db.TEMP_DAILY_MEAN].idxmin()
     coldest_year_temp = df_m[db.TEMP_DAILY_MEAN].min()
     warmest_year = df_m[db.TEMP_DAILY_MEAN].idxmax()
