@@ -50,11 +50,22 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	}, nil
 }
 
+func (s *Server) serveHomepage(w http.ResponseWriter, r *http.Request) {
+	var output bytes.Buffer
+	err := s.template.ExecuteTemplate(&output, "index.html", nil)
+	if err != nil {
+		log.Printf("Failed to render index.html: %v", err)
+		http.Error(w, "Template rendering error", http.StatusInternalServerError)
+		return
+	}
+	w.Write(output.Bytes())
+}
+
 func (s *Server) Serve() error {
 	mux := http.NewServeMux()
 
-	// Static files
-	mux.Handle("/", http.FileServer(http.Dir("static")))
+	// Root page
+	mux.HandleFunc("GET /{$}", s.serveHomepage)
 
 	// Reverse proxy
 	proxy := httputil.NewSingleHostReverseProxy(s.chartServiceEndpoint)
