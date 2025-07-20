@@ -101,7 +101,7 @@
 
         <!-- Charts -->
         <div>
-            <div>
+            <div class="mb-8">
                 <div id="temperature-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
                     hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
                     hx-get="/stations/{station}/charts/temperature">
@@ -113,7 +113,7 @@
                     <!-- #include "../templates/vega_embed.html" -->
                 </div>
             </div>
-            <div>
+            <div class="mb-8">
                 <div id="temperature-deviation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
                     hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
                     hx-get="/stations/{station}/charts/temperature_deviation">
@@ -125,7 +125,7 @@
                     <!-- #include "../templates/vega_embed.html" -->
                 </div>
             </div>
-            <div>
+            <div class="mb-8">
                 <div id="precipitation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
                     hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
                     hx-get="/stations/{station}/charts/precipitation">

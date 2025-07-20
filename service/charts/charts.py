@@ -201,7 +201,7 @@ def create_dynamic_baseline_bars(
             x=alt.X("year:Q", axis=alt.Axis(format="d", title=None)),
             y=alt.Y("anomaly:Q", title=f"Deviation from mean ({baseline:.2f} °C)"),
             color=alt.Color(
-                "sign:N", scale=color_scale, legend=alt.Legend(title="Compared to mean")
+                "sign:N", scale=color_scale, legend=alt.Legend(title="Vs. baseline")
             ),
             tooltip=[
                 alt.Tooltip("year:Q", title="Year"),
