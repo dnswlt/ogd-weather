@@ -178,6 +178,82 @@ def create_chart_trendline(
     return chart
 
 
+def create_dynamic_baseline_bars(
+    values_long: pd.DataFrame, title="Untitled chart"
+) -> alt.Chart:
+    df = values_long.copy()
+
+    # Compute baseline
+    baseline = df["value"].mean()
+    df["anomaly"] = df["value"] - baseline
+    df["sign"] = df["anomaly"].apply(lambda x: "Below mean" if x < 0 else "Above mean")
+
+    # Color scale for below/above baseline
+    color_scale = alt.Scale(
+        domain=["Below mean", "Above mean"], range=["#2166ac", "#b2182b"]
+    )
+
+    # Bars for anomalies
+    bars = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            x=alt.X("year:Q", axis=alt.Axis(format="d", title=None)),
+            y=alt.Y("anomaly:Q", title=f"Deviation from mean ({baseline:.2f} °C)"),
+            color=alt.Color(
+                "sign:N", scale=color_scale, legend=alt.Legend(title="Compared to mean")
+            ),
+            tooltip=[
+                alt.Tooltip("year:Q", title="Year"),
+                alt.Tooltip("value:Q", title="Temp (°C)"),
+                alt.Tooltip("anomaly:Q", title="Δ vs mean"),
+            ],
+        )
+    )
+
+    # Zero line
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(strokeDash=[4, 4], color="black")
+        .encode(y="y:Q")
+    )
+
+    chart_title = f"{title} (Baseline = {baseline:.2f} °C over {df['year'].min()}–{df['year'].max()})"
+
+    return (
+        (bars + zero_line)
+        .properties(
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+            title=chart_title,
+        )
+        .interactive()
+    )
+
+
+def temperature_deviation_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
+):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No temperature data for {station_abbr}")
+    verify_period(df, period)
+
+    temp = rename_columns(df[[db.TEMP_DAILY_MEAN]])
+
+    temp_m = annual_agg(temp, "mean")
+    if window and window > 1:
+        temp_m = rolling_mean(temp_m, window=window)
+
+    temp_long = long_format(temp_m).dropna()
+
+    return create_dynamic_baseline_bars(
+        temp_long,
+        f"Temperature deviation from mean in {period_to_title(period)}",
+    ).to_dict()
+
+
 def temperature_chart(
     df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
 ):
@@ -200,7 +276,10 @@ def temperature_chart(
     _, trend = polyfit_columns(temp_m, deg=1)
     trend_long = trend.reset_index().melt(id_vars="year").dropna()
 
-    title = f"Temperatures in {period_to_title(period)} (5y rolling avg. + trendline)"
+    window_info = f"({window}y rolling avg.)" if window else ""
+    title = (
+        f"Avg. temperatures in {period_to_title(period)}, by year {window_info}".strip()
+    )
     return create_chart_trendline(
         temp_long,
         trend_long,
@@ -230,7 +309,8 @@ def precipitation_chart(
     _, trend = polyfit_columns(precip_m, deg=1)
     trend_long = long_format(trend).dropna()
 
-    title = f"Monthly precipitation in {period_to_title(period)}"
+    window_info = f"({window}y rolling avg.)" if window else ""
+    title = f"Total precipitation in {period_to_title(period)}, by year {window_info}".strip()
     return create_chart_trendline(
         precip_long,
         trend_long,

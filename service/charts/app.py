@@ -91,6 +91,20 @@ async def get_chart(
                 df, station_abbr, period=period, window=window_int
             ),
         }
+    elif chart_type == "temperature_deviation":
+        df = db.read_daily_historical(
+            app.state.db,
+            station_abbr,
+            period=period,
+            columns=[db.TEMP_DAILY_MEAN],
+            from_year=from_year_int,
+            to_year=to_year_int,
+        )
+        return {
+            "vega_spec": charts.temperature_deviation_chart(
+                df, station_abbr, period=period, window=window_int
+            ),
+        }
     elif chart_type == "precipitation":
         df = db.read_daily_historical(
             app.state.db,
@@ -106,7 +120,7 @@ async def get_chart(
             ),
         }
 
-    valid_charts = ["temperature", "precipitation"]
+    valid_charts = ["temperature", "precipitation", "temperature_deviation"]
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f"Invalid chart type (must be one of [{','.join(valid_charts)}])",

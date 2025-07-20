@@ -114,6 +114,18 @@
                 </div>
             </div>
             <div>
+                <div id="temperature-deviation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
+                    hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
+                    hx-get="/stations/{station}/charts/temperature_deviation">
+                    <!-- <script> element with Vega from the backend goes here. -->
+                </div>
+                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
+                <div id="temperature_deviation-chart" class="w-full overflow-hidden">
+                    <!-- Under Vega's control. Chart goes here. -->
+                    <!-- #include "../templates/vega_embed.html" -->
+                </div>
+            </div>
+            <div>
                 <div id="precipitation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
                     hx-swap="innerHTML" hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
                     hx-get="/stations/{station}/charts/precipitation">
