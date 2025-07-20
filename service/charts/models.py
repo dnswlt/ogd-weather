@@ -11,6 +11,8 @@ class Station(BaseModel):
 
 
 class StationStats(BaseModel):
+    """Weather data statistics for the requested period."""
+
     first_date: date
     last_date: date
     period: str

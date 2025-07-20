@@ -38,3 +38,44 @@ OGD_BASE_DIR=~/tmp/ogd-weather uvicorn service.charts.app:app --host 127.0.0.1 -
 cd service/api
 go run ./cmd/server
 ```
+
+## Docker
+
+You can run both services in Docker, either individually or together with `docker compose`.  
+
+### Build images
+
+From the repo root:  
+
+```bash
+# Build Python charts service
+docker build -t weather-charts service/charts
+
+# Build Go API service
+docker build -t weather-api service/api
+```
+
+### Run services with docker compose
+
+A `docker-compose.yml` is provided for local integration. It builds both images and connects them on a shared network.
+
+```bash
+docker compose up --build
+```
+
+This starts:  
+
+- **Python charts service** on <http://localhost:8082>  
+- **Go API service** on <http://localhost:8081>  
+
+The Go backend is automatically configured to call the charts service via the internal Docker network.
+
+If you change application code:  
+
+- `docker compose up --build` – rebuilds only affected layers  
+- `docker compose up --build --force-recreate` – full rebuild (needed after Dockerfile or dependency changes)
+
+This setup matches production packaging:  
+
+- Python container includes the prebuilt SQLite database (`swissmetnet.sqlite`)  
+- Go container includes HTML templates  
