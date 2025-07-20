@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/dnswlt/ogd-weather/service/api/internal/types"
 	"github.com/dnswlt/ogd-weather/service/api/internal/ui"
@@ -20,12 +22,26 @@ type Server struct {
 	addr                 string
 	chartServiceEndpoint *url.URL
 	template             *template.Template
+	debugMode            bool
+	lastReloadMu         sync.Mutex
+	lastReload           time.Time
 }
 
 type ServerOptions struct {
 	Addr                 string // Ex: "localhost:8080"
 	ChartServiceEndpoint string // Ex: "http://localhost:8000"
 	TemplateDir          string // Ex: "./templates"
+	DebugMode            bool
+}
+
+func (s *Server) reloadTemplates() error {
+	tmpl := template.New("root")
+	tmpl = tmpl.Funcs(map[string]any{
+		"datefmt": ui.DateFmt,
+	})
+	var err error
+	s.template, err = tmpl.ParseGlob(path.Join("./templates", "*.html"))
+	return err
 }
 
 func NewServer(opts ServerOptions) (*Server, error) {
@@ -33,20 +49,18 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid chartServiceEndpoint URL: %v", err)
 	}
-	tmpl := template.New("root")
-	tmpl = tmpl.Funcs(map[string]any{
-		"datefmt": ui.DateFmt,
-	})
-	tmpl, err = tmpl.ParseGlob(path.Join(opts.TemplateDir, "*.html"))
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to read templates: %w", err)
-	}
-	return &Server{
+	s := &Server{
 		addr:                 opts.Addr,
 		chartServiceEndpoint: endpoint,
-		template:             tmpl,
-	}, nil
+		debugMode:            opts.DebugMode,
+	}
+
+	if err := s.reloadTemplates(); err != nil {
+		return nil, fmt.Errorf("failed to load templates: %w", err)
+	}
+
+	return s, nil
 }
 
 func (s *Server) serveHomepage(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +72,33 @@ func (s *Server) serveHomepage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(output.Bytes())
+}
+
+// withTemplateReload wraps a handler and reloads templates in debug mode,
+// but at most once every second (1s). The first triggering request will block
+// until reload completes.
+func (s *Server) withTemplateReload(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.debugMode {
+			now := time.Now()
+
+			func() {
+				s.lastReloadMu.Lock()
+				defer s.lastReloadMu.Unlock()
+
+				if now.Sub(s.lastReload) > 1*time.Second {
+					if err := s.reloadTemplates(); err != nil {
+						log.Printf("Failed to reload templates: %v", err)
+						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+						return
+					}
+					s.lastReload = now
+				}
+			}()
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) Serve() error {
@@ -88,16 +129,23 @@ func (s *Server) Serve() error {
 		func(w http.ResponseWriter, r *http.Request) {
 			accept := r.Header.Get("Accept")
 			if acceptsHTML(accept) {
-				// Serve <option> elements for htmx
 				s.serveStationsSnippet(w, r)
 				return
 			}
-			// Otherwise just proxy JSON
 			proxy.ServeHTTP(w, r)
 		})
 
-	log.Printf("Go API server on http://%s", s.addr)
-	return http.ListenAndServe(s.addr, mux)
+	var handler http.Handler = mux
+	if s.debugMode {
+		handler = s.withTemplateReload(handler)
+	}
+
+	modeInfo := "(prod mode)"
+	if s.debugMode {
+		modeInfo = "(debug mode)"
+	}
+	log.Printf("Go API server %s on http://%s", modeInfo, s.addr)
+	return http.ListenAndServe(s.addr, handler)
 }
 
 func acceptsHTML(accept string) bool {
