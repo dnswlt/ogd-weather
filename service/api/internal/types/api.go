@@ -40,6 +40,10 @@ type StationSummaryResponse struct {
 	Summary *StationSummary `json:"summary,omitempty"`
 }
 
+type VegaSpecResponse struct {
+	VegaSpec map[string]any `json:"vega_spec"`
+}
+
 // Date wraps time.Time but marshals/unmarshals as YYYY-MM-DD.
 type Date struct {
 	time.Time

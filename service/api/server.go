@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -116,49 +115,6 @@ func (s *Server) chartServiceURL(originalURL *url.URL) *url.URL {
 	return &u
 }
 
-func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Request) {
-	chartType := r.PathValue("chartType")
-
-	// Call the Python backend to get the JSON Vega spec
-	u := s.chartServiceURL(r.URL)
-	resp, err := http.Get(u.String())
-	if err != nil {
-		log.Printf("Backend error for %s: %v", r.URL.Path, err)
-		http.Error(w, "Backend error", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		http.Error(w, "", resp.StatusCode)
-		return
-	}
-
-	// Parse Vega spec as JSON to ensure it's valid, and to safely render
-	// it in the html template.
-	var vegaSpec map[string]any
-	err = json.NewDecoder(resp.Body).Decode(&vegaSpec)
-	if err != nil {
-		log.Printf("Chart server returned invalid JSON: %v", err)
-		http.Error(w, "Read backend error", http.StatusInternalServerError)
-		return
-	}
-
-	// Return <script> for htmx
-	w.Header().Set("Content-Type", "text/html")
-
-	var output bytes.Buffer
-	err = s.template.ExecuteTemplate(&output, "vega_embed.html", map[string]any{
-		"ChartType": chartType,
-		"VegaSpec":  vegaSpec,
-	})
-	if err != nil {
-		log.Printf("Failed to render template: %v", err)
-		http.Error(w, "Template rendering error", http.StatusInternalServerError)
-		return
-	}
-	w.Write(output.Bytes())
-}
-
 func serveChartServiceURL[Response any](
 	s *Server,
 	w http.ResponseWriter,
@@ -206,43 +162,17 @@ func serveChartServiceURL[Response any](
 	w.Write(output.Bytes())
 }
 
+func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Request) {
+	chartType := r.PathValue("chartType")
+	serveChartServiceURL[types.VegaSpecResponse](s, w, r, "vega_embed.html", map[string]any{
+		"ChartType": chartType,
+	})
+}
+
 func (s *Server) serveSummarySnippet(w http.ResponseWriter, r *http.Request) {
 	serveChartServiceURL[types.StationSummaryResponse](s, w, r, "station_summary.html", nil)
 }
 
 func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {
-	resp, err := http.Get(s.chartServiceEndpoint.String() + r.URL.Path)
-	if err != nil {
-		log.Printf("Backend error for %s: %v", r.URL.Path, err)
-		http.Error(w, "Backend error", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Read backend error", http.StatusInternalServerError)
-		return
-	}
-
-	// Parse JSON
-	var data types.StationsResponse
-	if err := json.Unmarshal(body, &data); err != nil {
-		log.Printf("Error parsing stations JSON: %v", err)
-		http.Error(w, "Parse backend JSON error", http.StatusInternalServerError)
-		return
-	}
-
-	// Return <option> elements
-	w.Header().Set("Content-Type", "text/html")
-	var output bytes.Buffer
-	err = s.template.ExecuteTemplate(&output, "station_options.html", map[string]any{
-		"Stations": data.Stations,
-	})
-	if err != nil {
-		log.Printf("Failed to render template: %v", err)
-		http.Error(w, "Template rendering error", http.StatusInternalServerError)
-		return
-	}
-	w.Write(output.Bytes())
+	serveChartServiceURL[types.StationsResponse](s, w, r, "station_options.html", nil)
 }

@@ -84,7 +84,9 @@ async def get_chart(
             from_year=from_year_int,
             to_year=to_year_int,
         )
-        return charts.temperature_chart(df, station_abbr, period=period)
+        return {
+            "vega_spec": charts.temperature_chart(df, station_abbr, period=period),
+        }
     elif chart_type == "precipitation":
         df = db.read_daily_historical(
             app.state.db,
@@ -94,7 +96,9 @@ async def get_chart(
             from_year=from_year_int,
             to_year=to_year_int,
         )
-        return charts.precipitation_chart(df, station_abbr, period=period)
+        return {
+            "vega_spec": charts.precipitation_chart(df, station_abbr, period=period),
+        }
 
     valid_charts = ["temperature", "precipitation"]
     raise HTTPException(
