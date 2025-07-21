@@ -3,6 +3,7 @@ import datetime
 import glob
 import os
 import sqlite3
+import time
 import pandas as pd
 import requests
 import sys
@@ -31,14 +32,31 @@ def fetch_paginated(url, timeout=10):
         )
 
 
-def download_csv(url, output_dir, skip_existing=True):
+def download_csv(url, output_dir, max_age_seconds: int | None = None):
+    """Downloads a CSV file from the given URL url and writes it to output_dir.
+
+    Args:
+        * url - the URL to download from
+        * output_dir - the directory to which the file gets written, using
+            the same filename as the url.
+        * max_age_seconds - maximum age of an existing file (based on its mtime)
+            for it to get skipped if skip_existing=True.
+    """
     try:
         filename = os.path.basename(urlparse(url).path)
         output_path = os.path.join(output_dir, filename)
 
-        if skip_existing and os.path.exists(output_path):
-            print(f"Skipping existing file {output_path}")
-            return
+        if os.path.exists(output_path):
+            if max_age_seconds is None:
+                # Always overwrite
+                pass
+            elif max_age_seconds < 0:
+                # Infinite max age: never overwrite
+                print(f"Skipping existing file {output_path}")
+                return
+            elif time.time() - os.path.getmtime(output_path) < max_age_seconds:
+                print(f"Skipping existing fresh file {output_path}")
+                return
 
         response = requests.get(url, timeout=30)
         response.raise_for_status()
@@ -59,7 +77,7 @@ def fetch_all_data(weather_dir: str):
     print(f"Read {len(collections)} collections.")
     cs = {c["id"]: c for c in collections}
 
-    # Find "items' (data) and "assets" (metadata).
+    # Find "items" (data) and "assets" (metadata).
     assets_url = None
     items_url = None
     for l in cs["ch.meteoschweiz.ogd-smn"]["links"]:
@@ -81,18 +99,25 @@ def fetch_all_data(weather_dir: str):
     csv_urls = []
     for feature in features:
         for asset in feature["assets"].values():
-            if asset["href"].endswith("d_historical.csv"):
-                csv_urls.append(asset["href"])
+            url = asset["href"]
+            if url.endswith("_d_historical.csv"):
+                csv_urls.append((url, -1))  # Skip existing CSV files.
+            elif url.endswith("_h_recent.csv"):
+                csv_urls.append(
+                    (url, 12 * 60 * 60)
+                )  # Overwrite existing for recent data every 12 hours.
 
-    print(f"Found {len(csv_urls)} CSV URLs. Example: {csv_urls[0]}")
+    print(f"Found {len(csv_urls)} CSV URLs. Example: {csv_urls[0][0]}")
 
     os.makedirs(weather_dir, exist_ok=True)
     for a in assets:
         download_csv(a["href"], output_dir=weather_dir)
 
     # Download CSV data files concurrently.
-    def _download(url):
-        download_csv(url, weather_dir)
+    def _download(params):
+        url, max_age_seconds = params
+        # Download fresh data at most every 12h.
+        download_csv(url, weather_dir, max_age_seconds=max_age_seconds)
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         executor.map(_download, csv_urls)
@@ -107,13 +132,11 @@ def infer_sqlite_type(dtype: pd.api.types.CategoricalDtype) -> str:
         return "TEXT"
 
 
-def normalize_timestamp(
-    series: pd.Series, local_tz: str = "Europe/Zurich"
-) -> pd.Series:
+def normalize_timestamp(series: pd.Series) -> pd.Series:
     """Normalizes a datetime Series for DB storage.
 
     - If all times are midnight, returns only "YYYY-MM-DD".
-    - Otherwise assumes local_tz, converts to UTC, returns ISO with second granularity.
+    - Otherwise assumes UTC, returns ISO with second granularity.
     """
     if series.empty:
         return series
@@ -124,19 +147,13 @@ def normalize_timestamp(
         return series.dt.strftime("%Y-%m-%d")
     else:
         # Sub-daily measurements: use UTC
-        return (
-            series.dt.tz_localize(local_tz)
-            .dt.tz_convert("UTC")
-            .dt.strftime("%Y-%m-%d %H:%M:%S")
-        )
+        return series.dt.tz_localize("UTC").dt.strftime("%Y-%m-%d %H:%M:%SZ")
 
 
-def prepare_sql_ogd_smn_d_historical(dir: str, conn: sqlite3.Connection) -> None:
-    table_name = "ogd_smn_d_historical"
-    csv_pattern = "ogd-smn_*_d_historical.csv"
-
+def prepare_sql_table(
+    dir: str, conn: sqlite3.Connection, table_name: str, csv_pattern: str
+) -> None:
     # Create table if it doesn't exist (schema inferred from first CSV)
-
     files = glob.glob(os.path.join(dir, csv_pattern))
     if not files:
         print("No CSV files found.")
@@ -187,6 +204,18 @@ def prepare_sql_ogd_smn_d_historical(dir: str, conn: sqlite3.Connection) -> None
 
         conn.executemany(insert_sql, df.itertuples(index=False, name=None))
         conn.commit()
+
+
+def prepare_sql_ogd_smn_h_recent(dir: str, conn: sqlite3.Connection) -> None:
+    table_name = "ogd_smn_h_recent"
+    csv_pattern = "ogd-smn_*_h_recent.csv"
+    prepare_sql_table(dir, conn, table_name=table_name, csv_pattern=csv_pattern)
+
+
+def prepare_sql_ogd_smn_d_historical(dir: str, conn: sqlite3.Connection) -> None:
+    table_name = "ogd_smn_d_historical"
+    csv_pattern = "ogd-smn_*_d_historical.csv"
+    prepare_sql_table(dir, conn, table_name=table_name, csv_pattern=csv_pattern)
 
 
 def prepare_sql_ogd_smn_meta_stations(dir: str, conn: sqlite3.Connection) -> None:
@@ -314,16 +343,23 @@ def prepare_sql_db(dir: str) -> None:
 
     The following data tables are supported:
 
-    SwissMetNet (smn) historical daily measurements.
+    * SwissMetNet (smn) historical daily measurements.
 
-    * sqlite3 table name: ogd_smn_d_historical
-    * File pattern: ogd-smn_*_d_historical.csv
-    * Time resolution: daily
-    * Primary key: (station_abbr, reference_timestamp)
+        * sqlite3 table name: ogd_smn_d_historical
+        * File pattern: ogd-smn_*_d_historical.csv
+        * Time resolution: daily
+        * Primary key: (station_abbr, reference_timestamp)
 
-    And the following metadata tables are supported:
+    * SwissMetNet (smn) recent hourly measurements.
 
-    smn_meta_stations
+        * sqlite3 table name: ogd_smn_h_recent
+        * File pattern: ogd-smn_*_h_recent.csv
+        * Time resolution: hourly
+        * Primary key: (station_abbr, reference_timestamp)
+
+    * And the following metadata tables are supported:
+
+        * smn_meta_stations
 
     """
     db_path = os.path.join(dir, "swissmetnet.sqlite")
@@ -331,6 +367,7 @@ def prepare_sql_db(dir: str) -> None:
 
     # CSV data
     prepare_sql_ogd_smn_d_historical(dir, conn)
+    prepare_sql_ogd_smn_h_recent(dir, conn)
     prepare_sql_ogd_smn_meta_stations(dir, conn)
     # Materialized views
     prepare_sql_ogd_smn_station_data_summary(conn)

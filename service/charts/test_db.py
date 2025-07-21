@@ -48,6 +48,18 @@ class TestDb(unittest.TestCase):
             )
         """
         )
+        cursor.execute(
+            """
+            CREATE TABLE ogd_smn_h_recent (
+                station_abbr TEXT,
+                reference_timestamp TEXT,
+                tre200h0 REAL,
+                tre200hn REAL,
+                tre200hx REAL,
+                rre150h0 REAL
+            )
+        """
+        )
         cls.conn.commit()
 
 
@@ -184,7 +196,7 @@ class TestDbStations(TestDb):
         self.assertEqual(stations[0].abbr, "ABO")
 
 
-class TestDbHistory(TestDb):
+class TestDbDailyHistory(TestDb):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -277,3 +289,76 @@ class TestDbHistory(TestDb):
         self.assertIn(db.TEMP_DAILY_MEAN, df.columns)
         self.assertNotIn(db.PRECIP_DAILY_MM, df.columns)
         self.assertEqual(set(df.columns), {db.TEMP_DAILY_MEAN, "station_abbr"})
+
+
+class TestDbHourlyRecent(TestDb):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._insert_history_test_data()
+
+    @classmethod
+    def _insert_history_test_data(cls):
+        cursor = cls.conn.cursor()
+        historical_data = [
+            ("ABO", "2023-01-01 00:00:00Z", 1.0, 0.5, 1.5, 10.0),
+            ("ABO", "2023-01-01 01:00:00Z", 2.0, 1.5, 2.5, 12.0),
+            ("ABO", "2023-01-01 02:00:00Z", 3.0, 2.5, 3.5, 15.0),
+            ("ABO", "2023-01-01 03:00:00Z", 4.0, 3.5, 4.5, 18.0),
+            ("ABO", "2023-01-01 04:00:00Z", 5.0, 4.5, 5.5, 20.0),
+            ("ABO", "2023-01-01 05:00:00Z", 6.0, 5.5, 6.5, 22.0),
+            ("ABO", "2024-01-02 00:00:00Z", 1.5, 1.0, 2.0, 10.5),
+            ("GEN", "2023-08-15 12:00:00Z", 23.0, 22.0, 24.5, 7.0),
+            ("GEN", "2023-07-15 12:00:00Z", 22.0, 21.0, 23.0, 7.0),
+            ("GEN", "2023-06-15 12:00:00Z", 20.0, 19.0, 21.0, 5.0),
+        ]
+        cursor.executemany(
+            """
+            INSERT INTO ogd_smn_h_recent (station_abbr, reference_timestamp, tre200h0, tre200hn, tre200hx, rre150h0)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """,
+            historical_data,
+        )
+        cls.conn.commit()
+
+    def test_read_hourly_recent_time_range(self):
+        from_date = datetime.datetime(2023, 1, 1, 0, 0, 0, 0, datetime.UTC)
+        to_date = from_date + datetime.timedelta(hours=4)
+        df = db.read_hourly_recent(self.conn, "ABO", from_date, to_date)
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertFalse(df.empty)
+        self.assertEqual(len(df), 4)  # to_date is exclusive
+        self.assertIn(db.TEMP_HOURLY_MEAN, df.columns)
+        self.assertIn(db.TEMP_HOURLY_MAX, df.columns)
+        self.assertIn(db.TEMP_HOURLY_MIN, df.columns)
+        self.assertIn(db.PRECIP_HOURLY_MM, df.columns)
+        self.assertEqual(df.index.name, "reference_timestamp")
+        self.assertEqual(df.index.dtype, "datetime64[ns, UTC]")
+        self.assertTrue(df.index.is_monotonic_increasing)
+
+    def test_read_hourly_recent_multiple_days(self):
+        from_date = datetime.datetime(2023, 1, 1, 0, 0, 0, 0, datetime.UTC)
+        to_date = from_date + datetime.timedelta(days=365)
+        df = db.read_hourly_recent(self.conn, "GEN", from_date, to_date)
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertEqual(len(df), 3)  # all 3 rows should be returned
+        self.assertTrue(df.index.is_monotonic_increasing)
+
+    def test_read_hourly_recent_invalid_column(self):
+        from_date = datetime.datetime(2023, 1, 1, 0, 0, 0, 0, datetime.UTC)
+        to_date = from_date + datetime.timedelta(hours=4)
+        with self.assertRaises(ValueError):
+            db.read_hourly_recent(
+                self.conn,
+                station_abbr="ABO",
+                columns=["invalid;column"],
+                from_date=from_date,
+                to_date=to_date,
+            )
+
+    def test_read_hourly_recent_no_data_in_range(self):
+        from_date = datetime.datetime(1980, 1, 1, 0, 0, 0, 0, datetime.UTC)
+        to_date = from_date + datetime.timedelta(hours=4)
+        df = db.read_hourly_recent(self.conn, "ABO", from_date, to_date)
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertTrue(df.empty)

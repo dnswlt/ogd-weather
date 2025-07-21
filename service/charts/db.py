@@ -10,9 +10,13 @@ import sqlite3
 from . import models
 
 # Column names for temperature and precipitation measurements.
+TEMP_HOURLY_MEAN = "tre200h0"
+TEMP_HOURLY_MIN = "tre200hn"
+TEMP_HOURLY_MAX = "tre200hx"
 TEMP_DAILY_MEAN = "tre200d0"
 TEMP_DAILY_MIN = "tre200dn"
 TEMP_DAILY_MAX = "tre200dx"
+PRECIP_HOURLY_MM = "rre150h0"
 PRECIP_DAILY_MM = "rre150d0"
 
 
@@ -158,6 +162,53 @@ def read_daily_historical(
         filters.append(f"date(reference_timestamp) >= date('{from_year:04d}-01-01')")
     if to_year is not None:
         filters.append(f"date(reference_timestamp) < date('{to_year+1:04d}-01-01')")
+
+    # Filter out any row that has only NULL measurements.
+    if columns:
+        non_null = " OR ".join(f"{c} IS NOT NULL" for c in columns)
+        filters.append(f"({non_null})")
+
+    sql += " WHERE " + " AND ".join(filters)
+    sql += " ORDER BY reference_timestamp ASC"
+
+    return pd.read_sql(
+        sql,
+        conn,
+        params=params,
+        parse_dates=["reference_timestamp"],
+        index_col="reference_timestamp",
+    )
+
+
+def read_hourly_recent(
+    conn: sqlite3.Connection,
+    station_abbr: str,
+    from_date: datetime.datetime,
+    to_date: datetime.datetime,
+    columns: list[str] | None = None,
+) -> pd.DataFrame:
+    if columns is None:
+        columns = [TEMP_HOURLY_MEAN, TEMP_HOURLY_MIN, TEMP_HOURLY_MAX, PRECIP_HOURLY_MM]
+
+    # Validate column names to prevent SQL injection
+    if not all(re.search(r"^[a-z][a-zA-Z0-9_]*$", c) for c in columns):
+        raise ValueError(f"Invalid columns: {','.join(columns)}")
+
+    select_columns = ["station_abbr", "reference_timestamp"] + columns
+    sql = f"""
+        SELECT {', '.join(select_columns)}
+        FROM ogd_smn_h_recent
+    """
+    # Filter by station.
+    filters = ["station_abbr = ?"]
+    params = [station_abbr]
+
+    if from_date is not None:
+        from_date_str = from_date.strftime("%Y-%m-%d %H:%M:%SZ")
+        filters.append(f"reference_timestamp >= '{from_date_str}'")
+    if to_date is not None:
+        to_date_str = to_date.strftime("%Y-%m-%d %H:%M:%SZ")
+        filters.append(f"reference_timestamp < '{to_date_str}'")
 
     # Filter out any row that has only NULL measurements.
     if columns:

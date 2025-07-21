@@ -5,8 +5,6 @@ import pandas as pd
 from . import db
 from . import models
 
-BASE_DIR = os.environ.get("OGD_BASE_DIR", ".")
-
 
 class StationNotFoundError(ValueError):
     """Raised when a requested station doesn't exist."""
