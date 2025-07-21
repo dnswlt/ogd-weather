@@ -180,6 +180,18 @@ def read_daily_historical(
     )
 
 
+def utc_timestr(d: datetime.datetime) -> str:
+    """Returns the given datetime as a UTC time string in ISO format.
+
+    Example: "2025-03-31 23:59:59Z"
+
+    If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
+    """
+    if d.tzinfo is not None:
+        d = d.astimezone(datetime.UTC)
+    return d.strftime("%Y-%m-%d %H:%M:%SZ")
+
+
 def read_hourly_recent(
     conn: sqlite3.Connection,
     station_abbr: str,
@@ -204,11 +216,9 @@ def read_hourly_recent(
     params = [station_abbr]
 
     if from_date is not None:
-        from_date_str = from_date.strftime("%Y-%m-%d %H:%M:%SZ")
-        filters.append(f"reference_timestamp >= '{from_date_str}'")
+        filters.append(f"reference_timestamp >= '{utc_timestr(from_date)}'")
     if to_date is not None:
-        to_date_str = to_date.strftime("%Y-%m-%d %H:%M:%SZ")
-        filters.append(f"reference_timestamp < '{to_date_str}'")
+        filters.append(f"reference_timestamp < '{utc_timestr(to_date)}'")
 
     # Filter out any row that has only NULL measurements.
     if columns:

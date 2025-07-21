@@ -41,6 +41,7 @@ class ColumnInfo(BaseModel):
     name: str
     display_name: str = ""
     description: str = ""
+    dtype: str = ""
 
 
 class StationMeasurementsData(BaseModel):

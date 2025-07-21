@@ -6,6 +6,7 @@ import sqlite3
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from zoneinfo import ZoneInfo
 from . import charts
 from . import db
 from . import models
@@ -147,7 +148,7 @@ async def get_daily_measurements(
         else datetime.date.today() - datetime.timedelta(days=1)
     )
     from_date = datetime.datetime(
-        d.year, d.month, d.day, 0, 0, 0, 0, tzinfo=datetime.UTC
+        d.year, d.month, d.day, 0, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
     )
     to_date = from_date + datetime.timedelta(days=1)
     df = db.read_hourly_recent(

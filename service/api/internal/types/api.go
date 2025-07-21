@@ -53,6 +53,7 @@ type ColumnInfo struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 	Description string `json:"description"`
+	Dtype       string `json:"dtype"`
 }
 
 type StationMeasurementsData struct {

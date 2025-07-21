@@ -374,6 +374,7 @@ def daily_measurements(
         columns=[
             models.ColumnInfo(
                 name=c,
+                dtype=str(df[c].dtype),
             )
             for c in measurements.columns
         ],
