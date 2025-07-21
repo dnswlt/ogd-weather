@@ -34,6 +34,7 @@ type ServerOptions struct {
 	ChartServiceEndpoint string // Ex: "http://localhost:8000"
 	TemplateDir          string // Ex: "./templates"
 	DebugMode            bool
+	LogRequests          bool
 }
 
 func (s *Server) reloadTemplates() error {
@@ -85,6 +86,45 @@ func (s *Server) serveHomepage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(output.Bytes())
+}
+
+// withRequestLogging wraps a handler and logs each request if in debug mode.
+// Logs include method, path, remote address, and duration.
+func (s *Server) withRequestLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Wrap ResponseWriter to capture status code
+		lrw := &loggingResponseWriter{ResponseWriter: w}
+
+		next.ServeHTTP(lrw, r)
+
+		duration := time.Since(start)
+		log.Printf("%s %s %d %dms (remote=%s)",
+			r.Method,
+			r.URL.Path,
+			lrw.statusCode,
+			duration.Milliseconds(),
+			r.RemoteAddr,
+		)
+	})
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
+
+func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
+	if lrw.statusCode == 0 { // no explicit status yet => implies 200
+		lrw.WriteHeader(http.StatusOK)
+	}
+	return lrw.ResponseWriter.Write(b)
 }
 
 // withTemplateReload wraps a handler and reloads templates in debug mode,
@@ -157,6 +197,9 @@ func (s *Server) Serve() error {
 	var handler http.Handler = mux
 	if s.opts.DebugMode {
 		handler = s.withTemplateReload(handler)
+	}
+	if s.opts.LogRequests {
+		handler = s.withRequestLogging(handler)
 	}
 
 	modeInfo := "(prod mode)"
