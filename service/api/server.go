@@ -2,10 +2,12 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -19,12 +21,12 @@ import (
 )
 
 type Server struct {
-	addr                 string
-	chartServiceEndpoint *url.URL
-	template             *template.Template
-	debugMode            bool
-	lastReloadMu         sync.Mutex
-	lastReload           time.Time
+	opts                ServerOptions
+	chartServiceBaseURL *url.URL
+	template            *template.Template
+	lastReloadMu        sync.Mutex
+	lastReload          time.Time
+	client              *http.Client
 }
 
 type ServerOptions struct {
@@ -40,20 +42,31 @@ func (s *Server) reloadTemplates() error {
 		"datefmt": ui.DateFmt,
 	})
 	var err error
-	s.template, err = tmpl.ParseGlob(path.Join("./templates", "*.html"))
+	s.template, err = tmpl.ParseGlob(path.Join(s.opts.TemplateDir, "*.html"))
 	return err
 }
 
 func NewServer(opts ServerOptions) (*Server, error) {
-	endpoint, err := url.Parse(opts.ChartServiceEndpoint)
+	chartServiceBaseURL, err := url.Parse(opts.ChartServiceEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid chartServiceEndpoint URL: %v", err)
 	}
-
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,  // TCP connect timeout
+				KeepAlive: 15 * time.Second, // keep-alive for connection reuse
+			}).DialContext,
+			MaxIdleConns:        100,
+			IdleConnTimeout:     120 * time.Second,
+			TLSHandshakeTimeout: 5 * time.Second,
+		},
+	}
 	s := &Server{
-		addr:                 opts.Addr,
-		chartServiceEndpoint: endpoint,
-		debugMode:            opts.DebugMode,
+		opts:                opts,
+		chartServiceBaseURL: chartServiceBaseURL,
+		client:              client,
 	}
 
 	if err := s.reloadTemplates(); err != nil {
@@ -79,7 +92,7 @@ func (s *Server) serveHomepage(w http.ResponseWriter, r *http.Request) {
 // until reload completes.
 func (s *Server) withTemplateReload(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.debugMode {
+		if s.opts.DebugMode {
 			now := time.Now()
 
 			func() {
@@ -107,8 +120,14 @@ func (s *Server) Serve() error {
 	// Root page
 	mux.HandleFunc("GET /{$}", s.serveHomepage)
 
+	// Health check. Useful for cloud deployments.
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "OK")
+	})
+
 	// Reverse proxy
-	proxy := httputil.NewSingleHostReverseProxy(s.chartServiceEndpoint)
+	proxy := httputil.NewSingleHostReverseProxy(s.chartServiceBaseURL)
 	mux.HandleFunc("GET /stations/{stationID}/charts/{chartType}",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
@@ -136,16 +155,16 @@ func (s *Server) Serve() error {
 		})
 
 	var handler http.Handler = mux
-	if s.debugMode {
+	if s.opts.DebugMode {
 		handler = s.withTemplateReload(handler)
 	}
 
 	modeInfo := "(prod mode)"
-	if s.debugMode {
+	if s.opts.DebugMode {
 		modeInfo = "(debug mode)"
 	}
-	log.Printf("Go API server %s on http://%s", modeInfo, s.addr)
-	return http.ListenAndServe(s.addr, handler)
+	log.Printf("Go API server %s on http://%s", modeInfo, s.opts.Addr)
+	return http.ListenAndServe(s.opts.Addr, handler)
 }
 
 func acceptsHTML(accept string) bool {
@@ -157,7 +176,7 @@ func acceptsHTML(accept string) bool {
 // chartServiceURL creates the forwarding URL to the chart service endpoint
 // for the given original URL targeting this server.
 func (s *Server) chartServiceURL(originalURL *url.URL) *url.URL {
-	u := *s.chartServiceEndpoint
+	u := *s.chartServiceBaseURL
 	u.Path = originalURL.Path
 	u.RawQuery = originalURL.RawQuery
 	return &u
@@ -171,9 +190,18 @@ func serveChartServiceURL[Response any](
 	params map[string]any) {
 
 	u := s.chartServiceURL(r.URL)
-	resp, err := http.Get(u.String())
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		log.Printf("Backend error for %s: %v", r.URL.Path, err)
+		log.Printf("Failed to create request for %s: %v", u.String(), err)
+		http.Error(w, "Backend error", http.StatusInternalServerError)
+		return
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		log.Printf("Backend error for %s: %v", u.String(), err)
 		http.Error(w, "Backend error", http.StatusInternalServerError)
 		return
 	}

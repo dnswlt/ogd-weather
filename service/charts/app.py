@@ -62,6 +62,12 @@ async def no_data_error_handler(request, exc: charts.NoDataError):
     )
 
 
+@app.get("/health")
+def health():
+    """Health check endpoint for cloud deployments."""
+    return {"status": "ok"}
+
+
 @app.get("/stations/{station_abbr}/charts/{chart_type}")
 async def get_chart(
     station_abbr: str,

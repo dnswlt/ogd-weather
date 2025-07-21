@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build -o weather-api ./cmd/server
 FROM alpine:3.20
 WORKDIR /app
 COPY --from=builder /app/weather-api /app/
-COPY templates/ templates/
+COPY templates ./templates
 
 # Expose the port your Go service listens on
 EXPOSE 8080

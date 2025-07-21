@@ -1,0 +1,23 @@
+{
+    "family": "weather-charts",
+    "executionRoleArn": "arn:aws:iam::006725292903:role/ecsTaskExecutionRole",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "512",
+    "memory": "1024",
+    "containerDefinitions": [
+        {
+            "name": "weather-charts",
+            "image": "006725292903.dkr.ecr.eu-central-1.amazonaws.com/weather-charts:latest",
+            "portMappings": [
+                {
+                    "containerPort": 8080,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true
+        }
+    ]
+}
