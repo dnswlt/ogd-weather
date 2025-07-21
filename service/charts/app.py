@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import datetime
 import logging
 import os
 import sqlite3
@@ -131,6 +132,30 @@ async def get_chart(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f"Invalid chart type (must be one of [{','.join(valid_charts)}])",
     )
+
+
+@app.get("/stations/{station_abbr}/daily")
+async def get_daily_measurements(
+    station_abbr: str,
+    date: str | None = None,
+):
+    station_abbr = station_abbr.upper()
+    # Parse date, if specified, else assume yesterday.
+    d = (
+        datetime.date.fromisoformat(date)
+        if date
+        else datetime.date.today() - datetime.timedelta(days=1)
+    )
+    from_date = datetime.datetime(
+        d.year, d.month, d.day, 0, 0, 0, 0, tzinfo=datetime.UTC
+    )
+    to_date = from_date + datetime.timedelta(days=1)
+    df = db.read_hourly_recent(
+        app.state.db, station_abbr, from_date=from_date, to_date=to_date
+    )
+    return {
+        "data": charts.daily_measurements(df, station_abbr),
+    }
 
 
 @app.get("/stations/{station_abbr}/summary")

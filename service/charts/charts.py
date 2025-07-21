@@ -354,3 +354,27 @@ def station_stats(
         driest_year=driest_year,
         wettest_year=wettest_year,
     )
+
+
+def daily_measurements(
+    df: pd.DataFrame, station_abbr: str
+) -> models.StationMeasurementsData:
+    rows = []
+    measurements = df.select_dtypes(include=["number"]).astype("float")
+    for t, d in measurements.iterrows():
+        rows.append(
+            models.MeasurementsRow(
+                reference_timestamp=t.to_pydatetime(),
+                measurements=list(d),
+            )
+        )
+    return models.StationMeasurementsData(
+        station_abbr=station_abbr,
+        rows=rows,
+        columns=[
+            models.ColumnInfo(
+                name=c,
+            )
+            for c in measurements.columns
+        ],
+    )

@@ -44,6 +44,27 @@ type VegaSpecResponse struct {
 	VegaSpec map[string]any `json:"vega_spec"`
 }
 
+type MeasurementsRow struct {
+	ReferenceTimestamp time.Time `json:"reference_timestamp"`
+	Measurements       []float64 `json:"measurements"`
+}
+
+type ColumnInfo struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Description string `json:"description"`
+}
+
+type StationMeasurementsData struct {
+	StationAbbr string             `json:"station_abbr"`
+	Rows        []*MeasurementsRow `json:"rows"`
+	Columns     []*ColumnInfo      `json:"columns"`
+}
+
+type StationMeasurementsResponse struct {
+	Data *StationMeasurementsData `json:"data"`
+}
+
 // Date wraps time.Time but marshals/unmarshals as YYYY-MM-DD.
 type Date struct {
 	time.Time

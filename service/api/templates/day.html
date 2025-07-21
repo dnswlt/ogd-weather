@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Wetterdaten CH</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Vega stack -->
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+
+    <!-- htmx + path‑params -->
+    <script src="https://unpkg.com/htmx.org@2.0.6"></script>
+    <script src="https://unpkg.com/htmx-ext-path-params@2.0.0/path-params.js"></script>
+</head>
+
+<body class="min-h-screen bg-gray-50 p-4">
+    <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
+        <h1 class="text-2xl font-semibold text-center">Wetterdaten CH</h1>
+
+        <!-- Controls -->
+        <form class="space-y-4" id="chart-controls">
+
+            <!-- Station -->
+            <div class="grid grid-cols-3 gap-3 items-center">
+                <label for="station" class="col-span-1 font-medium">Station</label>
+
+                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full" hx-get="/stations"
+                    hx-trigger="load" hx-target="#station" hx-swap="innerHTML">
+                    <!-- #include "../templates/station_options.html" -->
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+
+            <!-- Date picker -->
+            <div class="grid grid-cols-3 gap-3 items-center">
+                <label for="date" class="col-span-1 font-medium">Date</label>
+                <div class="col-span-2 grid grid-cols-2 gap-3">
+                    <input type="date" id="date" name="date" placeholder="Pick date" class="border rounded p-2 w-full">
+                </div>
+            </div>
+
+        </form>
+
+        <!-- Summary -->
+        <div>
+            <div id="station-summary-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
+                hx-trigger="change from:#station, change from:#date" hx-get="/stations/{station}/daily">
+                <!-- <table> with station weather summary goes here -->
+                <!-- #include "../templates/station_summary.html" -->
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Auto-load once station options arrive
+        document.body.addEventListener('htmx:afterSwap', function (evt) {
+            if (evt.target.id === 'station') {
+                const sel = document.getElementById('station');
+                if (!sel) return;
+
+                // Prefer server-selected; else first non-empty option
+                let opt = sel.querySelector('option[selected]');
+                if (!opt) {
+                    opt = Array.from(sel.options).find(o => o.value.trim() !== '');
+                }
+                if (opt) {
+                    sel.value = opt.value;
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        });
+    </script>
+    <div class="text-center text-gray-500 text-xs mt-4">
+        Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
+    </div>
+    <div class="text-center text-gray-500 text-xs mt-2">
+        Disclaimer: No responsibility is taken for the accuracy or use of the data shown.
+    </div>
+</body>
+
+</html>

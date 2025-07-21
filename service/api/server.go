@@ -88,6 +88,17 @@ func (s *Server) serveHomepage(w http.ResponseWriter, r *http.Request) {
 	w.Write(output.Bytes())
 }
 
+func (s *Server) serveDay(w http.ResponseWriter, r *http.Request) {
+	var output bytes.Buffer
+	err := s.template.ExecuteTemplate(&output, "day.html", nil)
+	if err != nil {
+		log.Printf("Failed to render day.html: %v", err)
+		http.Error(w, "Template rendering error", http.StatusInternalServerError)
+		return
+	}
+	w.Write(output.Bytes())
+}
+
 // withRequestLogging wraps a handler and logs each request if in debug mode.
 // Logs include method, path, remote address, and duration.
 func (s *Server) withRequestLogging(next http.Handler) http.Handler {
@@ -159,6 +170,7 @@ func (s *Server) Serve() error {
 
 	// Root page
 	mux.HandleFunc("GET /{$}", s.serveHomepage)
+	mux.HandleFunc("GET /day", s.serveDay)
 
 	// Health check. Useful for cloud deployments.
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -180,6 +192,14 @@ func (s *Server) Serve() error {
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
 				s.serveSummarySnippet(w, r)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
+	mux.HandleFunc("GET /stations/{stationID}/daily",
+		func(w http.ResponseWriter, r *http.Request) {
+			if acceptsHTML(r.Header.Get("Accept")) {
+				s.serveDailySnippet(w, r)
 				return
 			}
 			proxy.ServeHTTP(w, r)
@@ -290,6 +310,10 @@ func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) serveSummarySnippet(w http.ResponseWriter, r *http.Request) {
 	serveChartServiceURL[types.StationSummaryResponse](s, w, r, "station_summary.html", nil)
+}
+
+func (s *Server) serveDailySnippet(w http.ResponseWriter, r *http.Request) {
+	serveChartServiceURL[types.StationMeasurementsResponse](s, w, r, "daily_measurements.html", nil)
 }
 
 func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {

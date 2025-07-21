@@ -1,0 +1,25 @@
+{{$columns := .Response.Data.Columns}}
+<table>
+    <thead>
+        <tr>
+            <th>Timestamp</th>
+        {{range $columns}}
+            <th style="text-align:right;padding-left:1ex;">{{.Name}}</th>
+        {{end}}
+        </tr>
+    </thead>
+    <tbody>
+        {{range $row := .Response.Data.Rows}}
+        <tr>
+            <td>
+                {{$row.ReferenceTimestamp}}
+            </td>
+            {{range $i, $c := $columns}}
+            <td style="text-align:right;padding-left:1ex;">
+                {{printf "%.1f" (index $row.Measurements $i)}}
+            </td>
+            {{end}}
+        </tr>
+        {{end}}
+    </tbody>
+</table>

@@ -1,3 +1,4 @@
+import datetime
 from pydantic import BaseModel
 from datetime import date
 
@@ -29,3 +30,22 @@ class StationStats(BaseModel):
 class StationSummary(BaseModel):
     station: Station
     stats: StationStats
+
+
+class MeasurementsRow(BaseModel):
+    reference_timestamp: datetime.datetime
+    measurements: list[float]
+
+
+class ColumnInfo(BaseModel):
+    name: str
+    display_name: str = ""
+    description: str = ""
+
+
+class StationMeasurementsData(BaseModel):
+    """Generic holder of measurement data for a single station."""
+
+    station_abbr: str
+    rows: list[MeasurementsRow]
+    columns: list[ColumnInfo]
