@@ -29,6 +29,13 @@ func TestDateFmt(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:        "Format including time with time.Time",
+			format:      "Y-m-d H:M:S",
+			date:        sampleTime.Add(18*time.Hour + 30*time.Minute + 50*time.Second),
+			expected:    "2023-01-15 18:30:50",
+			expectError: false,
+		},
+		{
 			name:        "Format Ymd with types.Date",
 			format:      "Y",
 			date:        sampleDate,
@@ -93,9 +100,9 @@ func TestDateFmt(t *testing.T) {
 		},
 		{
 			name:        "Format with additional characters",
-			format:      "Y-m-d HH:MM:SS", // HH:MM:SS should pass through unchanged
+			format:      "Y-m-d XZ", // XZ should pass through unchanged
 			date:        sampleDate,
-			expected:    "2023-01-15 HH:MM:SS",
+			expected:    "2023-01-15 XZ",
 			expectError: false,
 		},
 	}

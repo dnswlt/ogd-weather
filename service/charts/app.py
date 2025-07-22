@@ -148,7 +148,7 @@ async def get_daily_measurements(
         else datetime.date.today() - datetime.timedelta(days=1)
     )
     from_date = datetime.datetime(
-        d.year, d.month, d.day, 0, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
+        d.year, d.month, d.day, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
     )
     to_date = from_date + datetime.timedelta(days=1)
     df = db.read_hourly_recent(

@@ -171,7 +171,7 @@ def read_daily_historical(
     sql += " WHERE " + " AND ".join(filters)
     sql += " ORDER BY reference_timestamp ASC"
 
-    return pd.read_sql(
+    return pd.read_sql_query(
         sql,
         conn,
         params=params,
@@ -228,10 +228,14 @@ def read_hourly_recent(
     sql += " WHERE " + " AND ".join(filters)
     sql += " ORDER BY reference_timestamp ASC"
 
-    return pd.read_sql(
+    return pd.read_sql_query(
         sql,
         conn,
         params=params,
         parse_dates=["reference_timestamp"],
         index_col="reference_timestamp",
     )
+
+
+def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
+    return pd.read_sql_table("ogd_smn_meta_parameters", conn)

@@ -12,7 +12,7 @@
         {{range $row := .Response.Data.Rows}}
         <tr>
             <td>
-                {{$row.ReferenceTimestamp}}
+                {{datefmt "d J Y H:M" $row.ReferenceTimestamp}}
             </td>
             {{range $i, $c := $columns}}
             <td style="text-align:right;padding-left:1ex;">

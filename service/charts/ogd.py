@@ -2,12 +2,20 @@ from concurrent.futures import ThreadPoolExecutor
 import datetime
 import glob
 import os
+import re
 import sqlite3
 import time
+import numpy as np
 import pandas as pd
 import requests
 import sys
 from urllib.parse import urlparse
+
+
+_DATE_FORMATS = {
+    "station_data_since": "%d.%m.%Y",
+    "reference_timestamp": "%d.%m.%Y %H:%M",
+}
 
 
 def fetch_paginated(url, timeout=10):
@@ -111,7 +119,8 @@ def fetch_all_data(weather_dir: str):
 
     os.makedirs(weather_dir, exist_ok=True)
     for a in assets:
-        download_csv(a["href"], output_dir=weather_dir)
+        # Download metadata at most once a day
+        download_csv(a["href"], output_dir=weather_dir, max_age_seconds=24 * 60 * 60)
 
     # Download CSV data files concurrently.
     def _download(params):
@@ -150,53 +159,78 @@ def normalize_timestamp(series: pd.Series) -> pd.Series:
         return series.dt.tz_localize("UTC").dt.strftime("%Y-%m-%d %H:%M:%SZ")
 
 
+def determine_column_types(csv_file: str):
+    """Returns all columns present in both _DATE_FORMATS and the given CSV file."""
+    df = pd.read_csv(
+        csv_file,
+        sep=";",
+        encoding="cp1252",
+        nrows=1,
+    )
+
+    def is_measurement(c):
+        # Heuristically determine if the column is a measurement column.
+        return len(c) == len("tre200h0") and re.search(r"^[a-z0-9]+$", c)
+
+    return {
+        "date_format": {
+            c: fmt for (c, fmt) in _DATE_FORMATS.items() if c in df.columns
+        },
+        "dtype": {c: np.float64 for c in df.columns if is_measurement(c)},
+    }
+
+
 def prepare_sql_table(
-    dir: str, conn: sqlite3.Connection, table_name: str, csv_pattern: str
+    dir: str,
+    conn: sqlite3.Connection,
+    table_name: str,
+    csv_pattern: str,
+    primary_keys: list[str] | None = None,
 ) -> None:
     # Create table if it doesn't exist (schema inferred from first CSV)
     files = glob.glob(os.path.join(dir, csv_pattern))
     if not files:
-        print("No CSV files found.")
+        print(f"No CSV files matching {csv_pattern} found.")
         return
 
-    first_file = files[0]
+    # Pandas expects all columns passed to read_csv's parse_dates= to exist.
+    # Identify which columns exist by reading the first file:
+    typeinfo = determine_column_types(files[0])
+    date_format = typeinfo["date_format"]
 
-    # Read one file to infer schema
-    sample_df = pd.read_csv(
-        first_file,
-        sep=";",
-        encoding="cp1252",
-        parse_dates=["reference_timestamp"],
-        date_format={"reference_timestamp": "%d.%m.%Y %H:%M"},
-        nrows=10,
-    )
-    # Create table with proper PK
-    cols_def = ",\n".join(
-        f"{col} {infer_sqlite_type(dtype)}" for col, dtype in sample_df.dtypes.items()
-    )
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            {cols_def},
-            PRIMARY KEY (station_abbr, reference_timestamp)
-        )
-    """
-    )
-    conn.commit()
-
-    # Process all files
-    for fname in glob.glob(os.path.join(dir, csv_pattern)):
+    schema_created = False
+    for fname in files:
         print(f"Importing {fname} into sqlite3 database...")
         df = pd.read_csv(
             fname,
             sep=";",
             encoding="cp1252",
-            parse_dates=["reference_timestamp"],
-            date_format={"reference_timestamp": "%d.%m.%Y %H:%M"},
+            date_format=date_format,
+            parse_dates=list(date_format.keys()),
+            dtype=typeinfo["dtype"],
         )
-
         # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
-        df["reference_timestamp"] = normalize_timestamp(df["reference_timestamp"])
+        for col in date_format.keys():
+            df[col] = normalize_timestamp(df[col])
+
+        if not schema_created:
+            # Create table with proper PK
+            cols_def = ",\n".join(
+                f"{col} {infer_sqlite_type(dtype)}" for col, dtype in df.dtypes.items()
+            )
+            primary_key = (
+                f"PRIMARY KEY ({', '.join(primary_keys)})" if primary_keys else ""
+            )
+            conn.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS {table_name} (
+                    {cols_def},
+                    {primary_key}
+                )
+            """
+            )
+            conn.commit()
+            schema_created = True
 
         # Insert row by row, ignoring duplicates
         placeholders = ",".join(["?"] * len(df.columns))
@@ -207,56 +241,50 @@ def prepare_sql_table(
 
 
 def prepare_sql_ogd_smn_h_recent(dir: str, conn: sqlite3.Connection) -> None:
-    table_name = "ogd_smn_h_recent"
-    csv_pattern = "ogd-smn_*_h_recent.csv"
-    prepare_sql_table(dir, conn, table_name=table_name, csv_pattern=csv_pattern)
+    prepare_sql_table(
+        dir,
+        conn,
+        table_name="ogd_smn_h_recent",
+        csv_pattern="ogd-smn_*_h_recent.csv",
+        primary_keys=["station_abbr", "reference_timestamp"],
+    )
 
 
 def prepare_sql_ogd_smn_d_historical(dir: str, conn: sqlite3.Connection) -> None:
-    table_name = "ogd_smn_d_historical"
-    csv_pattern = "ogd-smn_*_d_historical.csv"
-    prepare_sql_table(dir, conn, table_name=table_name, csv_pattern=csv_pattern)
+    prepare_sql_table(
+        dir,
+        conn,
+        table_name="ogd_smn_d_historical",
+        csv_pattern="ogd-smn_*_d_historical.csv",
+        primary_keys=["station_abbr", "reference_timestamp"],
+    )
 
 
 def prepare_sql_ogd_smn_meta_stations(dir: str, conn: sqlite3.Connection) -> None:
-    table_name = "ogd_smn_meta_stations"
-    csv_file = os.path.join(dir, "ogd-smn_meta_stations.csv")
-
-    df = pd.read_csv(
-        csv_file,
-        sep=";",
-        encoding="cp1252",
-        parse_dates=["station_data_since"],
-        date_format={"station_data_since": "%d.%m.%Y"},
+    prepare_sql_table(
+        dir,
+        conn,
+        table_name="ogd_smn_meta_stations",
+        csv_pattern=os.path.join(dir, "ogd-smn_meta_stations.csv"),
+        primary_keys=["station_abbr"],
     )
-    # Create table with proper PK
-    cols_def = ",\n".join(
-        f"{col} {infer_sqlite_type(dtype)}" for col, dtype in df.dtypes.items()
+
+
+def prepare_sql_ogd_smn_meta_parameters(dir: str, conn: sqlite3.Connection) -> None:
+    prepare_sql_table(
+        dir,
+        conn,
+        table_name="ogd_smn_meta_parameters",
+        csv_pattern=os.path.join(dir, "ogd-smn_meta_parameters.csv"),
+        primary_keys=["parameter_shortname"],
     )
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            {cols_def},
-            PRIMARY KEY (station_abbr)
-        )
-    """
-    )
-    conn.commit()
-
-    print(f"Importing {csv_file} into sqlite3 database...")
-
-    # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
-    df["station_data_since"] = normalize_timestamp(df["station_data_since"])
-
-    # Insert row by row, ignoring duplicates
-    placeholders = ",".join(["?"] * len(df.columns))
-    insert_sql = f"INSERT OR IGNORE INTO {table_name} VALUES ({placeholders})"
-
-    conn.executemany(insert_sql, df.itertuples(index=False, name=None))
-    conn.commit()
 
 
 def prepare_sql_ogd_smn_station_data_summary(conn: sqlite3.Connection) -> None:
+    """Creates a materialized view of summary data per station_abbr.
+
+    The data is based on a JOIN of the ogd_smn_meta_stations and ogd_smn_d_historical tables.
+    """
     # Drop old table
     conn.execute("DROP TABLE IF EXISTS ogd_smn_station_data_summary;")
 
@@ -369,6 +397,7 @@ def prepare_sql_db(dir: str) -> None:
     prepare_sql_ogd_smn_d_historical(dir, conn)
     prepare_sql_ogd_smn_h_recent(dir, conn)
     prepare_sql_ogd_smn_meta_stations(dir, conn)
+    prepare_sql_ogd_smn_meta_parameters(dir, conn)
     # Materialized views
     prepare_sql_ogd_smn_station_data_summary(conn)
 
@@ -381,7 +410,7 @@ def main():
         print(f"Usage: python3 {sys.argv[0]} <output_dir>")
         sys.exit(1)
     weather_dir = sys.argv[1]
-    fetch_all_data(weather_dir=weather_dir)
+    fetch_all_data(weather_dir)
     prepare_sql_db(weather_dir)
 
 
