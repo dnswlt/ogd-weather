@@ -4,6 +4,61 @@
 # xs = list(s.to_dict() for _, s in df.iterrows())
 # {x['shortname']: x for x in xs}
 #
+
+_COMMENT = """
+Units we care about:
+
+* Böenspitze (Sekundenböe) (fkl010d1)
+* Luftdruck auf Barometerhöhe (QFE) (prestad0)
+* Lufttemperatur 2 m über Boden (tre200d0)
+* Niederschlag (rre150d0)
+* Relative Luftfeuchtigkeit 2 m über Boden (ure200d0)
+* Sonnenscheindauer (sre000d0)
+* Windgeschwindigkeit skalar (fkl010d0)
+* Windrichtung (dkl010d0)
+
+
+Frequency of columns in historical daily data:
+
+[(4422732, 'rre150d0_count'),
+ (3186651, 'tre200d0_count'),
+ (2853791, 'fkl010d0_count'),
+ (2729305, 'fu3010d0_count'),
+ (2727246, 'ure200d0_count'),
+ (2707578, 'tre200dn_count'),
+ (2697903, 'pva200d0_count'),
+ (2510862, 'tre200dx_count'),
+ (2492608, 'prestad0_count'),
+ (1871335, 'sre000d0_count'),
+ (1800136, 'xno012d0_count'),
+ (1772228, 'sremaxdv_count'),
+ (1739472, 'fkl010d1_count'),
+ (1733950, 'fu3010d1_count'),
+ (1648405, 'dkl010d0_count'),
+ (1599862, 'xno000d0_count'),
+ (1576664, 'xcd000d0_count'),
+ (1369920, 'rka150d0_count'),
+ (1338734, 'gre000d0_count'),
+ (1260676, 'erefaod0_count'),
+ (1057259, 'rreetsd0_count'),
+ (959349, 'tre005dn_count'),
+ (919718, 'tre005dx_count'),
+ (919698, 'tre005d0_count'),
+ (858720, 'pp0qnhd0_count'),
+ (785932, 'fkl010d3_count'),
+ (784651, 'fu3010d3_count'),
+ (643791, 'pp0qffd0_count'),
+ (607691, 'ppz850d0_count'),
+ (336789, 'ods000d0_count'),
+ (226258, 'oli000d0_count'),
+ (169935, 'htoautd0_count'),
+ (158627, 'wcc006d0_count'),
+ (120748, 'ppz700d0_count'),
+ (44586, 'osr000d0_count'),
+ (19294, 'olo000d0_count')]
+
+"""
+
 ALL = {
     "dkl010d0": {
         "shortname": "dkl010d0",
