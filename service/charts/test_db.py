@@ -1,3 +1,4 @@
+import os
 import unittest
 import sqlite3
 import datetime
@@ -196,14 +197,14 @@ class TestDbStations(TestDb):
         self.assertEqual(stations[0].abbr, "ABO")
 
 
-class TestDbDailyHistory(TestDb):
+class TestDbDaily(TestDb):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls._insert_history_test_data()
+        cls._insert_daily_test_data()
 
     @classmethod
-    def _insert_history_test_data(cls):
+    def _insert_daily_test_data(cls):
         cursor = cls.conn.cursor()
         historical_data = [
             ("ABO", "2023-01-01", 1.0, 0.5, 1.5, 10.0),
@@ -292,14 +293,14 @@ class TestDbDailyHistory(TestDb):
         self.assertEqual(set(df.columns), {db.TEMP_DAILY_MEAN, "station_abbr"})
 
 
-class TestDbHourlyRecent(TestDb):
+class TestDbHourly(TestDb):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls._insert_history_test_data()
+        cls._insert_hourly_test_data()
 
     @classmethod
-    def _insert_history_test_data(cls):
+    def _insert_hourly_test_data(cls):
         cursor = cls.conn.cursor()
         historical_data = [
             ("ABO", "2023-01-01 00:00:00Z", 1.0, 0.5, 1.5, 10.0),
@@ -364,3 +365,56 @@ class TestDbHourlyRecent(TestDb):
         df = db.read_hourly_measurements(self.conn, "ABO", from_date, to_date)
         self.assertIsInstance(df, pd.DataFrame)
         self.assertTrue(df.empty)
+
+
+def _testdata_dir():
+    return os.path.join(os.path.dirname(__file__), "testdata")
+
+
+class TestCreateDb(unittest.TestCase):
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_create_daily(self):
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(),
+            self.conn,
+            db.DAILY_MEASUREMENTS_TABLE,
+            "ogd-smn_vis_d_recent.csv",
+        )
+        columns = [db.TEMP_DAILY_MAX, db.PRECIP_DAILY_MM, db.ATM_PRESSURE_DAILY_MEAN]
+        df = db.read_daily_measurements(
+            self.conn,
+            "VIS",
+            columns=columns,
+        )
+        self.assertEqual(len(df), 202)
+        self.assertTrue(
+            (df[columns].sum() > 0).all(),
+            "All measurement columns should have some nonzero values.",
+        )
+
+    def test_create_hourly(self):
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(),
+            self.conn,
+            db.HOURLY_MEASUREMENTS_TABLE,
+            "ogd-smn_vis_h_recent.csv",
+        )
+        columns = [db.TEMP_HOURLY_MAX, db.PRECIP_HOURLY_MM, db.GUST_PEAK_HOURLY_MAX]
+        df = db.read_hourly_measurements(
+            self.conn,
+            "VIS",
+            from_date=datetime.datetime(2020, 1, 1),
+            to_date=datetime.datetime(2026, 1, 1),
+            columns=columns,
+        )
+        self.assertEqual(len(df), 500)
+        self.assertTrue(
+            (df[columns].sum() > 0).all(),
+            "All measurement columns should have some nonzero values.",
+        )
