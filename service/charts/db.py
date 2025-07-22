@@ -238,4 +238,22 @@ def read_hourly_recent(
 
 
 def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
-    return pd.read_sql_table("ogd_smn_meta_parameters", conn)
+    sql = """
+        SELECT
+            parameter_shortname,
+            parameter_description_de,
+            parameter_description_fr,
+            parameter_description_it,
+            parameter_description_en,
+            parameter_group_de,
+            parameter_group_fr,
+            parameter_group_it,
+            parameter_group_en,
+            parameter_datatype,
+            parameter_unit
+        FROM ogd_smn_meta_parameters
+        ORDER BY parameter_shortname
+    """
+    df = pd.read_sql_query(sql, conn)
+    df.columns = [c.removeprefix("parameter_") for c in df.columns]
+    return df
