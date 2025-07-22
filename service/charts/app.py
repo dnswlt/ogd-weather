@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from . import charts
 from . import db
 from . import models
+from . import logging_config as _  # configure logging
 
 
 class ChartRequest(BaseModel):
@@ -17,11 +18,6 @@ class ChartRequest(BaseModel):
     chart_type: str
 
 
-# Global logging config
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
 logger = logging.getLogger("app")
 
 
@@ -29,7 +25,7 @@ logger = logging.getLogger("app")
 async def lifespan(app: FastAPI):
     # Startup: open SQLite connection once
     base_dir = os.environ.get("OGD_BASE_DIR", ".")
-    db_path = os.path.join(base_dir, "swissmetnet.sqlite")
+    db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
     conn = sqlite3.connect(db_path, check_same_thread=True)
     logger.info("Connected to sqlite3 at %s", db_path)
     conn.row_factory = sqlite3.Row
@@ -86,7 +82,7 @@ async def get_chart(
     window_int = int(window) if window and window.isdigit() else None
 
     if chart_type == "temperature":
-        df = db.read_daily_historical(
+        df = db.read_daily_measurements(
             app.state.db,
             station_abbr,
             period=period,
@@ -100,7 +96,7 @@ async def get_chart(
             ),
         }
     elif chart_type == "temperature_deviation":
-        df = db.read_daily_historical(
+        df = db.read_daily_measurements(
             app.state.db,
             station_abbr,
             period=period,
@@ -114,7 +110,7 @@ async def get_chart(
             ),
         }
     elif chart_type == "precipitation":
-        df = db.read_daily_historical(
+        df = db.read_daily_measurements(
             app.state.db,
             station_abbr,
             period=period,
@@ -151,7 +147,7 @@ async def get_daily_measurements(
         d.year, d.month, d.day, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
     )
     to_date = from_date + datetime.timedelta(days=1)
-    df = db.read_hourly_recent(
+    df = db.read_hourly_measurements(
         app.state.db, station_abbr, from_date=from_date, to_date=to_date
     )
     return {
@@ -171,7 +167,7 @@ async def get_summary(
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
     to_year_int = int(to_year) if to_year and to_year.isdigit() else None
 
-    df = db.read_daily_historical(
+    df = db.read_daily_measurements(
         app.state.db,
         station_abbr,
         period=period,

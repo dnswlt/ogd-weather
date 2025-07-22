@@ -22,8 +22,8 @@ class TestDb(unittest.TestCase):
     def _create_all_tables(cls):
         cursor = cls.conn.cursor()
         cursor.execute(
-            """
-            CREATE TABLE ogd_smn_station_data_summary (
+            f"""
+            CREATE TABLE {db.STATION_DATA_SUMMARY_TABLE_NAME} (
                 station_abbr TEXT PRIMARY KEY,
                 station_name TEXT,
                 station_canton TEXT,
@@ -37,8 +37,8 @@ class TestDb(unittest.TestCase):
         """
         )
         cursor.execute(
-            """
-            CREATE TABLE ogd_smn_d_historical (
+            f"""
+            CREATE TABLE {db.DAILY_MEASUREMENTS_TABLE.name} (
                 station_abbr TEXT,
                 reference_timestamp TEXT,
                 tre200d0 REAL,
@@ -49,8 +49,8 @@ class TestDb(unittest.TestCase):
         """
         )
         cursor.execute(
-            """
-            CREATE TABLE ogd_smn_h_recent (
+            f"""
+            CREATE TABLE {db.HOURLY_MEASUREMENTS_TABLE.name} (
                 station_abbr TEXT,
                 reference_timestamp TEXT,
                 tre200h0 REAL,
@@ -109,8 +109,8 @@ class TestDbStations(TestDb):
             ("LUG", "Lugano", "TI", None, None, None, None, 0, 0),  # All dates missing
         ]
         cursor.executemany(
-            """
-            INSERT INTO ogd_smn_station_data_summary (
+            f"""
+            INSERT INTO {db.STATION_DATA_SUMMARY_TABLE_NAME} (
                 station_abbr, station_name, station_canton,
                 tre200d0_min_date, tre200d0_max_date,
                 rre150d0_min_date, rre150d0_max_date,
@@ -223,8 +223,9 @@ class TestDbDailyHistory(TestDb):
             ("GEN", "2023-07-15", 22.0, 21.0, 23.0, 7.0),
         ]
         cursor.executemany(
-            """
-            INSERT INTO ogd_smn_d_historical (station_abbr, reference_timestamp, tre200d0, tre200dn, tre200dx, rre150d0)
+            f"""
+            INSERT INTO {db.DAILY_MEASUREMENTS_TABLE.name}
+            (station_abbr, reference_timestamp, tre200d0, tre200dn, tre200dx, rre150d0)
             VALUES (?, ?, ?, ?, ?, ?)
         """,
             historical_data,
@@ -232,7 +233,7 @@ class TestDbDailyHistory(TestDb):
         cls.conn.commit()
 
     def test_read_daily_historical_no_filters(self):
-        df = db.read_daily_historical(self.conn, station_abbr="ABO")
+        df = db.read_daily_measurements(self.conn, station_abbr="ABO")
         self.assertIsInstance(df, pd.DataFrame)
         self.assertFalse(df.empty)
         self.assertEqual(len(df), 13)  # 12 months in 2023 + 1 in 2024
@@ -242,48 +243,48 @@ class TestDbDailyHistory(TestDb):
         self.assertEqual(df.index.dtype, "datetime64[ns]")
 
     def test_read_daily_historical_with_period_month(self):
-        df = db.read_daily_historical(self.conn, station_abbr="ABO", period="1")
+        df = db.read_daily_measurements(self.conn, station_abbr="ABO", period="1")
         self.assertEqual(len(df), 2)  # Jan 2023, Jan 2024
         self.assertTrue(all(df.index.month == 1))
 
     def test_read_daily_historical_with_period_season(self):
-        df = db.read_daily_historical(self.conn, station_abbr="ABO", period="spring")
+        df = db.read_daily_measurements(self.conn, station_abbr="ABO", period="spring")
         self.assertEqual(len(df), 3)  # Mar, Apr, May 2023
         self.assertTrue(all(df.index.month.isin([3, 4, 5])))
 
     def test_read_daily_historical_with_period_all(self):
-        df = db.read_daily_historical(self.conn, station_abbr="ABO", period="all")
+        df = db.read_daily_measurements(self.conn, station_abbr="ABO", period="all")
         self.assertEqual(len(df), 13)  # All data for ABO
 
     def test_read_daily_historical_with_from_year(self):
-        df = db.read_daily_historical(self.conn, station_abbr="ABO", from_year=2024)
+        df = db.read_daily_measurements(self.conn, station_abbr="ABO", from_year=2024)
         self.assertEqual(len(df), 1)  # Only 2024-01-01
         self.assertTrue(all(df.index.year >= 2024))
 
     def test_read_daily_historical_with_to_year(self):
-        df = db.read_daily_historical(self.conn, station_abbr="ABO", to_year=2023)
+        df = db.read_daily_measurements(self.conn, station_abbr="ABO", to_year=2023)
         self.assertEqual(len(df), 12)  # All of 2023
         self.assertTrue(all(df.index.year <= 2023))
 
     def test_read_daily_historical_with_from_and_to_year(self):
-        df = db.read_daily_historical(
+        df = db.read_daily_measurements(
             self.conn, station_abbr="ABO", from_year=2023, to_year=2023
         )
         self.assertEqual(len(df), 12)  # All of 2023
         self.assertTrue(all(df.index.year == 2023))
 
     def test_read_daily_historical_no_data_for_station(self):
-        df = db.read_daily_historical(self.conn, station_abbr="LUG")
+        df = db.read_daily_measurements(self.conn, station_abbr="LUG")
         self.assertTrue(df.empty)
 
     def test_read_daily_historical_invalid_columns(self):
         with self.assertRaises(ValueError):
-            db.read_daily_historical(
+            db.read_daily_measurements(
                 self.conn, station_abbr="ABO", columns=["invalid;column"]
             )
 
     def test_read_daily_historical_specific_columns(self):
-        df = db.read_daily_historical(
+        df = db.read_daily_measurements(
             self.conn, station_abbr="ABO", columns=[db.TEMP_DAILY_MEAN]
         )
         self.assertIn(db.TEMP_DAILY_MEAN, df.columns)
@@ -313,8 +314,9 @@ class TestDbHourlyRecent(TestDb):
             ("GEN", "2023-06-15 12:00:00Z", 20.0, 19.0, 21.0, 5.0),
         ]
         cursor.executemany(
-            """
-            INSERT INTO ogd_smn_h_recent (station_abbr, reference_timestamp, tre200h0, tre200hn, tre200hx, rre150h0)
+            f"""
+            INSERT INTO {db.HOURLY_MEASUREMENTS_TABLE.name} 
+            (station_abbr, reference_timestamp, tre200h0, tre200hn, tre200hx, rre150h0)
             VALUES (?, ?, ?, ?, ?, ?)
         """,
             historical_data,
@@ -324,7 +326,7 @@ class TestDbHourlyRecent(TestDb):
     def test_read_hourly_recent_time_range(self):
         from_date = datetime.datetime(2023, 1, 1, 0, 0, 0, 0, datetime.UTC)
         to_date = from_date + datetime.timedelta(hours=4)
-        df = db.read_hourly_recent(self.conn, "ABO", from_date, to_date)
+        df = db.read_hourly_measurements(self.conn, "ABO", from_date, to_date)
         self.assertIsInstance(df, pd.DataFrame)
         self.assertFalse(df.empty)
         self.assertEqual(len(df), 4)  # to_date is exclusive
@@ -339,7 +341,7 @@ class TestDbHourlyRecent(TestDb):
     def test_read_hourly_recent_multiple_days(self):
         from_date = datetime.datetime(2023, 1, 1, 0, 0, 0, 0, datetime.UTC)
         to_date = from_date + datetime.timedelta(days=365)
-        df = db.read_hourly_recent(self.conn, "GEN", from_date, to_date)
+        df = db.read_hourly_measurements(self.conn, "GEN", from_date, to_date)
         self.assertIsInstance(df, pd.DataFrame)
         self.assertEqual(len(df), 3)  # all 3 rows should be returned
         self.assertTrue(df.index.is_monotonic_increasing)
@@ -348,7 +350,7 @@ class TestDbHourlyRecent(TestDb):
         from_date = datetime.datetime(2023, 1, 1, 0, 0, 0, 0, datetime.UTC)
         to_date = from_date + datetime.timedelta(hours=4)
         with self.assertRaises(ValueError):
-            db.read_hourly_recent(
+            db.read_hourly_measurements(
                 self.conn,
                 station_abbr="ABO",
                 columns=["invalid;column"],
@@ -359,6 +361,6 @@ class TestDbHourlyRecent(TestDb):
     def test_read_hourly_recent_no_data_in_range(self):
         from_date = datetime.datetime(1980, 1, 1, 0, 0, 0, 0, datetime.UTC)
         to_date = from_date + datetime.timedelta(hours=4)
-        df = db.read_hourly_recent(self.conn, "ABO", from_date, to_date)
+        df = db.read_hourly_measurements(self.conn, "ABO", from_date, to_date)
         self.assertIsInstance(df, pd.DataFrame)
         self.assertTrue(df.empty)

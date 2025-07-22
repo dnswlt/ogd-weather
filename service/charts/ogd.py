@@ -10,7 +10,8 @@ import pandas as pd
 import requests
 import sys
 from urllib.parse import urlparse
-
+from . import db
+from . import logging_config as _  # configure logging
 
 _DATE_FORMATS = {
     "station_data_since": "%d.%m.%Y",
@@ -108,12 +109,11 @@ def fetch_all_data(weather_dir: str):
     for feature in features:
         for asset in feature["assets"].values():
             url = asset["href"]
-            if url.endswith("_d_historical.csv"):
-                csv_urls.append((url, -1))  # Skip existing CSV files.
-            elif url.endswith("_h_recent.csv"):
-                csv_urls.append(
-                    (url, 12 * 60 * 60)
-                )  # Overwrite existing for recent data every 12 hours.
+            if re.search(r".*_(d_historical|h_historical_2020-2029).csv$", url):
+                csv_urls.append((url, -1))  # -1: Skip existing CSV files.
+            elif re.search(r".*_(d|h)_recent.csv$", url):
+                # Overwrite existing for recent data every 12 hours.
+                csv_urls.append((url, 12 * 60 * 60))
 
     print(f"Found {len(csv_urls)} CSV URLs. Example: {csv_urls[0][0]}")
 
@@ -139,24 +139,6 @@ def infer_sqlite_type(dtype: pd.api.types.CategoricalDtype) -> str:
         return "REAL"
     else:
         return "TEXT"
-
-
-def normalize_timestamp(series: pd.Series) -> pd.Series:
-    """Normalizes a datetime Series for DB storage.
-
-    - If all times are midnight, returns only "YYYY-MM-DD".
-    - Otherwise assumes UTC, returns ISO with second granularity.
-    """
-    if series.empty:
-        return series
-
-    time_of_day = series.dt.time
-
-    if time_of_day.nunique() == 1 and time_of_day.iloc[0] == datetime.time(0, 0):
-        return series.dt.strftime("%Y-%m-%d")
-    else:
-        # Sub-daily measurements: use UTC
-        return series.dt.tz_localize("UTC").dt.strftime("%Y-%m-%d %H:%M:%SZ")
 
 
 def determine_column_types(csv_file: str):
@@ -211,7 +193,7 @@ def prepare_sql_table(
         )
         # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
         for col in date_format.keys():
-            df[col] = normalize_timestamp(df[col])
+            df[col] = db.normalize_timestamp(df[col])
 
         if not schema_created:
             # Create table with proper PK
@@ -240,58 +222,68 @@ def prepare_sql_table(
         conn.commit()
 
 
-def prepare_sql_ogd_smn_h_recent(dir: str, conn: sqlite3.Connection) -> None:
-    prepare_sql_table(
+def import_sql_ogd_smn_hourly(dir: str, conn: sqlite3.Connection) -> None:
+    db.prepare_sql_table_from_spec(
         dir,
         conn,
-        table_name="ogd_smn_h_recent",
+        table_spec=db.HOURLY_MEASUREMENTS_TABLE,
+        csv_pattern="ogd-smn_*_h_historical_*.csv",
+    )
+    db.prepare_sql_table_from_spec(
+        dir,
+        conn,
+        table_spec=db.HOURLY_MEASUREMENTS_TABLE,
         csv_pattern="ogd-smn_*_h_recent.csv",
-        primary_keys=["station_abbr", "reference_timestamp"],
     )
 
 
-def prepare_sql_ogd_smn_d_historical(dir: str, conn: sqlite3.Connection) -> None:
-    prepare_sql_table(
+def import_sql_ogd_smn_daily(dir: str, conn: sqlite3.Connection) -> None:
+    db.prepare_sql_table_from_spec(
         dir,
         conn,
-        table_name="ogd_smn_d_historical",
+        table_spec=db.DAILY_MEASUREMENTS_TABLE,
         csv_pattern="ogd-smn_*_d_historical.csv",
-        primary_keys=["station_abbr", "reference_timestamp"],
+    )
+    db.prepare_sql_table_from_spec(
+        dir,
+        conn,
+        table_spec=db.DAILY_MEASUREMENTS_TABLE,
+        csv_pattern="ogd-smn_*_d_recent.csv",
     )
 
 
-def prepare_sql_ogd_smn_meta_stations(dir: str, conn: sqlite3.Connection) -> None:
+def import_sql_ogd_smn_meta_stations(dir: str, conn: sqlite3.Connection) -> None:
     prepare_sql_table(
         dir,
         conn,
-        table_name="ogd_smn_meta_stations",
+        table_name=db.META_STATIONS_TABLE_NAME,
         csv_pattern=os.path.join(dir, "ogd-smn_meta_stations.csv"),
         primary_keys=["station_abbr"],
     )
 
 
-def prepare_sql_ogd_smn_meta_parameters(dir: str, conn: sqlite3.Connection) -> None:
+def import_sql_ogd_smn_meta_parameters(dir: str, conn: sqlite3.Connection) -> None:
     prepare_sql_table(
         dir,
         conn,
-        table_name="ogd_smn_meta_parameters",
+        table_name=db.META_PARAMETERS_TABLE_NAME,
         csv_pattern=os.path.join(dir, "ogd-smn_meta_parameters.csv"),
         primary_keys=["parameter_shortname"],
     )
 
 
-def prepare_sql_ogd_smn_station_data_summary(conn: sqlite3.Connection) -> None:
+def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
     """Creates a materialized view of summary data per station_abbr.
 
     The data is based on a JOIN of the ogd_smn_meta_stations and ogd_smn_d_historical tables.
     """
     # Drop old table
-    conn.execute("DROP TABLE IF EXISTS ogd_smn_station_data_summary;")
+    conn.execute(f"DROP TABLE IF EXISTS {db.STATION_DATA_SUMMARY_TABLE_NAME};")
 
     # Create it with proper schema & PK
     conn.execute(
-        """
-        CREATE TABLE ogd_smn_station_data_summary (
+        f"""
+        CREATE TABLE {db.STATION_DATA_SUMMARY_TABLE_NAME} (
             station_abbr TEXT PRIMARY KEY,
             station_name TEXT,
             station_canton TEXT,
@@ -313,10 +305,9 @@ def prepare_sql_ogd_smn_station_data_summary(conn: sqlite3.Connection) -> None:
     """
     )
 
-    # Single INSERT query → use execute()
     conn.execute(
-        """
-        INSERT INTO ogd_smn_station_data_summary
+        f"""
+        INSERT INTO {db.STATION_DATA_SUMMARY_TABLE_NAME}
         SELECT
             m.station_abbr,
             m.station_name,
@@ -336,7 +327,7 @@ def prepare_sql_ogd_smn_station_data_summary(conn: sqlite3.Connection) -> None:
             h.rre150d0_min_date,
             h.rre150d0_max_date
 
-        FROM ogd_smn_meta_stations AS m
+        FROM {db.META_STATIONS_TABLE_NAME} AS m
 
         LEFT JOIN (
             SELECT
@@ -347,7 +338,7 @@ def prepare_sql_ogd_smn_station_data_summary(conn: sqlite3.Connection) -> None:
                 SUM(IIF(rre150d0 IS NOT NULL, 1, 0)) AS rre150d0_count,
                 MIN(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_min_date,
                 MAX(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_max_date
-            FROM ogd_smn_d_historical
+            FROM {db.DAILY_MEASUREMENTS_TABLE.name}
             GROUP BY station_abbr
         ) AS h
         ON m.station_abbr = h.station_abbr;
@@ -363,43 +354,42 @@ def prepare_sql_db(dir: str) -> None:
     Column names in the DB tables are identical to column names in the CSV (e.g.,
     station_abbr, reference_timestamp, tre200d0).
 
-    Dates are stored as TEXT in ISO format "YYYY-MM-DD HH:MM:SS.SSS" and use UTC time.
-    (This is different from the input CSV data, which uses local Swiss time!)
+    Dates are stored as TEXT in ISO format "YYYY-MM-DD HH:MM:SSZ" and use UTC time.
 
     Time is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
-    In this case the stored date represents the local ("civil") date.
 
     The following data tables are supported:
 
-    * SwissMetNet (smn) historical daily measurements.
+    * SwissMetNet (smn) daily measurements.
 
-        * sqlite3 table name: ogd_smn_d_historical
-        * File pattern: ogd-smn_*_d_historical.csv
+        * sqlite3 table name: ogd_smn_daily
+        * File patterns: ogd-smn_*_d_historical.csv
         * Time resolution: daily
         * Primary key: (station_abbr, reference_timestamp)
 
     * SwissMetNet (smn) recent hourly measurements.
 
-        * sqlite3 table name: ogd_smn_h_recent
-        * File pattern: ogd-smn_*_h_recent.csv
+        * sqlite3 table name: ogd_smn_hourly
+        * File patterns: ogd-smn_*_h_recent.csv
         * Time resolution: hourly
         * Primary key: (station_abbr, reference_timestamp)
 
     * And the following metadata tables are supported:
 
         * smn_meta_stations
+        * smn_meta_parameters
 
     """
-    db_path = os.path.join(dir, "swissmetnet.sqlite")
+    db_path = os.path.join(dir, db.DATABASE_FILENAME)
     conn = sqlite3.connect(db_path)
 
     # CSV data
-    prepare_sql_ogd_smn_d_historical(dir, conn)
-    prepare_sql_ogd_smn_h_recent(dir, conn)
-    prepare_sql_ogd_smn_meta_stations(dir, conn)
-    prepare_sql_ogd_smn_meta_parameters(dir, conn)
+    import_sql_ogd_smn_daily(dir, conn)
+    import_sql_ogd_smn_hourly(dir, conn)
+    import_sql_ogd_smn_meta_stations(dir, conn)
+    import_sql_ogd_smn_meta_parameters(dir, conn)
     # Materialized views
-    prepare_sql_ogd_smn_station_data_summary(conn)
+    recreate_station_data_summary(conn)
 
     conn.close()
     print(f"SQLite database updated at {db_path}")

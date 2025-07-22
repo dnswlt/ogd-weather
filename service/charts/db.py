@@ -1,15 +1,36 @@
 import datetime
+import glob
+import logging
+import os
 import re
 import sqlite3
-from typing import Callable, Iterable, TypeVar
 
 import pandas as pd
+from pydantic import BaseModel
 from . import models
 
 import sqlite3
 from . import models
 
-# Column names for temperature and precipitation measurements.
+logger = logging.getLogger("db")
+
+
+class TableSpec(BaseModel):
+    """Specification for a measurement table."""
+
+    name: str
+    primary_key: list[str]
+    measurements: list[str]
+    date_format: dict[str, str] | None = None
+    description: str = ""
+
+
+# Filename for the sqlite3 database.
+DATABASE_FILENAME = "swissmetnet.sqlite"
+
+# Column names for weather measurements.
+
+# Temperature
 TEMP_HOURLY_MEAN = "tre200h0"
 TEMP_HOURLY_MIN = "tre200hn"
 TEMP_HOURLY_MAX = "tre200hx"
@@ -17,36 +38,175 @@ TEMP_DAILY_MEAN = "tre200d0"
 TEMP_DAILY_MIN = "tre200dn"
 TEMP_DAILY_MAX = "tre200dx"
 
+# Precipitation
 PRECIP_HOURLY_MM = "rre150h0"
 PRECIP_DAILY_MM = "rre150d0"
 
-GUST_PEAK_DAILY_MAX = "fkl010d1"
-GUST_PEAK_HOURLY_MAX = "fkl010h1"
-ATM_PRESSURE_DAILY_MEAN = "prestad0"
-ATM_PRESSURE_HOURLY_MEAN = "prestah0"
-REL_HUMITIDY_DAILY_MEAN = "ure200d0"
-REL_HUMITIDY_HOURLY_MEAN = "ure200h0"
-SUNSHINE_DAILY_MINUTES = "sre000d0"
-SUNSHINE_HOURLY_MINUTES = "sre000h0"
+# Wind
 WIND_SPEED_DAILY_MEAN = "fkl010d0"
-WIND_SPEED_HOUYRLY_MEAN = "fkl010h0"
+WIND_SPEED_HOURLY_MEAN = "fkl010h0"
 WIND_DIRECTION_DAILY_MEAN = "dkl010d0"
 WIND_DIRECTION_HOURLY_MEAN = "dkl010h0"
+GUST_PEAK_DAILY_MAX = "fkl010d1"
+GUST_PEAK_HOURLY_MAX = "fkl010h1"
 
-T = TypeVar("T")
+# Atmospheric pressure
+ATM_PRESSURE_DAILY_MEAN = "prestad0"
+ATM_PRESSURE_HOURLY_MEAN = "prestah0"
+
+# Humidity
+REL_HUMITIDY_DAILY_MEAN = "ure200d0"
+REL_HUMITIDY_HOURLY_MEAN = "ure200h0"
+
+# Sunshine
+SUNSHINE_DAILY_MINUTES = "sre000d0"
+SUNSHINE_HOURLY_MINUTES = "sre000h0"
 
 
-def agg_none(func: Callable[[Iterable[T]], T], items: Iterable[T | None]) -> T | None:
+# Table definitions
+
+HOURLY_MEASUREMENTS_TABLE = TableSpec(
+    name="ogd_smn_hourly",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        TEMP_HOURLY_MEAN,
+        TEMP_HOURLY_MIN,
+        TEMP_HOURLY_MAX,
+        PRECIP_HOURLY_MM,
+        GUST_PEAK_HOURLY_MAX,
+        ATM_PRESSURE_HOURLY_MEAN,
+        REL_HUMITIDY_HOURLY_MEAN,
+        SUNSHINE_HOURLY_MINUTES,
+        WIND_SPEED_HOURLY_MEAN,
+        WIND_DIRECTION_HOURLY_MEAN,
+    ],
+)
+
+DAILY_MEASUREMENTS_TABLE = TableSpec(
+    name="ogd_smn_daily",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        TEMP_DAILY_MEAN,
+        TEMP_DAILY_MIN,
+        TEMP_DAILY_MAX,
+        PRECIP_DAILY_MM,
+        GUST_PEAK_DAILY_MAX,
+        ATM_PRESSURE_DAILY_MEAN,
+        REL_HUMITIDY_DAILY_MEAN,
+        SUNSHINE_DAILY_MINUTES,
+        WIND_SPEED_DAILY_MEAN,
+        WIND_DIRECTION_DAILY_MEAN,
+    ],
+)
+
+# Metadata tables
+META_STATIONS_TABLE_NAME = "ogd_smn_meta_stations"
+META_PARAMETERS_TABLE_NAME = "ogd_smn_meta_parameters"
+
+
+# Derived tables / materialized views
+STATION_DATA_SUMMARY_TABLE_NAME = "ogd_smn_station_data_summary"
+
+
+def agg_none(func, items):
     """Apply func (e.g. min or max) to items, ignoring None.
     Returns None if all values are None."""
     filtered = [x for x in items if x is not None]
     return func(filtered) if filtered else None
 
 
+def normalize_timestamp(series: pd.Series) -> pd.Series:
+    """Normalizes a datetime Series for DB storage.
+
+    - If all times are midnight, returns only "YYYY-MM-DD".
+    - Otherwise assumes UTC, returns ISO with second granularity.
+    """
+    if series.empty:
+        return series
+
+    time_of_day = series.dt.time
+
+    if time_of_day.nunique() == 1 and time_of_day.iloc[0] == datetime.time(0, 0):
+        return series.dt.strftime("%Y-%m-%d")
+    else:
+        # Sub-daily measurements: use UTC
+        return series.dt.tz_localize("UTC").dt.strftime("%Y-%m-%d %H:%M:%SZ")
+
+
+def prepare_sql_table_from_spec(
+    dir: str,
+    conn: sqlite3.Connection,
+    table_spec: TableSpec,
+    csv_pattern: str,
+) -> None:
+    """Creates the table defined by table_spec if needed and inserts data from CSV files."""
+
+    files = glob.glob(os.path.join(dir, csv_pattern))
+    if not files:
+        logger.info(f"No files match pattern {csv_pattern}")
+        return
+
+    # Create table if needed.
+    pk_columns = ", ".join(table_spec.primary_key)
+    columns = ",\n".join(
+        [f"{k} TEXT" for k in table_spec.primary_key]
+        + [f"{k} REAL" for k in table_spec.measurements]
+    )
+    sql = f"""
+        CREATE TABLE IF NOT EXISTS {table_spec.name} (
+            {columns},
+            PRIMARY KEY ({pk_columns})
+        )
+        """
+    conn.execute(sql)
+    conn.commit()
+
+    csv_dtype = {}
+    for c in table_spec.measurements:
+        csv_dtype[c] = float
+
+    columns = table_spec.primary_key + table_spec.measurements
+    for fname in files:
+        logger.info(f"Importing {fname} into sqlite3 database...")
+        df = pd.read_csv(
+            fname,
+            sep=";",
+            encoding="cp1252",
+            date_format=table_spec.date_format,
+            parse_dates=list(table_spec.date_format.keys()),
+            dtype=csv_dtype,
+            usecols=columns,
+        )
+        df = df[columns]  # Reorder columns to match the order in table_spec.
+        # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
+        for col in table_spec.date_format.keys():
+            df[col] = normalize_timestamp(df[col])
+
+        # Insert row by row, ignoring duplicates
+        placeholders = ",".join(["?"] * len(df.columns))
+        insert_sql = f"INSERT OR IGNORE INTO {table_spec.name} VALUES ({placeholders})"
+
+        c = conn.executemany(insert_sql, df.itertuples(index=False, name=None))
+        logger.info(f"Inserted {c.rowcount} rows")
+        conn.commit()
+
+
 def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
     """Returns data for the given station."""
 
-    sql = """
+    sql = f"""
         SELECT
             station_abbr,
             station_name,
@@ -55,7 +215,7 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
             tre200d0_max_date,
             rre150d0_min_date,
             rre150d0_max_date
-        FROM ogd_smn_station_data_summary
+        FROM {STATION_DATA_SUMMARY_TABLE_NAME}
         WHERE station_abbr = ?
     """
     cur = conn.execute(sql, [station_abbr])
@@ -96,9 +256,9 @@ def read_stations(
     - exclude_empty: if True, skips stations with no temp/precip data
     """
 
-    sql = """
+    sql = f"""
         SELECT station_abbr, station_name, station_canton
-        FROM ogd_smn_station_data_summary
+        FROM {STATION_DATA_SUMMARY_TABLE_NAME}
     """
     filters = []
     params = []
@@ -132,7 +292,7 @@ def read_stations(
     ]
 
 
-def read_daily_historical(
+def read_daily_measurements(
     conn: sqlite3.Connection,
     station_abbr: str,
     columns: list[str] | None = None,
@@ -150,7 +310,7 @@ def read_daily_historical(
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""
         SELECT {', '.join(select_columns)}
-        FROM ogd_smn_d_historical
+        FROM {DAILY_MEASUREMENTS_TABLE.name}
     """
     # Filter by station.
     filters = ["station_abbr = ?"]
@@ -205,7 +365,7 @@ def utc_timestr(d: datetime.datetime) -> str:
     return d.strftime("%Y-%m-%d %H:%M:%SZ")
 
 
-def read_hourly_recent(
+def read_hourly_measurements(
     conn: sqlite3.Connection,
     station_abbr: str,
     from_date: datetime.datetime,
@@ -222,7 +382,7 @@ def read_hourly_recent(
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""
         SELECT {', '.join(select_columns)}
-        FROM ogd_smn_h_recent
+        FROM {HOURLY_MEASUREMENTS_TABLE.name}
     """
     # Filter by station.
     filters = ["station_abbr = ?"]
@@ -251,7 +411,7 @@ def read_hourly_recent(
 
 
 def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
-    sql = """
+    sql = f"""
         SELECT
             parameter_shortname,
             parameter_description_de,
@@ -264,7 +424,7 @@ def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
             parameter_group_en,
             parameter_datatype,
             parameter_unit
-        FROM ogd_smn_meta_parameters
+        FROM {META_PARAMETERS_TABLE_NAME}
         ORDER BY parameter_shortname
     """
     df = pd.read_sql_query(sql, conn)
