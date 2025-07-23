@@ -384,7 +384,7 @@ class TestCreateDb(unittest.TestCase):
             _testdata_dir(),
             self.conn,
             db.DAILY_MEASUREMENTS_TABLE,
-            "ogd-smn_vis_d_recent.csv",
+            ["ogd-smn_vis_d_recent.csv"],
         )
         columns = [db.TEMP_DAILY_MAX, db.PRECIP_DAILY_MM, db.ATM_PRESSURE_DAILY_MEAN]
         df = db.read_daily_measurements(
@@ -403,7 +403,7 @@ class TestCreateDb(unittest.TestCase):
             _testdata_dir(),
             self.conn,
             db.HOURLY_MEASUREMENTS_TABLE,
-            "ogd-smn_vis_h_recent.csv",
+            ["ogd-smn_vis_h_recent.csv"],
         )
         columns = [db.TEMP_HOURLY_MAX, db.PRECIP_HOURLY_MM, db.GUST_PEAK_HOURLY_MAX]
         df = db.read_hourly_measurements(

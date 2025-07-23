@@ -146,17 +146,22 @@ def normalize_timestamp(series: pd.Series) -> pd.Series:
 
 
 def prepare_sql_table_from_spec(
-    dir: str,
+    base_dir: str,
     conn: sqlite3.Connection,
     table_spec: TableSpec,
-    csv_pattern: str,
+    csv_filenames: list[str] | None = None,
 ) -> None:
-    """Creates the table defined by table_spec if needed and inserts data from CSV files."""
+    """Creates the table defined by table_spec if needed and inserts data from CSV files.
 
-    files = glob.glob(os.path.join(dir, csv_pattern))
-    if not files:
-        logger.info(f"No files match pattern {csv_pattern}")
-        return
+    Column names in the DB tables are identical to column names in the CSV (e.g.,
+    station_abbr, reference_timestamp, tre200d0).
+
+    Dates are stored as TEXT in ISO format "YYYY-MM-DD HH:MM:SSZ" and use UTC time.
+
+    The time part is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
+    """
+
+    files = [os.path.join(base_dir, f) for f in csv_filenames]
 
     # Create table if needed.
     pk_columns = ", ".join(table_spec.primary_key)
@@ -201,6 +206,82 @@ def prepare_sql_table_from_spec(
         c = conn.executemany(insert_sql, df.itertuples(index=False, name=None))
         logger.info(f"Inserted {c.rowcount} rows")
         conn.commit()
+
+
+def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
+    """Creates a materialized view of summary data per station_abbr.
+
+    The data is based on a JOIN of the ogd_smn_meta_stations and ogd_smn_d_historical tables.
+    """
+    # Drop old table
+    conn.execute(f"DROP TABLE IF EXISTS {STATION_DATA_SUMMARY_TABLE_NAME};")
+
+    # Create it with proper schema & PK
+    conn.execute(
+        f"""
+        CREATE TABLE {STATION_DATA_SUMMARY_TABLE_NAME} (
+            station_abbr TEXT PRIMARY KEY,
+            station_name TEXT,
+            station_canton TEXT,
+            station_wigos_id TEXT,
+            station_type_en TEXT,
+            station_dataowner TEXT,
+            station_data_since TEXT,
+            station_height_masl REAL,
+            station_coordinates_wgs84_lat REAL,
+            station_coordinates_wgs84_lon REAL,
+
+            tre200d0_count INTEGER NOT NULL,
+            tre200d0_min_date TEXT,
+            tre200d0_max_date TEXT,
+            rre150d0_count INTEGER NOT NULL,
+            rre150d0_min_date TEXT,
+            rre150d0_max_date TEXT
+        );
+    """
+    )
+
+    conn.execute(
+        f"""
+        INSERT INTO {STATION_DATA_SUMMARY_TABLE_NAME}
+        SELECT
+            m.station_abbr,
+            m.station_name,
+            m.station_canton,
+            m.station_wigos_id,
+            m.station_type_en,
+            m.station_dataowner,
+            m.station_data_since,
+            m.station_height_masl,
+            m.station_coordinates_wgs84_lat,
+            m.station_coordinates_wgs84_lon,
+
+            COALESCE(h.tre200d0_count, 0),
+            h.tre200d0_min_date,
+            h.tre200d0_max_date,
+            COALESCE(h.rre150d0_count, 0),
+            h.rre150d0_min_date,
+            h.rre150d0_max_date
+
+        FROM {META_STATIONS_TABLE_NAME} AS m
+
+        LEFT JOIN (
+            SELECT
+                station_abbr,
+                SUM(CASE WHEN tre200d0 IS NOT NULL THEN 1 END) AS tre200d0_count,
+                MIN(CASE WHEN tre200d0 IS NOT NULL THEN reference_timestamp END) AS tre200d0_min_date,
+                MAX(CASE WHEN tre200d0 IS NOT NULL THEN reference_timestamp END) AS tre200d0_max_date,
+                SUM(CASE WHEN rre150d0 IS NOT NULL THEN 1 END) AS rre150d0_count,
+                MIN(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_min_date,
+                MAX(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_max_date
+            FROM {DAILY_MEASUREMENTS_TABLE.name}
+            GROUP BY station_abbr
+        ) AS h
+        ON m.station_abbr = h.station_abbr;
+    """
+    )
+
+    conn.commit()
 
 
 def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
