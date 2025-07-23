@@ -361,7 +361,8 @@ def utc_timestr(d: datetime.datetime) -> str:
     If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
     """
     if d.tzinfo is not None:
-        d = d.astimezone(datetime.UTC)
+        # datetime.UTC is only available since Python 3.11
+        d = d.astimezone(datetime.timezone.utc)
     return d.strftime("%Y-%m-%d %H:%M:%SZ")
 
 

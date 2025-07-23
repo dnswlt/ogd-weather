@@ -58,6 +58,7 @@ CHART_TYPE_COLUMNS = {
     "precipitation": [db.PRECIP_DAILY_MM],
     "raindays": [db.PRECIP_DAILY_MM],
     "sunshine": [db.SUNSHINE_DAILY_MINUTES],
+    "sunny_days": [db.SUNSHINE_DAILY_MINUTES],
 }
 
 
@@ -279,6 +280,35 @@ def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     ).to_dict()
 
 
+def sunny_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No sunshine data for {station_abbr}")
+    verify_period(df, period)
+    verify_columns(df, CHART_TYPE_COLUMNS["sunny_days"])
+
+    sunny_days = df[[db.SUNSHINE_DAILY_MINUTES]]
+    sunny_days = sunny_days[sunny_days[db.SUNSHINE_DAILY_MINUTES] >= 6 * 60]
+    sunny_days = sunny_days.rename(columns={db.SUNSHINE_DAILY_MINUTES: "# days"})
+
+    sunny_days_m = annual_agg(sunny_days, "count")
+
+    sunny_days_long = long_format(sunny_days_m).dropna()
+
+    _, trend = polyfit_columns(sunny_days_m, deg=1)
+    trend_long = long_format(trend).dropna()
+
+    title = f"Number of sunny days (≥ 6 h of sunshine) in {period_to_title(period)}, by year".strip()
+    return create_chart_trendline(
+        sunny_days_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+    ).to_dict()
+
+
 def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
@@ -419,6 +449,8 @@ def create_chart(
         return raindays_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "sunshine":
         return sunshine_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "sunny_days":
+        return sunny_days_chart(df, station_abbr=station_abbr, period=period)
     else:
         raise ValueError(f"Invalid chart type: {chart_type}")
 
