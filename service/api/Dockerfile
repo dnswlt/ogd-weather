@@ -9,6 +9,7 @@ RUN CGO_ENABLED=0 go build -o weather-api ./cmd/server
 
 # --- runtime stage ---
 FROM alpine:3.20
+RUN apk add --no-cache tzdata
 WORKDIR /app
 COPY --from=builder /app/weather-api /app/
 COPY templates ./templates
