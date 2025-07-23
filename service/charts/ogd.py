@@ -391,10 +391,13 @@ def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvReso
 
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) == 2:
+        weather_dir = sys.argv[1]
+    elif "OGD_BASE_DIR" in os.environ:
+        weather_dir = os.environ["OGD_BASE_DIR"]
+    else:
         print(f"Usage: python3 -m service.charts.ogd <output_dir>")
         sys.exit(1)
-    weather_dir = sys.argv[1]
 
     db_path = os.path.join(weather_dir, db.DATABASE_FILENAME)
     with sqlite3.connect(db_path) as conn:

@@ -1,5 +1,5 @@
 {
-    "family": "weather-charts",
+    "family": "weather-db-updater",
     "taskRoleArn": "arn:aws:iam::006725292903:role/weather-task-role",
     "executionRoleArn": "arn:aws:iam::006725292903:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
@@ -10,14 +10,8 @@
     "memory": "1024",
     "containerDefinitions": [
         {
-            "name": "weather-charts",
-            "image": "006725292903.dkr.ecr.eu-central-1.amazonaws.com/weather-charts:latest",
-            "portMappings": [
-                {
-                    "containerPort": 8080,
-                    "protocol": "tcp"
-                }
-            ],
+            "name": "weather-db-updater",
+            "image": "006725292903.dkr.ecr.eu-central-1.amazonaws.com/weather-db-updater:latest",
             "essential": true,
             "environment": [
                 {
@@ -35,7 +29,7 @@
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                    "awslogs-group": "/ecs/weather-charts",
+                    "awslogs-group": "/ecs/weather-db-updater",
                     "awslogs-region": "eu-central-1",
                     "awslogs-stream-prefix": "ecs"
                 }
