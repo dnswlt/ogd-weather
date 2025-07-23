@@ -1,5 +1,6 @@
 {
     "family": "weather-charts",
+    "taskRoleArn": "arn:aws:iam::006725292903:role/weather-task-role",
     "executionRoleArn": "arn:aws:iam::006725292903:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
     "requiresCompatibilities": [
