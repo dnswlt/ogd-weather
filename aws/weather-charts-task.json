@@ -25,6 +25,14 @@
                     "value": "/app/data"
                 }
             ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/weather-charts",
+                    "awslogs-region": "eu-central-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
             "mountPoints": [
                 {
                     "sourceVolume": "weather-sqlite",
