@@ -400,6 +400,8 @@ def main():
         sys.exit(1)
 
     db_path = os.path.join(weather_dir, db.DATABASE_FILENAME)
+    logger.info("Connecting to sqlite DB at %s", db_path)
+
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         create_update_status(conn)
@@ -424,6 +426,8 @@ def main():
         # Recreate materialized views
         logger.info("Recreating materialized views...")
         db.recreate_station_data_summary(conn)
+
+        logger.info("Done")
 
 
 if __name__ == "__main__":
