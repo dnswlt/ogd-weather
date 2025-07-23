@@ -164,8 +164,8 @@ func (s *Server) Serve() error {
 	mux.HandleFunc("GET /day", func(w http.ResponseWriter, r *http.Request) {
 		s.serveHTML(w, "day.html")
 	})
-	mux.HandleFunc("GET /daycounts", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTML(w, "daycounts.html")
+	mux.HandleFunc("GET /sun_rain", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTML(w, "sun_rain.html")
 	})
 
 	// Health check. Useful for cloud deployments.
