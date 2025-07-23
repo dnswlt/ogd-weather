@@ -18,7 +18,33 @@
                     "protocol": "tcp"
                 }
             ],
-            "essential": true
+            "essential": true,
+            "environment": [
+                {
+                    "name": "OGD_BASE_DIR",
+                    "value": "/app/data"
+                }
+            ],
+            "mountPoints": [
+                {
+                    "sourceVolume": "weather-sqlite",
+                    "containerPath": "/app/efs",
+                    "readOnly": false
+                }
+            ]
+        }
+    ],
+    "volumes": [
+        {
+            "name": "weather-sqlite",
+            "efsVolumeConfiguration": {
+                "fileSystemId": "fs-05754135c68678c1d",
+                "transitEncryption": "ENABLED",
+                "authorizationConfig": {
+                    "accessPointId": "fsap-0e0734cec27f5a6df",
+                    "iam": "DISABLED"
+                }
+            }
         }
     ]
 }

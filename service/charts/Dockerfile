@@ -7,12 +7,12 @@ WORKDIR /build
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy only ogd.py, needed to download CSV and build the sqlite DB.
-COPY ogd.py .
+# Copy scripts needed to download CSV and build the sqlite DB.
+COPY *.py ./service/charts/
 
 # Run the CSV downloader and create /build/data/swissmetnet.sqlite.
 RUN mkdir -p /build/data && \
-    OGD_BASE_DIR=/build/data python ogd.py /build/data
+    OGD_BASE_DIR=/build/data python3 -m service.charts.ogd /build/data
 
 # --- runtime stage ---
 FROM python:3.12-slim
@@ -31,5 +31,4 @@ COPY . ./service/charts
 COPY --from=builder /build/data/swissmetnet.sqlite /app/data/swissmetnet.sqlite
 
 EXPOSE 8080
-ENV OGD_BASE_DIR=/app/data
 CMD ["uvicorn", "service.charts.app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
