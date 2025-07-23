@@ -16,6 +16,8 @@ COPY templates ./templates
 
 # Expose the port your Go service listens on
 EXPOSE 8080
+# Ensure Go app finds time zone infos for "Europe/Zurich" etc.
+ENV ZONEINFO=/usr/share/zoneinfo
 
 CMD ["/app/weather-api", "-addr", "0.0.0.0:8080"]
 
