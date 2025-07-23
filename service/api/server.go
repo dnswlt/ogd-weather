@@ -77,22 +77,11 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) serveHomepage(w http.ResponseWriter, r *http.Request) {
+func (s *Server) serveHTML(w http.ResponseWriter, templateFile string) {
 	var output bytes.Buffer
-	err := s.template.ExecuteTemplate(&output, "index.html", nil)
+	err := s.template.ExecuteTemplate(&output, templateFile, nil)
 	if err != nil {
-		log.Printf("Failed to render index.html: %v", err)
-		http.Error(w, "Template rendering error", http.StatusInternalServerError)
-		return
-	}
-	w.Write(output.Bytes())
-}
-
-func (s *Server) serveDay(w http.ResponseWriter, r *http.Request) {
-	var output bytes.Buffer
-	err := s.template.ExecuteTemplate(&output, "day.html", nil)
-	if err != nil {
-		log.Printf("Failed to render day.html: %v", err)
+		log.Printf("Failed to render template %q: %v", templateFile, err)
 		http.Error(w, "Template rendering error", http.StatusInternalServerError)
 		return
 	}
@@ -169,8 +158,15 @@ func (s *Server) Serve() error {
 	mux := http.NewServeMux()
 
 	// Root page
-	mux.HandleFunc("GET /{$}", s.serveHomepage)
-	mux.HandleFunc("GET /day", s.serveDay)
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTML(w, "index.html")
+	})
+	mux.HandleFunc("GET /day", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTML(w, "day.html")
+	})
+	mux.HandleFunc("GET /daycounts", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTML(w, "daycounts.html")
+	})
 
 	// Health check. Useful for cloud deployments.
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

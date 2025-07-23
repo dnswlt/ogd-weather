@@ -75,60 +75,30 @@ async def get_chart(
     to_year: str | None = None,
     window: str | None = None,
 ):
-    station_abbr = station_abbr.upper()
+    if chart_type not in charts.CHART_TYPE_COLUMNS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Invalid chart type: {chart_type}",
+        )
 
+    station_abbr = station_abbr.upper()
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
     to_year_int = int(to_year) if to_year and to_year.isdigit() else None
     window_int = int(window) if window and window.isdigit() else None
 
-    if chart_type == "temperature":
-        df = db.read_daily_measurements(
-            app.state.db,
-            station_abbr,
-            period=period,
-            columns=[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX],
-            from_year=from_year_int,
-            to_year=to_year_int,
-        )
-        return {
-            "vega_spec": charts.temperature_chart(
-                df, station_abbr, period=period, window=window_int
-            ),
-        }
-    elif chart_type == "temperature_deviation":
-        df = db.read_daily_measurements(
-            app.state.db,
-            station_abbr,
-            period=period,
-            columns=[db.TEMP_DAILY_MEAN],
-            from_year=from_year_int,
-            to_year=to_year_int,
-        )
-        return {
-            "vega_spec": charts.temperature_deviation_chart(
-                df, station_abbr, period=period, window=window_int
-            ),
-        }
-    elif chart_type == "precipitation":
-        df = db.read_daily_measurements(
-            app.state.db,
-            station_abbr,
-            period=period,
-            columns=[db.PRECIP_DAILY_MM],
-            from_year=from_year_int,
-            to_year=to_year_int,
-        )
-        return {
-            "vega_spec": charts.precipitation_chart(
-                df, station_abbr, period=period, window=window_int
-            ),
-        }
-
-    valid_charts = ["temperature", "precipitation", "temperature_deviation"]
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"Invalid chart type (must be one of [{','.join(valid_charts)}])",
+    df = db.read_daily_measurements(
+        app.state.db,
+        station_abbr,
+        period=period,
+        columns=charts.CHART_TYPE_COLUMNS[chart_type],
+        from_year=from_year_int,
+        to_year=to_year_int,
     )
+    return {
+        "vega_spec": charts.create_chart(
+            chart_type, df, station_abbr, period=period, window=window_int
+        ),
+    }
 
 
 @app.get("/stations/{station_abbr}/daily")

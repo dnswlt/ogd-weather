@@ -1,3 +1,4 @@
+from typing import Iterable
 import altair as alt
 import numpy as np
 import os
@@ -14,7 +15,7 @@ class NoDataError(ValueError):
     """Raised when a request is valid, but no data is available."""
 
 
-MEASUREMENT_NAMES = {
+MEASUREMENT_LABELS = {
     db.TEMP_DAILY_MEAN: "temp_2m_mean",
     db.TEMP_DAILY_MAX: "temp_2m_max",
     db.TEMP_DAILY_MIN: "temp_2m_min",
@@ -50,6 +51,15 @@ SEASONS = {
     "winter": [12, 1, 2],
 }
 
+# Measurement colums to load, by chart type.
+CHART_TYPE_COLUMNS = {
+    "temperature": [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX],
+    "temperature_deviation": [db.TEMP_DAILY_MEAN],
+    "precipitation": [db.PRECIP_DAILY_MM],
+    "raindays": [db.PRECIP_DAILY_MM],
+    "sunshine": [db.SUNSHINE_DAILY_MINUTES],
+}
+
 
 def period_to_title(period: str) -> str:
     if period.isdigit():
@@ -59,6 +69,13 @@ def period_to_title(period: str) -> str:
     elif period == "all":
         return "Whole Year"
     return "Unknown Period"
+
+
+def verify_columns(df: pd.DataFrame, columns: Iterable[str]):
+    if not set(columns) <= set(df.columns):
+        raise ValueError(
+            f"DataFrame does not contain expected columns (want: {columns}, got: {df.columns})"
+        )
 
 
 def verify_period(df: pd.DataFrame, period: str):
@@ -91,9 +108,9 @@ def verify_period(df: pd.DataFrame, period: str):
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Renames all well-known columns from their ODG SwissMetNet (smn) names to human-readable names.
 
-    Example: tre200d0 -> temp_2m_mean. See MEASUREMENT_NAMES for the full list.
+    Example: tre200d0 -> temp_2m_mean. See `MEASUREMENT_LABELS` for the full list.
     """
-    return df.rename(columns=MEASUREMENT_NAMES)
+    return df.rename(columns=MEASUREMENT_LABELS)
 
 
 def annual_agg(df, func):
@@ -129,7 +146,11 @@ def polyfit_columns(df: pd.DataFrame, deg: int = 1) -> tuple[np.ndarray, pd.Data
 
 
 def create_chart_trendline(
-    values_long, trend_long, typ="line", y_label="value", title="Untitled chart"
+    values_long: pd.DataFrame,
+    trend_long: pd.DataFrame | None = None,
+    typ: str = "line",
+    y_label: str = "value",
+    title: str = "Untitled chart",
 ) -> alt.LayerChart:
     highlight = alt.selection_point(fields=["variable"], bind="legend")
 
@@ -151,20 +172,22 @@ def create_chart_trendline(
     )
 
     # Trendlines
-    trend = (
-        alt.Chart(trend_long)
-        .mark_line(strokeDash=[4, 4])
-        .encode(
-            x="year:Q",
-            y="value:Q",
-            color="variable:N",
-            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
+    trend = None
+    if trend_long is not None:
+        trend = (
+            alt.Chart(trend_long)
+            .mark_line(strokeDash=[4, 4])
+            .encode(
+                x="year:Q",
+                y="value:Q",
+                color="variable:N",
+                opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
+            )
         )
-    )
 
-    chart = (
-        (values + trend)
-        .add_params(highlight)
+    layer_chart = values + trend if trend else alt.layer(values)
+    return (
+        layer_chart.add_params(highlight)
         .properties(
             width="container",
             autosize={"type": "fit", "contains": "padding"},
@@ -173,12 +196,10 @@ def create_chart_trendline(
         .interactive()
     )
 
-    return chart
-
 
 def create_dynamic_baseline_bars(
     values_long: pd.DataFrame, title="Untitled chart"
-) -> alt.Chart:
+) -> alt.LayerChart:
     df = values_long.copy()
 
     # Compute baseline
@@ -229,6 +250,65 @@ def create_dynamic_baseline_bars(
     )
 
 
+def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No raindays data for {station_abbr}")
+    verify_period(df, period)
+    verify_columns(df, CHART_TYPE_COLUMNS["raindays"])
+
+    raindays = df[[db.PRECIP_DAILY_MM]]
+    raindays = raindays[raindays[db.PRECIP_DAILY_MM] >= 0.1]
+    raindays = raindays.rename(columns={db.PRECIP_DAILY_MM: "# days"})
+
+    raindays_m = annual_agg(raindays, "count")
+
+    raindays_long = long_format(raindays_m).dropna()
+
+    _, trend = polyfit_columns(raindays_m, deg=1)
+    trend_long = long_format(trend).dropna()
+
+    title = f"Number of rain days (≥ 0.1 mm precip.) in {period_to_title(period)}, by year".strip()
+    return create_chart_trendline(
+        raindays_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+    ).to_dict()
+
+
+def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No sunshine data for {station_abbr}")
+    verify_period(df, period)
+    verify_columns(df, CHART_TYPE_COLUMNS["sunshine"])
+
+    sunshine = df[[db.SUNSHINE_DAILY_MINUTES]] / 60.0
+    sunshine = sunshine.rename(columns={db.SUNSHINE_DAILY_MINUTES: "sunshine (h)"})
+
+    sunshine_m = annual_agg(sunshine, "mean")
+
+    sunshine_long = long_format(sunshine_m).dropna()
+
+    _, trend = polyfit_columns(sunshine_m, deg=1)
+    trend_long = long_format(trend).dropna()
+
+    title = (
+        f"Mean daily hours of sunshine in {period_to_title(period)}, by year".strip()
+    )
+    return create_chart_trendline(
+        sunshine_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="hours/d",
+    ).to_dict()
+
+
 def temperature_deviation_chart(
     df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
 ):
@@ -238,7 +318,7 @@ def temperature_deviation_chart(
         raise NoDataError(f"No temperature data for {station_abbr}")
     verify_period(df, period)
 
-    temp = rename_columns(df[[db.TEMP_DAILY_MEAN]])
+    temp = rename_columns(df[CHART_TYPE_COLUMNS["temperature_deviation"]])
 
     temp_m = annual_agg(temp, "mean")
     if window and window > 1:
@@ -254,16 +334,14 @@ def temperature_deviation_chart(
 
 def temperature_chart(
     df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
-):
+) -> alt.LayerChart:
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
         raise NoDataError(f"No temperature data for {station_abbr}")
     verify_period(df, period)
 
-    temp = rename_columns(
-        df[[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]]
-    )
+    temp = rename_columns(df[CHART_TYPE_COLUMNS["temperature"]])
 
     temp_m = annual_agg(temp, "mean")
     if window and window > 1:
@@ -272,7 +350,7 @@ def temperature_chart(
     temp_long = long_format(temp_m).dropna()
 
     _, trend = polyfit_columns(temp_m, deg=1)
-    trend_long = trend.reset_index().melt(id_vars="year").dropna()
+    trend_long = long_format(trend).dropna()
 
     window_info = f"({window}y rolling avg.)" if window else ""
     title = (
@@ -296,7 +374,7 @@ def precipitation_chart(
         raise NoDataError(f"No precipitation data for {station_abbr}")
     verify_period(df, period)
 
-    precip = rename_columns(df[[db.PRECIP_DAILY_MM]])
+    precip = rename_columns(df[CHART_TYPE_COLUMNS["precipitation"]])
 
     precip_m = annual_agg(precip, "sum")
     if window and window > 1:
@@ -316,6 +394,33 @@ def precipitation_chart(
         title=title,
         y_label="mm",
     ).to_dict()
+
+
+def create_chart(
+    chart_type: str,
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = "6",
+    window: int | None = None,
+):
+    if chart_type == "temperature":
+        return temperature_chart(
+            df, station_abbr=station_abbr, period=period, window=window
+        )
+    elif chart_type == "precipitation":
+        return precipitation_chart(
+            df, station_abbr=station_abbr, period=period, window=window
+        )
+    elif chart_type == "temperature_deviation":
+        return temperature_deviation_chart(
+            df, station_abbr=station_abbr, period=period, window=window
+        )
+    elif chart_type == "raindays":
+        return raindays_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "sunshine":
+        return sunshine_chart(df, station_abbr=station_abbr, period=period)
+    else:
+        raise ValueError(f"Invalid chart type: {chart_type}")
 
 
 def station_stats(
