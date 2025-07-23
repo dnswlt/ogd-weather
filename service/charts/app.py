@@ -26,6 +26,8 @@ async def lifespan(app: FastAPI):
     # Startup: open SQLite connection once
     base_dir = os.environ.get("OGD_BASE_DIR", ".")
     db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
+    logger.info("Connecting to sqlite DB at %s", db_path)
+
     conn = sqlite3.connect(db_path, check_same_thread=True)
     logger.info("Connected to sqlite3 at %s", db_path)
     conn.row_factory = sqlite3.Row
