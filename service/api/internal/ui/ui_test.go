@@ -29,10 +29,10 @@ func TestDateFmt(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "Format including time with time.Time",
+			name:        "Format including time with time.Time in Europe/Zurich",
 			format:      "Y-m-d H:M:S",
 			date:        sampleTime.Add(18*time.Hour + 30*time.Minute + 50*time.Second),
-			expected:    "2023-01-15 18:30:50",
+			expected:    "2023-01-15 19:30:50",
 			expectError: false,
 		},
 		{

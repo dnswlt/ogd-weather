@@ -3,7 +3,7 @@ import datetime
 import logging
 import os
 import sqlite3
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from zoneinfo import ZoneInfo
@@ -166,12 +166,14 @@ async def get_summary(
 
 
 @app.get("/stations")
-async def list_stations(cantons: str | None = None):
+async def list_stations(cantons: str | None = None, response: Response = None):
     cantons_list = None
     if cantons:
         cantons_list = cantons.split(",")
 
     stations = db.read_stations(app.state.db, cantons=cantons_list, exclude_empty=True)
+    # Stations don't change often, use 1 day TTL for caching.
+    response.headers["Cache-Control"] = "public, max-age=86400"
     return {
         "stations": stations,
     }

@@ -325,8 +325,21 @@ func fetchBackendData[Response any](ctx context.Context, s *Server, backendURL s
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("chart server returned invalid JSON (want %T): %v", response, err)
 	}
-	// Add to LRU cache
-	s.cache.Put(backendURL, &response, len(body))
+
+	// Add to LRU cache, respecting backend's Cache-Control.
+	policy, ttl := cache.ComputeCachePolicy(resp.Header, time.Now())
+	switch policy {
+	case cache.CachePolicyNoCache:
+		// Never cache
+	case cache.CachePolicyTTL:
+		log.Printf("Adding %s to cache (ttl=%v)", backendURL, ttl)
+		s.cache.Put(backendURL, &response, len(body), ttl)
+	case cache.CachePolicyNone:
+		// No cache policy specified by backend: opportunistically cache for 10min.
+		ttl = 10 * time.Minute
+		log.Printf("Adding %s to cache (default ttl=%v)", backendURL, ttl)
+		s.cache.Put(backendURL, &response, len(body), ttl)
+	}
 
 	return &response, nil
 }

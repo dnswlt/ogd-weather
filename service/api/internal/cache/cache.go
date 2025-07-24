@@ -1,70 +1,154 @@
 package cache
 
 import (
+	"container/heap"
 	"container/list"
+	"fmt"
 	"sync"
+	"time"
 )
 
-// entry represents a cached item
+type Clock interface {
+	Now() time.Time
+}
+
+type RealClock struct{}
+
+func (c RealClock) Now() time.Time {
+	return time.Now()
+}
+
+// entry represents a cached item. It includes pointers for the LRU list
+// and an index for the TTL min-heap.
 type entry struct {
 	key     string
 	item    any
-	size    int           // "weight" of this entry
-	element *list.Element // pointer to its LRU position
+	size    int
+	expires time.Time
+
+	// element is the pointer to the item in the LRU list.
+	element *list.Element
+	// index is the item's index in the TTL heap.
+	// It's -1 if the item has no TTL and is not in the heap.
+	index int
 }
 
-// Cache implements an LRU cache with total capacity limit (in arbitrary units, e.g. bytes)
+// Cache implements a high-performance LRU cache with TTL.
+// It uses a hash map, a doubly-linked list for LRU, and a min-heap for TTL.
 type Cache struct {
 	mu       sync.Mutex
-	capacity int // total allowed capacity
-	usage    int // current sum of all entry sizes
+	capacity int
+	usage    int
 
+	// data provides O(1) lookup for entries.
 	data map[string]*entry
-	lru  *list.List // most recently used at front
+	// lru tracks the least recently used entries. Front is newest.
+	lru *list.List
+	// ttlHeap is a min-heap ordered by expiration time, for O(log n) expiration checks.
+	ttlHeap priorityQueue
+	// A RealClock in normal use cases,
+	clock Clock
 }
 
-// New creates a capacity-limited LRU cache.
-// capacity <= 0 means unbounded.
-func New(capacity int) *Cache {
+func NewWithClock(clock Clock, capacity int) *Cache {
 	return &Cache{
 		capacity: capacity,
 		data:     make(map[string]*entry),
 		lru:      list.New(),
+		ttlHeap:  make(priorityQueue, 0),
+		clock:    clock,
 	}
 }
 
-// Put inserts or updates an item with a given size.
-// Size should be the "weight" (e.g. response Content-Length).
-func (c *Cache) Put(key string, item any, size int) {
+// New creates a capacity-limited, high-performance LRU cache.
+// capacity <= 0 means the cache is unbounded.
+func New(capacity int) *Cache {
+	return NewWithClock(RealClock{}, capacity)
+}
+
+// Len returns number of items currently in cache.
+func (c *Cache) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.data)
+}
+
+func (c *Cache) Usage() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.usage
+}
+
+func (c *Cache) Capacity() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.capacity
+}
+
+// Put adds or updates an item, its size, and its TTL.
+// A ttl of 0 or less means the item never expires.
+// The value of `size` MUST be greater than zero.
+func (c *Cache) Put(key string, item any, size int, ttl time.Duration) {
+	if size <= 0 {
+		panic(fmt.Sprintf("cache: Put called with invalid size %d for key %q", size, key))
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// If already exists, update size & move to front
+	var expires time.Time
+	if ttl > 0 {
+		expires = c.clock.Now().Add(ttl)
+	}
+
+	// Update existing entry.
 	if e, ok := c.data[key]; ok {
-		// adjust current usage (remove old size, add new)
+		// Update usage and properties.
 		c.usage -= e.size
+		c.usage += size
 		e.item = item
 		e.size = size
-		c.usage += size
+
+		// Move to front of LRU list.
 		c.lru.MoveToFront(e.element)
 
-		// evict if needed
+		// Update TTL and adjust its position in the heap.
+		hadTTL := !e.expires.IsZero()
+		e.expires = expires
+		hasTTL := !e.expires.IsZero()
+
+		if hadTTL && hasTTL {
+			heap.Fix(&c.ttlHeap, e.index)
+		} else if hadTTL && !hasTTL {
+			heap.Remove(&c.ttlHeap, e.index)
+		} else if !hadTTL && hasTTL {
+			heap.Push(&c.ttlHeap, e)
+		}
+
 		c.evictIfNeeded()
 		return
 	}
 
-	// Create new entry
-	e := &entry{key: key, item: item, size: size}
-	elem := c.lru.PushFront(key) // list holds only the key
-	e.element = elem
+	// Add new entry.
+	e := &entry{
+		key:     key,
+		item:    item,
+		size:    size,
+		expires: expires,
+		index:   -1, // Not in the heap until we push it.
+	}
+	e.element = c.lru.PushFront(e)
 	c.data[key] = e
 	c.usage += size
 
-	// Evict until within capacity
+	if !e.expires.IsZero() {
+		heap.Push(&c.ttlHeap, e)
+	}
+
 	c.evictIfNeeded()
 }
 
-// Get retrieves an item and marks it as recently used
+// Get retrieves an item. It returns nil, false if the item is not found or is expired.
 func (c *Cache) Get(key string) (any, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -73,51 +157,90 @@ func (c *Cache) Get(key string) (any, bool) {
 	if !ok {
 		return nil, false
 	}
-	// Move to front (most recently used)
+
+	// Check for expiration. If expired, remove it.
+	if !e.expires.IsZero() && c.clock.Now().After(e.expires) {
+		c.removeEntry(e)
+		return nil, false
+	}
+
+	// Mark as recently used.
 	c.lru.MoveToFront(e.element)
 	return e.item, true
 }
 
-// evictIfNeeded evicts from the back until within maxCapacity
+// evictIfNeeded evicts items until the cache is within capacity.
+// It first purges expired items, then evicts items by LRU policy.
 func (c *Cache) evictIfNeeded() {
-	if c.capacity <= 0 {
-		return // unbounded
+	// Pass 1: Purge all expired items. This is fast thanks to the heap.
+	now := c.clock.Now()
+	for c.ttlHeap.Len() > 0 {
+		e := c.ttlHeap[0]
+		// Since the heap is ordered, we can stop when we find a non-expired item.
+		if e.expires.After(now) {
+			break
+		}
+		// This item is expired, remove it.
+		c.removeEntry(e)
 	}
-	for c.usage > c.capacity {
-		c.evictOldest()
+
+	// Pass 2: If still over capacity, evict by LRU.
+	for c.capacity > 0 && c.usage > c.capacity {
+		if elem := c.lru.Back(); elem != nil {
+			c.removeEntry(elem.Value.(*entry))
+		}
 	}
 }
 
-// evictOldest removes the least recently used entry
-func (c *Cache) evictOldest() {
-	oldestElem := c.lru.Back()
-	if oldestElem == nil {
-		return
+// removeEntry is a helper to remove an entry from all internal data structures.
+func (c *Cache) removeEntry(e *entry) {
+	// Remove from the main map.
+	delete(c.data, e.key)
+
+	// Remove from the LRU list.
+	c.lru.Remove(e.element)
+
+	// Remove from the TTL heap if it's in there.
+	if e.index != -1 {
+		heap.Remove(&c.ttlHeap, e.index)
 	}
-	oldestKey := oldestElem.Value.(string)
 
-	// Remove from map & list
-	if e, ok := c.data[oldestKey]; ok {
-		c.usage -= e.size
-		delete(c.data, oldestKey)
-	}
-	c.lru.Remove(oldestElem)
+	// Adjust usage.
+	c.usage -= e.size
 }
 
-func (c *Cache) Capacity() int {
-	return c.capacity
+// A priorityQueue implements heap.Interface and holds entries.
+type priorityQueue []*entry
+
+func (pq priorityQueue) Len() int { return len(pq) }
+
+// Less orders by expiration time. For items with the same time, order is not guaranteed.
+func (pq priorityQueue) Less(i, j int) bool {
+	return pq[i].expires.Before(pq[j].expires)
 }
 
-// Usage returns the current total size usage
-func (c *Cache) Usage() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.usage
+// Swap swaps elements and updates their heap index.
+func (pq priorityQueue) Swap(i, j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+	pq[i].index = i
+	pq[j].index = j
 }
 
-// Len returns number of items currently in cache
-func (c *Cache) Len() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.data)
+// Push adds an entry to the heap.
+func (pq *priorityQueue) Push(x any) {
+	n := len(*pq)
+	e := x.(*entry)
+	e.index = n
+	*pq = append(*pq, e)
+}
+
+// Pop removes an entry from the heap.
+func (pq *priorityQueue) Pop() any {
+	old := *pq
+	n := len(old)
+	e := old[n-1]
+	old[n-1] = nil // avoid memory leak
+	e.index = -1   // for safety
+	*pq = old[0 : n-1]
+	return e
 }
