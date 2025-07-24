@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"path"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -21,6 +23,7 @@ import (
 	"github.com/dnswlt/ogd-weather/service/api/internal/cache"
 	"github.com/dnswlt/ogd-weather/service/api/internal/types"
 	"github.com/dnswlt/ogd-weather/service/api/internal/ui"
+	"github.com/dnswlt/ogd-weather/service/api/internal/version"
 )
 
 type Server struct {
@@ -31,6 +34,7 @@ type Server struct {
 	lastReload          time.Time
 	client              *http.Client
 	cache               *cache.Cache
+	startTime           time.Time
 }
 
 type ServerOptions struct {
@@ -40,6 +44,10 @@ type ServerOptions struct {
 	DebugMode            bool
 	LogRequests          bool
 	CacheSize            int // Maximum approx. size for the response cache in bytes
+}
+
+func (s *Server) uptime() time.Duration {
+	return time.Since(s.startTime)
 }
 
 func (s *Server) reloadTemplates() error {
@@ -74,6 +82,7 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		chartServiceBaseURL: chartServiceBaseURL,
 		client:              client,
 		cache:               cache.New(opts.CacheSize),
+		startTime:           time.Now(),
 	}
 
 	if err := s.reloadTemplates(); err != nil {
@@ -182,78 +191,6 @@ func (s *Server) withTemplateReload(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (s *Server) Serve() error {
-	mux := http.NewServeMux()
-
-	// Root page
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "index.html")
-	})
-	mux.HandleFunc("GET /day", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "day.html")
-	})
-	mux.HandleFunc("GET /sun_rain", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "sun_rain.html")
-	})
-
-	// Health check. Useful for cloud deployments.
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "OK")
-	})
-
-	// Reverse proxy
-	proxy := httputil.NewSingleHostReverseProxy(s.chartServiceBaseURL)
-	mux.HandleFunc("GET /stations/{stationID}/charts/{chartType}",
-		func(w http.ResponseWriter, r *http.Request) {
-			if acceptsHTML(r.Header.Get("Accept")) {
-				s.serveStationsChartSnippet(w, r)
-				return
-			}
-			proxy.ServeHTTP(w, r)
-		})
-	mux.HandleFunc("GET /stations/{stationID}/summary",
-		func(w http.ResponseWriter, r *http.Request) {
-			if acceptsHTML(r.Header.Get("Accept")) {
-				s.serveSummarySnippet(w, r)
-				return
-			}
-			proxy.ServeHTTP(w, r)
-		})
-	mux.HandleFunc("GET /stations/{stationID}/daily",
-		func(w http.ResponseWriter, r *http.Request) {
-			if acceptsHTML(r.Header.Get("Accept")) {
-				s.serveDailySnippet(w, r)
-				return
-			}
-			proxy.ServeHTTP(w, r)
-		})
-	mux.HandleFunc("GET /stations",
-		func(w http.ResponseWriter, r *http.Request) {
-			accept := r.Header.Get("Accept")
-			if acceptsHTML(accept) {
-				s.serveStationsSnippet(w, r)
-				return
-			}
-			proxy.ServeHTTP(w, r)
-		})
-
-	var handler http.Handler = mux
-	if s.opts.DebugMode {
-		handler = s.withTemplateReload(handler)
-	}
-	if s.opts.LogRequests {
-		handler = s.withRequestLogging(handler)
-	}
-
-	modeInfo := "(prod mode)"
-	if s.opts.DebugMode {
-		modeInfo = "(debug mode)"
-	}
-	log.Printf("Go API server %s on http://%s", modeInfo, s.opts.Addr)
-	return http.ListenAndServe(s.opts.Addr, handler)
 }
 
 func acceptsHTML(accept string) bool {
@@ -396,4 +333,113 @@ func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {
 	serveChartServiceURL[types.StationsResponse](s, w, r, "station_options.html", map[string]any{
 		"SelectedStation": r.URL.Query().Get("station"),
 	})
+}
+
+func (s *Server) serveStatus(w http.ResponseWriter) {
+	type ServerStatus struct {
+		StartTime           time.Time
+		UptimeSeconds       float64
+		CacheUsage          int
+		CacheCapacity       int
+		ChartServiceBaseURL string
+		Options             ServerOptions
+		GoVersion           string
+		Hostname            string
+		NumCPU              int
+		BuildInfo           string
+	}
+
+	hostname, _ := os.Hostname()
+	status := ServerStatus{
+		StartTime:           s.startTime,
+		UptimeSeconds:       s.uptime().Seconds(),
+		CacheUsage:          s.cache.Usage(),
+		CacheCapacity:       s.cache.Capacity(),
+		ChartServiceBaseURL: s.chartServiceBaseURL.String(),
+		Options:             s.opts,
+		GoVersion:           runtime.Version(),
+		Hostname:            hostname,
+		NumCPU:              runtime.NumCPU(),
+		BuildInfo:           version.FullVersion(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
+	json.NewEncoder(w).Encode(status)
+}
+
+func (s *Server) Serve() error {
+	mux := http.NewServeMux()
+
+	// Root page
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "index.html")
+	})
+	mux.HandleFunc("GET /day", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "day.html")
+	})
+	mux.HandleFunc("GET /sun_rain", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "sun_rain.html")
+	})
+
+	// Health check. Useful for cloud deployments.
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "OK")
+	})
+	// Status page. Always a treasure in Cloud deployments.
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		s.serveStatus(w)
+	})
+
+	// Reverse proxy
+	proxy := httputil.NewSingleHostReverseProxy(s.chartServiceBaseURL)
+	mux.HandleFunc("GET /stations/{stationID}/charts/{chartType}",
+		func(w http.ResponseWriter, r *http.Request) {
+			if acceptsHTML(r.Header.Get("Accept")) {
+				s.serveStationsChartSnippet(w, r)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
+	mux.HandleFunc("GET /stations/{stationID}/summary",
+		func(w http.ResponseWriter, r *http.Request) {
+			if acceptsHTML(r.Header.Get("Accept")) {
+				s.serveSummarySnippet(w, r)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
+	mux.HandleFunc("GET /stations/{stationID}/daily",
+		func(w http.ResponseWriter, r *http.Request) {
+			if acceptsHTML(r.Header.Get("Accept")) {
+				s.serveDailySnippet(w, r)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
+	mux.HandleFunc("GET /stations",
+		func(w http.ResponseWriter, r *http.Request) {
+			accept := r.Header.Get("Accept")
+			if acceptsHTML(accept) {
+				s.serveStationsSnippet(w, r)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
+
+	var handler http.Handler = mux
+	if s.opts.DebugMode {
+		handler = s.withTemplateReload(handler)
+	}
+	if s.opts.LogRequests {
+		handler = s.withRequestLogging(handler)
+	}
+
+	modeInfo := "(prod mode)"
+	if s.opts.DebugMode {
+		modeInfo = "(debug mode)"
+	}
+	log.Printf("Go API server %s on http://%s", modeInfo, s.opts.Addr)
+	return http.ListenAndServe(s.opts.Addr, handler)
 }

@@ -1,11 +1,21 @@
 # --- build stage ---
 FROM golang:1.24-alpine AS builder
 
+# Build-time args (can be passed by docker build --build-arg)
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILDTIME=unknown
+
 WORKDIR /app
 COPY go.mod ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o weather-api ./cmd/server
+RUN CGO_ENABLED=0 go build \
+    -ldflags "\
+        -X 'github.com/dnswlt/ogd-weather/service/api/internal/version.Version=${VERSION}' \
+        -X 'github.com/dnswlt/ogd-weather/service/api/internal/version.GitCommit=${COMMIT}' \
+        -X 'github.com/dnswlt/ogd-weather/service/api/internal/version.BuildTime=${BUILDTIME}'" \
+    -o weather-api ./cmd/server
 
 # --- runtime stage ---
 FROM alpine:3.20

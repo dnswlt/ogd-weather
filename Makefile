@@ -1,6 +1,10 @@
 # Had some weird docker "Permission denied" errors without it.
 SHELL := /bin/bash
 
+VERSION    ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
+COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILDTIME  ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+
 COMPOSE = docker compose
 
 # AWS settings (must be provided via environment or .env file)
@@ -46,7 +50,11 @@ aws-login: ## Authenticate Docker with ECR
 
 build-aws: ## Build AWS images (charts, api, db-updater)
 	docker build -t $(CHARTS_IMAGE) -f service/charts/Dockerfile .
-	docker build -t $(API_IMAGE) -f service/api/Dockerfile ./service/api
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+	  	--build-arg COMMIT=$(COMMIT) \
+	  	--build-arg BUILDTIME=$(BUILDTIME) \
+	  	-t $(API_IMAGE) -f service/api/Dockerfile ./service/api
 	docker build -t $(DB_UPDATER_IMAGE) -f service/db_updater/Dockerfile .
 
 push-aws: aws-login build-aws ## Push all images to ECR
@@ -56,8 +64,8 @@ push-aws: aws-login build-aws ## Push all images to ECR
 
 # Redeploy with same task definition, just pull new :latest images
 redeploy-aws: ## Force ECS services to restart (pull latest image)
-	aws ecs update-service --cluster $(CLUSTER) --service weather-charts-service --force-new-deployment
-	aws ecs update-service --cluster $(CLUSTER) --service weather-api-service --force-new-deployment
+	aws ecs update-service --no-cli-pager --cluster $(CLUSTER) --service weather-charts-service --force-new-deployment
+	aws ecs update-service --no-cli-pager --cluster $(CLUSTER) --service weather-api-service --force-new-deployment
 
 # Register + activate new task definition revisions
 update-tasks-aws: update-task-weather-charts update-task-weather-api update-task-weather-db-updater
