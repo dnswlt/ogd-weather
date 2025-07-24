@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/dnswlt/ogd-weather/service/api"
 )
@@ -18,6 +19,10 @@ func main() {
 	if addr == "" {
 		addr = "127.0.0.1:8080" // local default
 	}
+	cacheSize, err := strconv.Atoi(os.Getenv("OGD_CACHE_SIZE"))
+	if err != nil {
+		cacheSize = 0
+	}
 
 	var opts api.ServerOptions
 	flag.StringVar(&opts.Addr, "addr", addr, "Address that the server listens on.")
@@ -25,7 +30,7 @@ func main() {
 	flag.StringVar(&opts.TemplateDir, "template-dir", "./templates", "Directory containing server templates.")
 	flag.BoolVar(&opts.DebugMode, "debug", false, "If specified, the server runs in debug mode.")
 	flag.BoolVar(&opts.LogRequests, "log-requests", false, "If true, the server write request logs.")
-	flag.IntVar(&opts.CacheSize, "cache-size", 10<<20, "Approximate size of the response cache in bytes.")
+	flag.IntVar(&opts.CacheSize, "cache-size", cacheSize, "Approximate size of the response cache in bytes. (0 = disabled, -1 = unlimited)")
 	flag.Parse()
 
 	server, err := api.NewServer(opts)

@@ -8,13 +8,21 @@ import (
 	"time"
 )
 
-type Clock interface {
+type Cache interface {
+	Len() int
+	Capacity() int
+	Usage() int
+	Get(key string) (any, bool)
+	Put(key string, item any, size int, ttl time.Duration)
+}
+
+type clock interface {
 	Now() time.Time
 }
 
-type RealClock struct{}
+type realClock struct{}
 
-func (c RealClock) Now() time.Time {
+func (c realClock) Now() time.Time {
 	return time.Now()
 }
 
@@ -33,9 +41,9 @@ type entry struct {
 	index int
 }
 
-// Cache implements a high-performance LRU cache with TTL.
+// lruCache implements a high-performance LRU cache with TTL.
 // It uses a hash map, a doubly-linked list for LRU, and a min-heap for TTL.
-type Cache struct {
+type lruCache struct {
 	mu       sync.Mutex
 	capacity int
 	usage    int
@@ -47,11 +55,20 @@ type Cache struct {
 	// ttlHeap is a min-heap ordered by expiration time, for O(log n) expiration checks.
 	ttlHeap priorityQueue
 	// A RealClock in normal use cases,
-	clock Clock
+	clock clock
 }
 
-func NewWithClock(clock Clock, capacity int) *Cache {
-	return &Cache{
+// disabledCache is an implementation of Cache that does not cache anything.
+type disabledCache struct{}
+
+func (c disabledCache) Len() int                                              { return 0 }
+func (c disabledCache) Capacity() int                                         { return 0 }
+func (c disabledCache) Usage() int                                            { return 0 }
+func (c disabledCache) Get(key string) (any, bool)                            { return nil, false }
+func (c disabledCache) Put(key string, item any, size int, ttl time.Duration) {}
+
+func newWithClock(clock clock, capacity int) *lruCache {
+	return &lruCache{
 		capacity: capacity,
 		data:     make(map[string]*entry),
 		lru:      list.New(),
@@ -61,25 +78,29 @@ func NewWithClock(clock Clock, capacity int) *Cache {
 }
 
 // New creates a capacity-limited, high-performance LRU cache.
-// capacity <= 0 means the cache is unbounded.
-func New(capacity int) *Cache {
-	return NewWithClock(RealClock{}, capacity)
+// capacity < 0 means the cache is unbounded.
+// capacity == 0 means the cache is disabled and does not cache anything.
+func New(capacity int) Cache {
+	if capacity == 0 {
+		return disabledCache{}
+	}
+	return newWithClock(realClock{}, capacity)
 }
 
 // Len returns number of items currently in cache.
-func (c *Cache) Len() int {
+func (c *lruCache) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.data)
 }
 
-func (c *Cache) Usage() int {
+func (c *lruCache) Usage() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.usage
 }
 
-func (c *Cache) Capacity() int {
+func (c *lruCache) Capacity() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.capacity
@@ -88,7 +109,7 @@ func (c *Cache) Capacity() int {
 // Put adds or updates an item, its size, and its TTL.
 // A ttl of 0 or less means the item never expires.
 // The value of `size` MUST be greater than zero.
-func (c *Cache) Put(key string, item any, size int, ttl time.Duration) {
+func (c *lruCache) Put(key string, item any, size int, ttl time.Duration) {
 	if size <= 0 {
 		panic(fmt.Sprintf("cache: Put called with invalid size %d for key %q", size, key))
 	}
@@ -149,7 +170,7 @@ func (c *Cache) Put(key string, item any, size int, ttl time.Duration) {
 }
 
 // Get retrieves an item. It returns nil, false if the item is not found or is expired.
-func (c *Cache) Get(key string) (any, bool) {
+func (c *lruCache) Get(key string) (any, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -171,7 +192,7 @@ func (c *Cache) Get(key string) (any, bool) {
 
 // evictIfNeeded evicts items until the cache is within capacity.
 // It first purges expired items, then evicts items by LRU policy.
-func (c *Cache) evictIfNeeded() {
+func (c *lruCache) evictIfNeeded() {
 	// Pass 1: Purge all expired items. This is fast thanks to the heap.
 	now := c.clock.Now()
 	for c.ttlHeap.Len() > 0 {
@@ -193,7 +214,7 @@ func (c *Cache) evictIfNeeded() {
 }
 
 // removeEntry is a helper to remove an entry from all internal data structures.
-func (c *Cache) removeEntry(e *entry) {
+func (c *lruCache) removeEntry(e *entry) {
 	// Remove from the main map.
 	delete(c.data, e.key)
 

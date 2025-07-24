@@ -33,7 +33,7 @@ type Server struct {
 	lastReloadMu        sync.Mutex
 	lastReload          time.Time
 	client              *http.Client
-	cache               *cache.Cache
+	cache               cache.Cache
 	startTime           time.Time
 }
 

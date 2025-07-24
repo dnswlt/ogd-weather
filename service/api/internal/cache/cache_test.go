@@ -21,7 +21,7 @@ func TestCacheEvictionForCapacity(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
 
 	keys := []string{"A", "B", "C"}
-	c := NewWithClock(clock, len(keys))
+	c := newWithClock(clock, len(keys))
 
 	for _, k := range keys {
 		c.Put(k, k, 1, 1*time.Minute)
@@ -48,7 +48,7 @@ func TestCacheEvictionForCapacity(t *testing.T) {
 
 func TestCacheEvictionForTTL(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
-	c := NewWithClock(clock, 10) // plenty of capacity
+	c := newWithClock(clock, 10) // plenty of capacity
 
 	// Put an item with a TTL of 1 minute
 	c.Put("X", "valueX", 1, 1*time.Minute)
@@ -80,7 +80,7 @@ func TestCacheEvictionForTTL(t *testing.T) {
 
 func TestCacheHeapExpiryPurgeOnPut(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
-	c := NewWithClock(clock, 10) // plenty of capacity
+	c := newWithClock(clock, 10) // plenty of capacity
 
 	// Put two items: A expires sooner, B later
 	c.Put("A", "valueA", 1, 1*time.Minute)
@@ -117,7 +117,7 @@ func TestCacheHeapExpiryPurgeOnPut(t *testing.T) {
 
 func TestCacheTTLThenCapacityEviction(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
-	c := NewWithClock(clock, 10) // total capacity 10
+	c := newWithClock(clock, 10) // total capacity 10
 
 	// --- Insert 3 small soon-to-expire items ---
 	c.Put("E1", "exp1", 1, 1*time.Minute)
@@ -175,7 +175,7 @@ func TestCacheTTLThenCapacityEviction(t *testing.T) {
 
 func TestCacheUpdateNoTTLToWithTTL(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
-	c := NewWithClock(clock, 10)
+	c := newWithClock(clock, 10)
 
 	// Insert item with no TTL (never expires)
 	c.Put("X", "initial", 1, 0)
@@ -204,7 +204,7 @@ func TestCacheUpdateNoTTLToWithTTL(t *testing.T) {
 
 func TestCacheUpdateTTLRemoved(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
-	c := NewWithClock(clock, 10)
+	c := newWithClock(clock, 10)
 
 	// Insert item with TTL of 1 minute
 	c.Put("Y", "willExpire", 1, 1*time.Minute)
@@ -234,7 +234,7 @@ func TestCacheUpdateTTLRemoved(t *testing.T) {
 
 func TestCacheUpdateTTLReschedule(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
-	c := NewWithClock(clock, 10)
+	c := newWithClock(clock, 10)
 
 	// Insert three items with different TTLs
 	c.Put("A", "valueA", 1, 2*time.Minute)  // expires soonest
@@ -284,7 +284,7 @@ func TestCacheUpdateTTLReschedule(t *testing.T) {
 
 func TestCacheUpdateTTLNoOp(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
-	c := NewWithClock(clock, 10)
+	c := newWithClock(clock, 10)
 
 	// Insert two items with different TTLs
 	c.Put("M", "valueM", 1, 5*time.Minute)  // will be updated with same TTL
@@ -326,7 +326,7 @@ func TestCacheUpdateTTLNoOp(t *testing.T) {
 
 func TestCacheBasicAPI(t *testing.T) {
 	clock := &FakeClock{now: time.Date(2025, 6, 3, 12, 0, 0, 0, time.UTC)}
-	c := NewWithClock(clock, 100) // arbitrary large capacity
+	c := newWithClock(clock, 100) // arbitrary large capacity
 
 	capacityVal := c.Capacity()
 	if capacityVal != 100 {
@@ -377,7 +377,7 @@ func TestCacheBasicAPI(t *testing.T) {
 
 func TestPutPanicsOnZeroOrNegativeSize(t *testing.T) {
 	clock := &FakeClock{now: time.Now()}
-	c := NewWithClock(clock, 10)
+	c := newWithClock(clock, 10)
 
 	cases := []struct {
 		name string

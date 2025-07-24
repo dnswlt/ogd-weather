@@ -20,6 +20,10 @@
             "essential": true,
             "environment": [
                 {
+                    "name": "OGD_CACHE_SIZE",
+                    "value": "50000000"
+                },
+                {
                     "name": "OGD_CHART_SERVICE_ENDPOINT",
                     "value": "http://weather-charts.weather.local:8080"
                 }
