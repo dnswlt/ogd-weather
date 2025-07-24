@@ -59,6 +59,8 @@ CHART_TYPE_COLUMNS = {
     "raindays": [db.PRECIP_DAILY_MM],
     "sunshine": [db.SUNSHINE_DAILY_MINUTES],
     "sunny_days": [db.SUNSHINE_DAILY_MINUTES],
+    "summer_days": [db.TEMP_DAILY_MAX],
+    "frost_days": [db.TEMP_DAILY_MIN],
 }
 
 
@@ -288,20 +290,74 @@ def sunny_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     verify_period(df, period)
     verify_columns(df, CHART_TYPE_COLUMNS["sunny_days"])
 
-    sunny_days = df[[db.SUNSHINE_DAILY_MINUTES]]
-    sunny_days = sunny_days[sunny_days[db.SUNSHINE_DAILY_MINUTES] >= 6 * 60]
-    sunny_days = sunny_days.rename(columns={db.SUNSHINE_DAILY_MINUTES: "# days"})
+    data = pd.DataFrame(
+        {"# days": (df[db.SUNSHINE_DAILY_MINUTES] >= 6 * 60).astype(int)}
+    )
 
-    sunny_days_m = annual_agg(sunny_days, "count")
+    data_m = annual_agg(data, "sum")
 
-    sunny_days_long = long_format(sunny_days_m).dropna()
+    data_long = long_format(data_m).dropna()
 
-    _, trend = polyfit_columns(sunny_days_m, deg=1)
+    _, trend = polyfit_columns(data_m, deg=1)
     trend_long = long_format(trend).dropna()
 
     title = f"Number of sunny days (≥ 6 h of sunshine) in {period_to_title(period)}, by year".strip()
     return create_chart_trendline(
-        sunny_days_long,
+        data_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+    ).to_dict()
+
+
+def frost_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No frost data for {station_abbr}")
+    verify_period(df, period)
+    verify_columns(df, CHART_TYPE_COLUMNS["frost_days"])
+
+    data = pd.DataFrame({"# days": (df[db.TEMP_DAILY_MIN] < 0).astype(int)})
+
+    data_m = annual_agg(data, "sum")
+
+    data_long = long_format(data_m).dropna()
+
+    _, trend = polyfit_columns(data_m, deg=1)
+    trend_long = long_format(trend).dropna()
+
+    title = f"Number of frost days (min. < 0 °C) in {period_to_title(period)}, by year".strip()
+    return create_chart_trendline(
+        data_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+    ).to_dict()
+
+
+def summer_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No hot days data for {station_abbr}")
+    verify_period(df, period)
+    verify_columns(df, CHART_TYPE_COLUMNS["summer_days"])
+
+    data = pd.DataFrame({"# days": (df[db.TEMP_DAILY_MAX] >= 25).astype(int)})
+
+    data_m = annual_agg(data, "sum")
+
+    data_long = long_format(data_m).dropna()
+
+    _, trend = polyfit_columns(data_m, deg=1)
+    trend_long = long_format(trend).dropna()
+
+    title = f"Number of summer days (max. ≥ 25 °C) in {period_to_title(period)}, by year".strip()
+    return create_chart_trendline(
+        data_long,
         trend_long,
         typ="bar",
         title=title,
@@ -317,21 +373,24 @@ def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     verify_period(df, period)
     verify_columns(df, CHART_TYPE_COLUMNS["sunshine"])
 
-    sunshine = df[[db.SUNSHINE_DAILY_MINUTES]] / 60.0
-    sunshine = sunshine.rename(columns={db.SUNSHINE_DAILY_MINUTES: "sunshine (h)"})
+    data = pd.DataFrame(
+        {
+            "sunshine (h)": df[db.SUNSHINE_DAILY_MINUTES] / 60.0,
+        }
+    )
 
-    sunshine_m = annual_agg(sunshine, "mean")
+    data_m = annual_agg(data, "mean")
 
-    sunshine_long = long_format(sunshine_m).dropna()
+    data_long = long_format(data_m).dropna()
 
-    _, trend = polyfit_columns(sunshine_m, deg=1)
+    _, trend = polyfit_columns(data_m, deg=1)
     trend_long = long_format(trend).dropna()
 
     title = (
         f"Mean daily hours of sunshine in {period_to_title(period)}, by year".strip()
     )
     return create_chart_trendline(
-        sunshine_long,
+        data_long,
         trend_long,
         typ="bar",
         title=title,
@@ -348,16 +407,16 @@ def temperature_deviation_chart(
         raise NoDataError(f"No temperature data for {station_abbr}")
     verify_period(df, period)
 
-    temp = rename_columns(df[CHART_TYPE_COLUMNS["temperature_deviation"]])
+    data = rename_columns(df[CHART_TYPE_COLUMNS["temperature_deviation"]])
 
-    temp_m = annual_agg(temp, "mean")
+    data_m = annual_agg(data, "mean")
     if window and window > 1:
-        temp_m = rolling_mean(temp_m, window=window)
+        data_m = rolling_mean(data_m, window=window)
 
-    temp_long = long_format(temp_m).dropna()
+    data_long = long_format(data_m).dropna()
 
     return create_dynamic_baseline_bars(
-        temp_long,
+        data_long,
         f"Temperature deviation from mean in {period_to_title(period)}",
     ).to_dict()
 
@@ -371,15 +430,15 @@ def temperature_chart(
         raise NoDataError(f"No temperature data for {station_abbr}")
     verify_period(df, period)
 
-    temp = rename_columns(df[CHART_TYPE_COLUMNS["temperature"]])
+    data = rename_columns(df[CHART_TYPE_COLUMNS["temperature"]])
 
-    temp_m = annual_agg(temp, "mean")
+    data_m = annual_agg(data, "mean")
     if window and window > 1:
-        temp_m = rolling_mean(temp_m, window=window)
+        data_m = rolling_mean(data_m, window=window)
 
-    temp_long = long_format(temp_m).dropna()
+    data_long = long_format(data_m).dropna()
 
-    _, trend = polyfit_columns(temp_m, deg=1)
+    _, trend = polyfit_columns(data_m, deg=1)
     trend_long = long_format(trend).dropna()
 
     window_info = f"({window}y rolling avg.)" if window else ""
@@ -387,7 +446,7 @@ def temperature_chart(
         f"Avg. temperatures in {period_to_title(period)}, by year {window_info}".strip()
     )
     return create_chart_trendline(
-        temp_long,
+        data_long,
         trend_long,
         typ="line",
         title=title,
@@ -404,21 +463,21 @@ def precipitation_chart(
         raise NoDataError(f"No precipitation data for {station_abbr}")
     verify_period(df, period)
 
-    precip = rename_columns(df[CHART_TYPE_COLUMNS["precipitation"]])
+    data = rename_columns(df[CHART_TYPE_COLUMNS["precipitation"]])
 
-    precip_m = annual_agg(precip, "sum")
+    data_m = annual_agg(data, "sum")
     if window and window > 1:
-        precip_m = rolling_mean(precip_m, window=window)
+        data_m = rolling_mean(data_m, window=window)
 
-    precip_long = long_format(precip_m).dropna()
+    data_long = long_format(data_m).dropna()
 
-    _, trend = polyfit_columns(precip_m, deg=1)
+    _, trend = polyfit_columns(data_m, deg=1)
     trend_long = long_format(trend).dropna()
 
     window_info = f"({window}y rolling avg.)" if window else ""
     title = f"Total precipitation in {period_to_title(period)}, by year {window_info}".strip()
     return create_chart_trendline(
-        precip_long,
+        data_long,
         trend_long,
         typ="bar",
         title=title,
@@ -451,6 +510,10 @@ def create_chart(
         return sunshine_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "sunny_days":
         return sunny_days_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "summer_days":
+        return summer_days_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "frost_days":
+        return frost_days_chart(df, station_abbr=station_abbr, period=period)
     else:
         raise ValueError(f"Invalid chart type: {chart_type}")
 
