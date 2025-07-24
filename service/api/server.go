@@ -313,5 +313,7 @@ func (s *Server) serveDailySnippet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {
-	serveChartServiceURL[types.StationsResponse](s, w, r, "station_options.html", nil)
+	serveChartServiceURL[types.StationsResponse](s, w, r, "station_options.html", map[string]any{
+		"SelectedStation": "BER", // For now hard-code the greatest Swiss city. TODO: use query param.
+	})
 }

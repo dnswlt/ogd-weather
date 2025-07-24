@@ -1,3 +1,4 @@
-{{range $index, $s := .Response.Stations}}
-<option value="{{$s.Abbr}}" {{if eq $index 0}}selected{{end}}>{{$s.Name}} {{$s.Canton}} ({{$s.Abbr}})</option>
+{{ $selected := .SelectedStation}}
+{{range .Response.Stations}}
+<option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})</option>
 {{end}}

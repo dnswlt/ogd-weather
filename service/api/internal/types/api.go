@@ -6,11 +6,16 @@ import (
 )
 
 type Station struct {
-	Abbr               string `json:"abbr"`
-	Name               string `json:"name"`
-	Canton             string `json:"canton"`
-	FirstAvailableDate *Date  `json:"first_available_date,omitempty"`
-	LastAvailableDate  *Date  `json:"last_available_date,omitempty"`
+	Abbr                string  `json:"abbr"`
+	Name                string  `json:"name"`
+	Canton              string  `json:"canton"`
+	Typ                 string  `json:"typ"`
+	Exposition          string  `json:"exposition"`
+	HeightMASL          float64 `json:"height_masl"`
+	CoordinatesWGS84Lat float64 `json:"coordinates_wgs84_lat"`
+	CoordinatesWGS84Lon float64 `json:"coordinates_wgs84_lon"`
+	FirstAvailableDate  *Date   `json:"first_available_date,omitempty"`
+	LastAvailableDate   *Date   `json:"last_available_date,omitempty"`
 }
 
 type StationsResponse struct {

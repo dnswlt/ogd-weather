@@ -1,15 +1,11 @@
 import datetime
-import glob
 import logging
 import os
+import pandas as pd
+from pydantic import BaseModel
 import re
 import sqlite3
 
-import pandas as pd
-from pydantic import BaseModel
-from . import models
-
-import sqlite3
 from . import models
 
 logger = logging.getLogger("db")
@@ -225,6 +221,7 @@ def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
             station_canton TEXT,
             station_wigos_id TEXT,
             station_type_en TEXT,
+            station_exposition_en TEXT,
             station_dataowner TEXT,
             station_data_since TEXT,
             station_height_masl REAL,
@@ -250,6 +247,7 @@ def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
             m.station_canton,
             m.station_wigos_id,
             m.station_type_en,
+            m.station_exposition_en,
             m.station_dataowner,
             m.station_data_since,
             m.station_height_masl,
@@ -292,6 +290,11 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
             station_abbr,
             station_name,
             station_canton,
+            station_type_en,
+            station_exposition_en,
+            station_height_masl,
+            station_coordinates_wgs84_lat,
+            station_coordinates_wgs84_lon,
             tre200d0_min_date,
             tre200d0_max_date,
             rre150d0_min_date,
@@ -321,6 +324,11 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
         abbr=row["station_abbr"],
         name=row["station_name"],
         canton=row["station_canton"],
+        typ=row["station_type_en"],
+        exposition=row["station_exposition_en"],
+        height_masl=row["station_height_masl"],
+        coordinates_wgs84_lat=row["station_coordinates_wgs84_lat"],
+        coordinates_wgs84_lon=row["station_coordinates_wgs84_lon"],
         first_available_date=first_available_date,
         last_available_date=last_available_date,
     )
@@ -358,7 +366,7 @@ def read_stations(
     if filters:
         sql += " WHERE " + " AND ".join(filters)
 
-    sql += " ORDER BY station_abbr"
+    sql += " ORDER BY station_name"
 
     cur = conn.execute(sql, params)
     rows = cur.fetchall()

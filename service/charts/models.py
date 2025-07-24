@@ -7,6 +7,11 @@ class Station(BaseModel):
     abbr: str
     name: str
     canton: str
+    typ: str | None = None
+    exposition: str | None = None
+    height_masl: float | None = None
+    coordinates_wgs84_lat: float | None = None
+    coordinates_wgs84_lon: float | None = None
     first_available_date: date | None = None
     last_available_date: date | None = None
 
