@@ -1,11 +1,15 @@
 services:
   charts:
     build:
-      context: ./service/charts
-      dockerfile: Dockerfile
+      context: . # build from repo root
+      dockerfile: service/charts/Dockerfile
     container_name: charts
     ports:
       - "8082:8080"
+    environment:
+      OGD_BASE_DIR: "/app/efs"
+    volumes:
+      - ./data:/app/efs:ro   # local SQLite folder → /app/efs in container
 
   api:
     build:
@@ -18,3 +22,13 @@ services:
       OGD_CHART_SERVICE_ENDPOINT: "http://charts:8080"
     depends_on:
       - charts
+
+  db-updater:
+    build:
+      context: . # build from repo root
+      dockerfile: service/db_updater/Dockerfile
+    container_name: db-updater
+    environment:
+      OGD_BASE_DIR: "/app/efs"
+    volumes:
+      - ./data:/app/efs:rw   # updater writes new SQLite DB here

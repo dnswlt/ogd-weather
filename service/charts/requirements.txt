@@ -1,8 +1,0 @@
-altair
-fastapi
-numpy
-pandas
-requests
-uvicorn[standard]
-pytest
-pytest-cov

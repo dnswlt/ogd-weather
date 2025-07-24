@@ -1,20 +1,18 @@
 from concurrent.futures import ThreadPoolExecutor
 import datetime
-import glob
 import logging
 import os
 import re
 import sqlite3
 import time
 from typing import Iterable
-import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 import requests
 import sys
 from urllib.parse import urlparse
-from . import db
-from . import logging_config as _  # configure logging
+from service.charts import db
+from service.charts import logging_config as _  # configure logging
 
 _DATE_FORMATS = {
     "station_data_since": "%d.%m.%Y",
@@ -310,7 +308,7 @@ def import_into_db(conn: sqlite3.Connection, weather_dir: str, csvs: list[CsvRes
         for meta_file in meta_files:
             table_name = table_map.get(meta_file)
             if not table_name:
-                logger.error("Ignoring unknown metadata CSV file %s", meta_file)
+                logger.warning("Ignoring unknown metadata CSV file %s", meta_file)
                 continue
             prepare_metadata_table(
                 conn,
@@ -402,6 +400,8 @@ def main():
     db_path = os.path.join(weather_dir, db.DATABASE_FILENAME)
     logger.info("Connecting to sqlite DB at %s", db_path)
 
+    started_time = time.time()
+
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         create_update_status(conn)
@@ -427,7 +427,7 @@ def main():
         logger.info("Recreating materialized views...")
         db.recreate_station_data_summary(conn)
 
-        logger.info("Done")
+    logger.info("Done. DB updated in %.1fs.", time.time() - started_time)
 
 
 if __name__ == "__main__":

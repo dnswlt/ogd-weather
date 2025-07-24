@@ -1,0 +1,9 @@
+# Shared requirements.txt file for all Python services in this repo.
+altair
+fastapi
+numpy
+pandas
+requests
+uvicorn[standard]
+pytest
+pytest-cov

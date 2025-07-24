@@ -4,35 +4,51 @@ Fun with Open Data from MeteoSwiss.
 
 ## Services
 
-### charts
+### Initial setup
 
 Prepare the Python virtual environment and install dependencies:
 
 ```bash
-pushd service/charts
 rm -rf .venv
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-popd
 ```
+
+Also make sure that all required environment variables are exported:
+
+```bash
+export OGD_BASE_DIR="$(pwd)/data"
+```
+
+### db-updater
 
 If this is the first time you run the server, you'll need to download the
-Open Government Data weather data first:
+Open Government Data weather data:
 
 ```bash
-export OGD_BASE_DIR=~/tmp/ogd-weather
-python3 service/charts/ogd.py "$OGD_BASE_DIR"
+source .venv/bin/activate
+python3 -m service.db_updater.app
 ```
 
-Run the server via `uvicorn` (set `OGD_BASE_DIR` to the directory you downloaded the CSV files into):
+Weather CSV data gets downloaded to `$OGD_BASE_DIR` and an sqlite3 database `swissmetnet.sqlite`
+gets created from that data.
+
+You can run `python3 -m service.db_updater.app` repeatedly to update the DB with the latest data.
+
+### charts
+
+Run the server via `uvicorn`:
 
 ```bash
-source service/charts/.venv/bin/activate
-OGD_BASE_DIR=~/tmp/ogd-weather uvicorn service.charts.app:app --host 127.0.0.1 --port 8000 --workers 1
+source .venv/bin/activate
+uvicorn service.charts.app:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 ### api
+
+The API server is a Go backend that sits in front of the Python charts server
+and serves HTML pages.
 
 ```bash
 cd service/api
@@ -41,26 +57,19 @@ go run ./cmd/server
 
 ## Docker
 
-You can run both services in Docker, either individually or together with `docker compose`.  
+You can run both services in Docker using `docker compose`.  
+A `docker-compose.yml` is provided for local integration. It builds both images and connects them on a shared network.
 
 ### Build images
 
-From the repo root:  
-
 ```bash
-# Build Python charts service
-docker build -t weather-charts service/charts
-
-# Build Go API service
-docker build -t weather-api service/api
+make rebuild
 ```
 
-### Run services with docker compose
-
-A `docker-compose.yml` is provided for local integration. It builds both images and connects them on a shared network.
+### Run services
 
 ```bash
-docker compose up --build
+make up
 ```
 
 This starts:  
@@ -69,13 +78,3 @@ This starts:
 - **Go API service** on <http://localhost:8081>  
 
 The Go backend is automatically configured to call the charts service via the internal Docker network.
-
-If you change application code:  
-
-- `docker compose up --build` – rebuilds only affected layers  
-- `docker compose up --build --force-recreate` – full rebuild (needed after Dockerfile or dependency changes)
-
-This setup matches production packaging:  
-
-- Python container includes the prebuilt SQLite database (`swissmetnet.sqlite`)  
-- Go container includes HTML templates  
