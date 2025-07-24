@@ -86,7 +86,8 @@ async def get_chart(
     station_abbr = station_abbr.upper()
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
     to_year_int = int(to_year) if to_year and to_year.isdigit() else None
-    window_int = int(window) if window and window.isdigit() else None
+    # Internal code treats window=None as "no window"
+    window_int = int(window) if window and window.isdigit() and window != "1" else None
 
     df = db.read_daily_measurements(
         app.state.db,

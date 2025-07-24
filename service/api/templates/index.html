@@ -24,7 +24,8 @@
         <div class="px-4">
             <div class="flex space-x-4">
                 <a href="/" class="py-3 px-4 text-blue-600 font-semibold border-b-2 border-blue-600">Trends</a>
-                <a href="/sun_rain" class="py-3 px-4 text-gray-700 hover:text-blue-600 font-medium">Sunshine &amp; Rain</a>
+                <a href="/sun_rain" class="py-3 px-4 text-gray-700 hover:text-blue-600 font-medium">Sunshine &amp;
+                    Rain</a>
                 <a href="/day" class="py-3 px-4 text-gray-700 hover:text-blue-600 font-medium">Single Day</a>
             </div>
         </div>
@@ -40,10 +41,11 @@
             <div class="grid grid-cols-3 gap-3 items-center">
                 <label for="station" class="col-span-1 font-medium">Station</label>
 
-                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full" hx-get="/stations"
-                    hx-trigger="load" hx-target="#station" hx-swap="innerHTML">
-                    <!-- #include "../templates/station_options.html" -->
-                    <option value="">Loading...</option>
+                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
+                    {{$selected := .Selected}}
+                    {{range .Stations}}
+                    <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})</option>
+                    {{end}}
                 </select>
             </div>
 
@@ -52,23 +54,10 @@
                 <label for="period" class="col-span-1 font-medium">Period</label>
 
                 <select id="period" name="period" class="col-span-2 border rounded p-2 w-full">
-                    <option value="1">January</option>
-                    <option value="2">February</option>
-                    <option value="3">March</option>
-                    <option value="4">April</option>
-                    <option value="5">May</option>
-                    <option value="6" selected>June</option>
-                    <option value="7">July</option>
-                    <option value="8">August</option>
-                    <option value="9">September</option>
-                    <option value="10">October</option>
-                    <option value="11">November</option>
-                    <option value="12">December</option>
-                    <option value="spring">Spring (Mar-May)</option>
-                    <option value="summer">Summer (Jun-Aug)</option>
-                    <option value="autumn">Autumn (Sep-Nov)</option>
-                    <option value="winter">Winter (Dec-Feb)</option>
-                    <option value="all">Whole Year</option>
+                    <!-- Jan Feb Mar ... Spring Summer etc.-->
+                    {{range .Periods}}
+                    <option value="{{.Value}}" {{.Selected}}>{{.DisplayName}}</option>
+                    {{end}}
                 </select>
             </div>
 
@@ -76,9 +65,9 @@
             <div class="grid grid-cols-3 gap-3 items-center">
                 <label for="from_year" class="col-span-1 font-medium">Year Range</label>
                 <div class="col-span-2 grid grid-cols-2 gap-3">
-                    <input type="number" id="from_year" name="from_year" placeholder="From"
+                    <input type="number" id="from_year" name="from_year" placeholder="From" value="{{.Query.from_year}}"
                         class="border rounded p-2 w-full">
-                    <input type="number" id="to_year" name="to_year" placeholder="To" class="border rounded p-2 w-full">
+                    <input type="number" id="to_year" name="to_year" placeholder="To" value="{{.Query.to_year}}" class="border rounded p-2 w-full">
                 </div>
             </div>
 
@@ -87,11 +76,11 @@
                 <label class="col-span-1 font-medium">Smoothing</label>
                 <div class="col-span-2 flex items-center space-x-4">
                     <label class="inline-flex items-center border rounded p-2 w-full">
-                        <input type="radio" name="window" value="" class="form-radio" checked>
+                        <input type="radio" name="window" value="1" class="form-radio" {{if ne .Query.window "1"}}checked{{end}}>
                         <span class="ml-2">Annual</span>
                     </label>
                     <label class="inline-flex items-center border rounded p-2 w-full">
-                        <input type="radio" name="window" value="5" class="form-radio">
+                        <input type="radio" name="window" value="5" class="form-radio" {{if eq .Query.window "5"}}checked{{end}}>
                         <span class="ml-2">5-year rolling avg.</span>
                     </label>
                 </div>
@@ -100,78 +89,58 @@
 
         <!-- Summary -->
         <div>
-            <div id="station-summary-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
-                hx-get="/stations/{station}/summary">
-                <!-- <table> with station weather summary goes here -->
-                <!-- #include "../templates/station_summary.html" -->
+            <div id="station-summary-container" hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                hx-get="/stations/{station}/summary" hx-include="#chart-controls" hx-target="this" hx-swap="innerHTML">
+                <!-- station summary goes here -->
             </div>
         </div>
-
 
         <!-- Charts -->
         <div>
             <div class="mb-8">
-                <div id="temperature-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
-                    hx-swap="innerHTML"
-                    hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
-                    hx-get="/stations/{station}/charts/temperature">
-                    <!-- <script> element with Vega from the backend goes here. -->
+                <div id="temperature-chart-script-container" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/temperature"
+                    hx-include="#chart-controls" hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
                 </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="temperature-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                    <!-- #include "../templates/vega_embed.html" -->
-                </div>
+                <div id="temperature-chart" class="w-full overflow-hidden"></div>
             </div>
+
             <div class="mb-8">
-                <div id="temperature-deviation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
-                    hx-swap="innerHTML"
-                    hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
-                    hx-get="/stations/{station}/charts/temperature_deviation">
-                    <!-- <script> element with Vega from the backend goes here. -->
+                <div id="temperature-deviation-chart-script-container" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/temperature_deviation"
+                    hx-include="#chart-controls" hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
                 </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="temperature_deviation-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                    <!-- #include "../templates/vega_embed.html" -->
-                </div>
+                <div id="temperature_deviation-chart" class="w-full overflow-hidden"></div>
             </div>
+
             <div class="mb-8">
-                <div id="precipitation-chart-script-container" hx-ext="path-params" hx-include="#chart-controls"
-                    hx-swap="innerHTML"
-                    hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year, change from:input[name='window']"
-                    hx-get="/stations/{station}/charts/precipitation">
-                    <!-- <script> element with Vega code from the backend goes here. -->
+                <div id="precipitation-chart-script-container" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/precipitation"
+                    hx-include="#chart-controls" hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
                 </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="precipitation-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                    <!-- #include "../templates/vega_embed.html" -->
-                </div>
+                <div id="precipitation-chart" class="w-full overflow-hidden"></div>
             </div>
         </div>
     </main>
 
     <script>
-        // Auto-load once station options arrive
-        document.body.addEventListener('htmx:afterSwap', function (evt) {
-            if (evt.target.id === 'station') {
-                const sel = document.getElementById('station');
-                if (!sel) return;
+        document.addEventListener("DOMContentLoaded", () => {
+            const form = document.getElementById('chart-controls');
 
-                // Prefer server-selected; else first non-empty option
-                let opt = sel.querySelector('option[selected]');
-                if (!opt) {
-                    opt = Array.from(sel.options).find(o => o.value.trim() !== '');
-                }
-                if (opt) {
-                    sel.value = opt.value;
-                    sel.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }
+            form.addEventListener('change', () => {
+                const data = new FormData(form);
+                const params = new URLSearchParams(data);
+                const newUrl = `${window.location.pathname}?${params.toString()}`;
+                window.history.replaceState({}, '', newUrl);
+            });
+            // Ensure htmx snippets get fetched from the backend.
+            htmx.trigger(form, 'change');
         });
     </script>
+
     <div class="text-center text-gray-500 text-xs mt-4">
         Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
     </div>

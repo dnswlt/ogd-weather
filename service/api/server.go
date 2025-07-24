@@ -77,14 +77,38 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) serveHTML(w http.ResponseWriter, templateFile string) {
+func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateFile string) {
 	var output bytes.Buffer
-	err := s.template.ExecuteTemplate(&output, templateFile, nil)
+	// Pass on query parameters to the template.
+	flatQuery := map[string]string{}
+	q := r.URL.Query()
+	for k := range q {
+		flatQuery[k] = q.Get(k)
+	}
+	// Months and other periods (for dropdown)
+	periods := ui.Periods(q.Get("period"))
+	// Weather stations (dropdown)
+	u := *s.chartServiceBaseURL
+	u.Path = path.Join(u.Path, "/stations")
+	stations, err := fetchBackendData[types.StationsResponse](r.Context(), s, u.String())
+	if err != nil {
+		log.Printf("Failed to fetch stations from backend: %v", err)
+		http.Error(w, "backend error", http.StatusInternalServerError)
+		return
+	}
+
+	err = s.template.ExecuteTemplate(&output, templateFile, map[string]any{
+		"Query":    flatQuery,
+		"Periods":  periods,
+		"Stations": stations.Stations,
+		"Selected": flatQuery["station"],
+	})
 	if err != nil {
 		log.Printf("Failed to render template %q: %v", templateFile, err)
 		http.Error(w, "Template rendering error", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 	w.Write(output.Bytes())
 }
 
@@ -159,13 +183,13 @@ func (s *Server) Serve() error {
 
 	// Root page
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTML(w, "index.html")
+		s.serveHTMLPage(w, r, "index.html")
 	})
 	mux.HandleFunc("GET /day", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTML(w, "day.html")
+		s.serveHTMLPage(w, r, "day.html")
 	})
 	mux.HandleFunc("GET /sun_rain", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTML(w, "sun_rain.html")
+		s.serveHTMLPage(w, r, "sun_rain.html")
 	})
 
 	// Health check. Useful for cloud deployments.
@@ -241,6 +265,30 @@ func (s *Server) chartServiceURL(originalURL *url.URL) *url.URL {
 	return &u
 }
 
+func fetchBackendData[Response any](ctx context.Context, s *Server, backendURL string) (*Response, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, backendURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for %s: %v", backendURL, err)
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("backend error for %s: %v", backendURL, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("backend returned status %s for %s.", resp.Status, backendURL)
+	}
+
+	var response Response
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		return nil, fmt.Errorf("chart server returned invalid JSON (want %T): %v", response, err)
+	}
+	return &response, nil
+}
+
 func serveChartServiceURL[Response any](
 	s *Server,
 	w http.ResponseWriter,
@@ -248,34 +296,11 @@ func serveChartServiceURL[Response any](
 	templateName string,
 	params map[string]any) {
 
-	u := s.chartServiceURL(r.URL)
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	backendURL := s.chartServiceURL(r.URL).String()
+	response, err := fetchBackendData[Response](r.Context(), s, backendURL)
 	if err != nil {
-		log.Printf("Failed to create request for %s: %v", u.String(), err)
+		log.Printf("Error fetching backend data: %v", err)
 		http.Error(w, "Backend error", http.StatusInternalServerError)
-		return
-	}
-	resp, err := s.client.Do(req)
-	if err != nil {
-		log.Printf("Backend error for %s: %v", u.String(), err)
-		http.Error(w, "Backend error", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		log.Printf("Backend returned status %s for %s.", resp.Status, u.String())
-		http.Error(w, "", resp.StatusCode)
-		return
-	}
-
-	var response Response
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	if err != nil {
-		log.Printf("Chart server returned invalid JSON (want %T): %v", response, err)
-		http.Error(w, "Read backend error", http.StatusInternalServerError)
 		return
 	}
 
@@ -314,6 +339,6 @@ func (s *Server) serveDailySnippet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {
 	serveChartServiceURL[types.StationsResponse](s, w, r, "station_options.html", map[string]any{
-		"SelectedStation": "BER", // For now hard-code the greatest Swiss city. TODO: use query param.
+		"SelectedStation": r.URL.Query().Get("station"),
 	})
 }

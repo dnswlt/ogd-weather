@@ -12,6 +12,48 @@ var (
 	zurichLoc = mustLoadLocation("Europe/Zurich")
 )
 
+type Option struct {
+	Value       string
+	DisplayName string
+	IsSelected  bool
+}
+
+func (o *Option) Selected() string {
+	if o.IsSelected {
+		return "selected"
+	}
+	return ""
+}
+
+func Periods(selected string) []Option {
+	opts := []Option{
+		{"1", "January", false},
+		{"2", "February", false},
+		{"3", "March", false},
+		{"4", "April", false},
+		{"5", "May", false},
+		{"6", "June", false},
+		{"7", "July", false},
+		{"8", "August", false},
+		{"9", "September", false},
+		{"10", "October", false},
+		{"11", "November", false},
+		{"12", "December", false},
+		{"spring", "Spring (Mar-May)", false},
+		{"summer", "Summer (Jun-Aug)", false},
+		{"autumn", "Autumn (Sep-Nov)", false},
+		{"winter", "Winter (Dec-Feb)", false},
+		{"all", "Whole Year", false},
+	}
+	for i := range opts {
+		if selected == opts[i].Value {
+			opts[i].IsSelected = true
+			break
+		}
+	}
+	return opts
+}
+
 func mustLoadLocation(name string) *time.Location {
 	loc, err := time.LoadLocation(name)
 	if err != nil {
