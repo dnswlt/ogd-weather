@@ -6,16 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/dnswlt/ogd-weather/service/api/internal/cache"
 	"github.com/dnswlt/ogd-weather/service/api/internal/types"
 	"github.com/dnswlt/ogd-weather/service/api/internal/ui"
 )
@@ -27,6 +30,7 @@ type Server struct {
 	lastReloadMu        sync.Mutex
 	lastReload          time.Time
 	client              *http.Client
+	cache               *cache.Cache
 }
 
 type ServerOptions struct {
@@ -35,6 +39,7 @@ type ServerOptions struct {
 	TemplateDir          string // Ex: "./templates"
 	DebugMode            bool
 	LogRequests          bool
+	CacheSize            int // Maximum approx. size for the response cache in bytes
 }
 
 func (s *Server) reloadTemplates() error {
@@ -68,6 +73,7 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		opts:                opts,
 		chartServiceBaseURL: chartServiceBaseURL,
 		client:              client,
+		cache:               cache.New(opts.CacheSize),
 	}
 
 	if err := s.reloadTemplates(); err != nil {
@@ -265,7 +271,38 @@ func (s *Server) chartServiceURL(originalURL *url.URL) *url.URL {
 	return &u
 }
 
+// canonicalURL returns a canonical form of the given rawURL.
+// This is useful when URLs are used as cache keys.
+func canonicalURL(rawURL string) (string, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	q := u.Query()
+
+	// sort repeated values for deterministic order
+	for k := range q {
+		sort.Strings(q[k])
+	}
+	u.RawQuery = q.Encode() // Encode sorts keys
+
+	return u.String(), nil
+}
+
 func fetchBackendData[Response any](ctx context.Context, s *Server, backendURL string) (*Response, error) {
+	// Canonicalize for stable cache keys
+	if u, err := canonicalURL(backendURL); err == nil {
+		backendURL = u
+	}
+	// Try cache first
+	r, found := s.cache.Get(backendURL)
+	if found {
+		if resp, ok := r.(*Response); ok {
+			return resp, nil
+		}
+	}
+	// Not cached => fetch
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, backendURL, nil)
@@ -280,12 +317,17 @@ func fetchBackendData[Response any](ctx context.Context, s *Server, backendURL s
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("backend returned status %s for %s.", resp.Status, backendURL)
 	}
-
-	var response Response
-	err = json.NewDecoder(resp.Body).Decode(&response)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+	var response Response
+	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("chart server returned invalid JSON (want %T): %v", response, err)
 	}
+	// Add to LRU cache
+	s.cache.Put(backendURL, &response, len(body))
+
 	return &response, nil
 }
 

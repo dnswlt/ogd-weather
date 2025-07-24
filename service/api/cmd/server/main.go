@@ -25,6 +25,7 @@ func main() {
 	flag.StringVar(&opts.TemplateDir, "template-dir", "./templates", "Directory containing server templates.")
 	flag.BoolVar(&opts.DebugMode, "debug", false, "If specified, the server runs in debug mode.")
 	flag.BoolVar(&opts.LogRequests, "log-requests", false, "If true, the server write request logs.")
+	flag.IntVar(&opts.CacheSize, "cache-size", 10<<20, "Approximate size of the response cache in bytes.")
 	flag.Parse()
 
 	server, err := api.NewServer(opts)
