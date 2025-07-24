@@ -1,7 +1,6 @@
 # Had some weird docker "Permission denied" errors without it.
 SHELL := /bin/bash
 
-
 COMPOSE = docker compose
 
 # AWS settings (must be provided via environment or .env file)
@@ -12,6 +11,8 @@ ECR_REGISTRY = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 CHARTS_IMAGE = $(ECR_REGISTRY)/weather-charts:latest
 API_IMAGE = $(ECR_REGISTRY)/weather-api:latest
 DB_UPDATER_IMAGE = $(ECR_REGISTRY)/weather-db-updater:latest
+
+CLUSTER = weather-cluster
 
 .PHONY: up restart update-db logs clean rebuild aws-login build-aws push-aws deploy-aws
 
@@ -53,6 +54,23 @@ push-aws: aws-login build-aws ## Push all images to ECR
 	docker push $(API_IMAGE)
 	docker push $(DB_UPDATER_IMAGE)
 
-deploy-aws: ## Deploy updated ECS services (forces new deployment)
-	aws ecs update-service --cluster weather-cluster --service weather-charts-service --force-new-deployment
-	aws ecs update-service --cluster weather-cluster --service weather-api-service --force-new-deployment
+# Redeploy with same task definition, just pull new :latest images
+redeploy-aws: ## Force ECS services to restart (pull latest image)
+	aws ecs update-service --cluster $(CLUSTER) --service weather-charts-service --force-new-deployment
+	aws ecs update-service --cluster $(CLUSTER) --service weather-api-service --force-new-deployment
+
+# Register + activate new task definition revisions
+update-tasks-aws: update-task-weather-charts update-task-weather-api update-task-weather-db-updater
+
+update-task-weather-charts:
+	bash scripts/update-ecs-task.sh aws/weather-charts-task.json $(CLUSTER) weather-charts-service
+
+update-task-weather-api:
+	bash scripts/update-ecs-task.sh aws/weather-api-task.json $(CLUSTER) weather-api-service
+
+# Pass empty service, since this is a batch job that doesn't have a service defn.
+update-task-weather-db-updater:
+	bash scripts/update-ecs-task.sh aws/weather-db-updater-task.json $(CLUSTER) ""
+
+run-db-updater-aws:
+	bash scripts/run-db-updater-aws.sh $(CLUSTER) weather-db-updater
