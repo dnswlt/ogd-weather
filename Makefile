@@ -1,3 +1,7 @@
+# Had some weird docker "Permission denied" errors without it.
+SHELL := /bin/bash
+
+
 COMPOSE = docker compose
 
 # AWS settings (must be provided via environment or .env file)
