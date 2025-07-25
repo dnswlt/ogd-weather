@@ -23,6 +23,7 @@ RUN apk add --no-cache tzdata
 WORKDIR /app
 COPY --from=builder /app/weather-api /app/
 COPY templates ./templates
+COPY static ./static
 
 # Expose the port your Go service listens on
 EXPOSE 8080
