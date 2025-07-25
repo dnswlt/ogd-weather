@@ -15,4 +15,5 @@ COPY service/db_updater /app/service/db_updater
 ENV OGD_BASE_DIR=/app/efs
 
 # Run the new entrypoint from db-updater
-CMD ["python3", "-m", "service.db_updater.app"]
+ENTRYPOINT ["python3", "-m", "service.db_updater.app"]
+
