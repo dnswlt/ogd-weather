@@ -57,7 +57,7 @@ build-aws: ## Build AWS images (charts, api, db-updater)
 	  	-t $(API_IMAGE) -f service/api/Dockerfile ./service/api
 	docker build -t $(DB_UPDATER_IMAGE) -f service/db_updater/Dockerfile .
 
-push-aws: aws-login build-aws ## Push all images to ECR
+push-aws: ## Push all images to ECR
 	docker push $(CHARTS_IMAGE)
 	docker push $(API_IMAGE)
 	docker push $(DB_UPDATER_IMAGE)
