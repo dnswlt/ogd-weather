@@ -69,7 +69,6 @@
             markers.forEach(marker => {
                 marker.addEventListener("click", () => {
                     const abbr = marker.id.replace("station-marker-", "");
-                    console.log("Clicked station:", abbr);
 
                     // Reset all shapes
                     document.querySelectorAll(".marker-shape")

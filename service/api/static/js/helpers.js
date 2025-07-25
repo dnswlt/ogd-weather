@@ -1,3 +1,4 @@
+// safeUpdateYearInputs updates the form <input> fields from_year and to_year
 window.safeUpdateYearInputs = function(firstYear, lastYear, minYear, maxYear) {
   const fy = document.getElementById('from_year');
   const ty = document.getElementById('to_year');

@@ -7,6 +7,7 @@ import re
 import sqlite3
 
 from . import models
+from .models import LocalizedString
 
 logger = logging.getLogger("db")
 
@@ -221,7 +222,14 @@ def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
             station_canton TEXT,
             station_wigos_id TEXT,
             station_type_en TEXT,
+            station_exposition_de TEXT,
+            station_exposition_fr TEXT,
+            station_exposition_it TEXT,
             station_exposition_en TEXT,
+            station_url_de TEXT,
+            station_url_fr TEXT,
+            station_url_it TEXT,
+            station_url_en TEXT,
             station_dataowner TEXT,
             station_data_since TEXT,
             station_height_masl REAL,
@@ -247,7 +255,14 @@ def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
             m.station_canton,
             m.station_wigos_id,
             m.station_type_en,
+            m.station_exposition_de,
+            m.station_exposition_fr,
+            m.station_exposition_it,
             m.station_exposition_en,
+            m.station_url_de,
+            m.station_url_fr,
+            m.station_url_it,
+            m.station_url_en,
             m.station_dataowner,
             m.station_data_since,
             m.station_height_masl,
@@ -291,7 +306,14 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
             station_name,
             station_canton,
             station_type_en,
+            station_exposition_de,
+            station_exposition_fr,
+            station_exposition_it,
             station_exposition_en,
+            station_url_de,
+            station_url_fr,
+            station_url_it,
+            station_url_en,
             station_height_masl,
             station_coordinates_wgs84_lat,
             station_coordinates_wgs84_lon,
@@ -308,29 +330,33 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
         raise ValueError(f"No station found with abbr={station_abbr!r}")
 
     # Parse possible date strings into actual dates (None stays None)
-    def d(key: str) -> datetime.date | None:
-        v = row[key]
+    def d(v: str | None) -> datetime.date | None:
         return datetime.date.fromisoformat(v) if v else None
-
-    # Pick overall min/max if any exist
-    first_available_date = agg_none(
-        min, [d("tre200d0_min_date"), d("rre150d0_min_date")]
-    )
-    last_available_date = agg_none(
-        max, [d("tre200d0_max_date"), d("rre150d0_max_date")]
-    )
 
     return models.Station(
         abbr=row["station_abbr"],
         name=row["station_name"],
         canton=row["station_canton"],
         typ=row["station_type_en"],
-        exposition=row["station_exposition_en"],
+        exposition=LocalizedString.from_nullable(
+            de=row["station_exposition_de"],
+            fr=row["station_exposition_fr"],
+            it=row["station_exposition_it"],
+            en=row["station_exposition_en"],
+        ),
+        url=LocalizedString.from_nullable(
+            de=row["station_url_de"],
+            fr=row["station_url_fr"],
+            it=row["station_url_it"],
+            en=row["station_url_en"],
+        ),
         height_masl=row["station_height_masl"],
         coordinates_wgs84_lat=row["station_coordinates_wgs84_lat"],
         coordinates_wgs84_lon=row["station_coordinates_wgs84_lon"],
-        first_available_date=first_available_date,
-        last_available_date=last_available_date,
+        temperature_min_date=d(row["tre200d0_min_date"]),
+        temperature_max_date=d(row["tre200d0_max_date"]),
+        precipitation_min_date=d(row["rre150d0_min_date"]),
+        precipitation_max_date=d(row["rre150d0_max_date"]),
     )
 
 
@@ -351,6 +377,9 @@ def read_stations(
             station_name,
             station_canton,
             station_type_en,
+            station_exposition_de,
+            station_exposition_fr,
+            station_exposition_it,
             station_exposition_en,
             station_height_masl,
             station_coordinates_wgs84_lat,
@@ -385,7 +414,12 @@ def read_stations(
             name=row["station_name"],
             canton=row["station_canton"],
             typ=row["station_type_en"],
-            exposition=row["station_exposition_en"],
+            exposition=LocalizedString.from_nullable(
+                de=row["station_exposition_de"],
+                fr=row["station_exposition_fr"],
+                it=row["station_exposition_it"],
+                en=row["station_exposition_en"],
+            ),
             height_masl=row["station_height_masl"],
             coordinates_wgs84_lat=row["station_coordinates_wgs84_lat"],
             coordinates_wgs84_lon=row["station_coordinates_wgs84_lon"],

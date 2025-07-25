@@ -486,7 +486,7 @@
     <g id="station-markers">
         {{range .Stations}}
         {{$p := wgs84tosvg "suisse" .CoordinatesWGS84Lon .CoordinatesWGS84Lat}}
-        {{if eq .Exposition "crest" }}
+        {{if eq .Exposition.EN "crest" }}
         <g id="station-marker-{{.Abbr}}" transform="translate({{$p.X}}, {{$p.Y}})">
             <!-- Larger invisible hit area -->
             <circle r="12" fill="transparent" pointer-events="visible"/>

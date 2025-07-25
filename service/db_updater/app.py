@@ -14,10 +14,6 @@ from urllib.parse import urlparse
 from service.charts import db
 from service.charts import logging_config as _  # configure logging
 
-_DATE_FORMATS = {
-    "station_data_since": "%d.%m.%Y",
-    "reference_timestamp": "%d.%m.%Y %H:%M",
-}
 
 OGD_SNM_URL = (
     "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-smn"
@@ -25,7 +21,7 @@ OGD_SNM_URL = (
 
 UPDATE_STATUS_TABLE_NAME = "update_status"
 
-logger = logging.getLogger("ogd")
+logger = logging.getLogger("db_updater")
 
 
 class UpdateStatus(BaseModel):
@@ -182,6 +178,10 @@ def prepare_metadata_table(
     csv_file: str,
     table_name: str,
 ) -> None:
+    """Creates (if not exists) metadata table `table_name`.
+
+    All columns and their types are inferred from the CSV file.
+    """
     logger.info(f"Importing {csv_file} into sqlite3 database...")
     df = pd.read_csv(
         csv_file,

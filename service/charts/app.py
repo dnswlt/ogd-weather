@@ -143,7 +143,6 @@ async def get_summary(
     to_year: str | None = None,
     response: Response = None,
 ):
-    period = period_default(period)
     return await get_info(
         station_abbr=station_abbr,
         period=period,

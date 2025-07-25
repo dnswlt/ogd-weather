@@ -5,17 +5,70 @@ import (
 	"time"
 )
 
+type localizedFields struct {
+	DE string `json:"de"`
+	FR string `json:"fr"`
+	IT string `json:"it"`
+	EN string `json:"en"`
+}
+
+// LocalizedString is an immutable, localized string for DE/FR/IT/EN text.
+type LocalizedString struct {
+	f localizedFields
+}
+
+func NewLocalizedString(de, fr, it, en string) LocalizedString {
+	return LocalizedString{
+		f: localizedFields{DE: de, FR: fr, IT: it, EN: en},
+	}
+}
+
+func (l LocalizedString) DE() string { return l.f.DE }
+func (l LocalizedString) FR() string { return l.f.FR }
+func (l LocalizedString) IT() string { return l.f.IT }
+func (l LocalizedString) EN() string { return l.f.EN }
+
 type Station struct {
-	Abbr                string  `json:"abbr"`
-	Name                string  `json:"name"`
-	Canton              string  `json:"canton"`
-	Typ                 string  `json:"typ"`
-	Exposition          string  `json:"exposition"`
-	HeightMASL          float64 `json:"height_masl"`
-	CoordinatesWGS84Lat float64 `json:"coordinates_wgs84_lat"`
-	CoordinatesWGS84Lon float64 `json:"coordinates_wgs84_lon"`
-	FirstAvailableDate  *Date   `json:"first_available_date,omitempty"`
-	LastAvailableDate   *Date   `json:"last_available_date,omitempty"`
+	Abbr                string          `json:"abbr"`
+	Name                string          `json:"name"`
+	Canton              string          `json:"canton"`
+	Typ                 string          `json:"typ"`
+	Exposition          LocalizedString `json:"exposition"`
+	URL                 LocalizedString `json:"url"`
+	HeightMASL          float64         `json:"height_masl"`
+	CoordinatesWGS84Lat float64         `json:"coordinates_wgs84_lat"`
+	CoordinatesWGS84Lon float64         `json:"coordinates_wgs84_lon"`
+	// These dates must be optional so they don't get serialized as 0000-00-00 in JSON.
+	TemperatureMinDate   *Date `json:"temperature_min_date,omitempty"`
+	TemperatureMaxDate   *Date `json:"temperature_max_date,omitempty"`
+	PrecipitationMinDate *Date `json:"precipitation_min_date,omitempty"`
+	PrecipitationMaxDate *Date `json:"precipitation_max_date,omitempty"`
+}
+
+func (s *Station) MinDate() Date {
+	var m Date
+	if s.TemperatureMinDate != nil {
+		m = *s.TemperatureMinDate
+	}
+	if s.PrecipitationMinDate != nil {
+		if m.IsZero() || m.After(s.PrecipitationMinDate.Time) {
+			m = *s.PrecipitationMinDate
+		}
+	}
+	return m
+}
+
+func (s *Station) MaxDate() Date {
+	var m Date
+	if s.TemperatureMaxDate != nil {
+		m = *s.TemperatureMaxDate
+	}
+	if s.PrecipitationMaxDate != nil {
+		if m.IsZero() || m.Before(s.PrecipitationMaxDate.Time) {
+			m = *s.PrecipitationMaxDate
+		}
+	}
+	return m
 }
 
 type StationsResponse struct {
@@ -96,3 +149,6 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 func (d Date) String() string {
 	return d.Format("2006-01-02")
 }
+
+func (l LocalizedString) MarshalJSON() ([]byte, error)  { return json.Marshal(l.f) }
+func (l *LocalizedString) UnmarshalJSON(b []byte) error { return json.Unmarshal(b, &l.f) }

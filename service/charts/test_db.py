@@ -8,6 +8,10 @@ from . import db
 from . import models
 
 
+def _testdata_dir():
+    return os.path.join(os.path.dirname(__file__), "testdata")
+
+
 class TestDb(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -21,52 +25,45 @@ class TestDb(unittest.TestCase):
 
     @classmethod
     def _create_all_tables(cls):
-        cursor = cls.conn.cursor()
-        cursor.execute(
-            f"""
-            CREATE TABLE {db.STATION_DATA_SUMMARY_TABLE_NAME} (
-                station_abbr TEXT PRIMARY KEY,
+        conn = cls.conn
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(), conn, db.DAILY_MEASUREMENTS_TABLE, []
+        )
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(), conn, db.HOURLY_MEASUREMENTS_TABLE, []
+        )
+        conn.execute(
+            """
+            CREATE TABLE ogd_smn_meta_stations (
+                station_abbr TEXT,
                 station_name TEXT,
                 station_canton TEXT,
+                station_wigos_id TEXT,
+                station_type_de TEXT,
+                station_type_fr TEXT,
+                station_type_it TEXT,
                 station_type_en TEXT,
-                station_exposition_en TEXT,
+                station_dataowner TEXT,
+                station_data_since TEXT,
                 station_height_masl REAL,
+                station_height_barometer_masl REAL,
+                station_coordinates_lv95_east REAL,
+                station_coordinates_lv95_north REAL,
                 station_coordinates_wgs84_lat REAL,
                 station_coordinates_wgs84_lon REAL,
-                tre200d0_min_date TEXT,
-                tre200d0_max_date TEXT,
-                rre150d0_min_date TEXT,
-                rre150d0_max_date TEXT,
-                tre200d0_count INTEGER,
-                rre150d0_count INTEGER
-            )
-        """
+                station_exposition_de TEXT,
+                station_exposition_fr TEXT,
+                station_exposition_it TEXT,
+                station_exposition_en TEXT,
+                station_url_de TEXT,
+                station_url_fr TEXT,
+                station_url_it TEXT,
+                station_url_en TEXT,
+                PRIMARY KEY (station_abbr)
+            );
+            """
         )
-        cursor.execute(
-            f"""
-            CREATE TABLE {db.DAILY_MEASUREMENTS_TABLE.name} (
-                station_abbr TEXT,
-                reference_timestamp TEXT,
-                tre200d0 REAL,
-                tre200dn REAL,
-                tre200dx REAL,
-                rre150d0 REAL
-            )
-        """
-        )
-        cursor.execute(
-            f"""
-            CREATE TABLE {db.HOURLY_MEASUREMENTS_TABLE.name} (
-                station_abbr TEXT,
-                reference_timestamp TEXT,
-                tre200h0 REAL,
-                tre200hn REAL,
-                tre200hx REAL,
-                rre150h0 REAL
-            )
-        """
-        )
-        cls.conn.commit()
+        db.recreate_station_data_summary(conn)
 
 
 class TestDbStations(TestDb):
@@ -89,6 +86,10 @@ class TestDbStations(TestDb):
                 "2020-12-31",
                 100,  # tre200d0_count
                 100,  # rre150d0_count
+                "Ebene",
+                "Plaine",
+                "Pianura",
+                "plain",
             ),
             (
                 "BAS",
@@ -100,6 +101,10 @@ class TestDbStations(TestDb):
                 None,
                 50,  # tre200d0_count
                 0,  # rre150d0_count
+                "Ebene",
+                None,
+                None,
+                None,
             ),  # Missing precip dates
             (
                 "BER",
@@ -111,8 +116,26 @@ class TestDbStations(TestDb):
                 "2022-12-31",
                 0,  # tre200d0_count
                 50,  # rre150d0_count
+                "Ebene",
+                "Plaine",
+                "Pianura",
+                "plain",
             ),  # Missing temp dates
-            ("LUG", "Lugano", "TI", None, None, None, None, 0, 0),  # All dates missing
+            (
+                "LUG",
+                "Lugano",
+                "TI",
+                None,
+                None,
+                None,
+                None,
+                0,
+                0,
+                None,
+                None,
+                None,
+                None,
+            ),  # All dates missing
         ]
         cursor.executemany(
             f"""
@@ -120,9 +143,11 @@ class TestDbStations(TestDb):
                 station_abbr, station_name, station_canton,
                 tre200d0_min_date, tre200d0_max_date,
                 rre150d0_min_date, rre150d0_max_date,
-                tre200d0_count, rre150d0_count
+                tre200d0_count, rre150d0_count,
+                station_exposition_de, station_exposition_fr,
+                station_exposition_it, station_exposition_en
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             stations_data,
         )
@@ -134,8 +159,8 @@ class TestDbStations(TestDb):
         self.assertEqual(station.abbr, "ABO")
         self.assertEqual(station.name, "Arosa")
         self.assertEqual(station.canton, "GR")
-        self.assertEqual(station.first_available_date, datetime.date(2000, 1, 1))
-        self.assertEqual(station.last_available_date, datetime.date(2020, 12, 31))
+        self.assertEqual(station.precipitation_min_date, datetime.date(2000, 1, 1))
+        self.assertEqual(station.precipitation_max_date, datetime.date(2020, 12, 31))
 
     def test_read_station_not_found(self):
         with self.assertRaises(ValueError) as cm:
@@ -146,27 +171,52 @@ class TestDbStations(TestDb):
         station = db.read_station(self.conn, "BAS")
         self.assertIsInstance(station, models.Station)
         self.assertEqual(station.abbr, "BAS")
-        self.assertEqual(station.first_available_date, datetime.date(1990, 1, 1))
-        self.assertEqual(station.last_available_date, datetime.date(2010, 12, 31))
+        self.assertEqual(station.temperature_min_date, datetime.date(1990, 1, 1))
+        self.assertEqual(station.temperature_max_date, datetime.date(2010, 12, 31))
 
         station = db.read_station(self.conn, "BER")
         self.assertIsInstance(station, models.Station)
         self.assertEqual(station.abbr, "BER")
-        self.assertEqual(station.first_available_date, datetime.date(1980, 1, 1))
-        self.assertEqual(station.last_available_date, datetime.date(2022, 12, 31))
+        self.assertEqual(station.precipitation_min_date, datetime.date(1980, 1, 1))
+        self.assertEqual(station.precipitation_max_date, datetime.date(2022, 12, 31))
 
     def test_read_station_no_dates(self):
         station = db.read_station(self.conn, "LUG")
         self.assertIsInstance(station, models.Station)
         self.assertEqual(station.abbr, "LUG")
-        self.assertIsNone(station.first_available_date)
-        self.assertIsNone(station.last_available_date)
+        self.assertIsNone(station.temperature_min_date)
+        self.assertIsNone(station.temperature_max_date)
+        self.assertIsNone(station.precipitation_min_date)
+        self.assertIsNone(station.precipitation_max_date)
+
+    def test_read_station_localized_string(self):
+        station = db.read_station(self.conn, "BER")
+        self.assertIsNotNone(station.exposition)
+        self.assertEqual(station.exposition.de, "Ebene")
+        self.assertEqual(station.exposition.fr, "Plaine")
+        self.assertEqual(station.exposition.it, "Pianura")
+        self.assertEqual(station.exposition.en, "plain")
+
+    def test_read_station_localized_string_empty(self):
+        station = db.read_station(self.conn, "BAS")
+        self.assertIsNotNone(station.exposition)
+        self.assertEqual(station.exposition.de, "Ebene")
+        self.assertEqual(station.exposition.fr, "")
+        self.assertEqual(station.exposition.it, "")
+        self.assertEqual(station.exposition.en, "")
 
     def test_read_stations_no_filters(self):
         stations = db.read_stations(self.conn)
         # Default exclude_empty=True, so BAS (no precip) and BER (no temp) and LUG (no data) are excluded
         self.assertEqual(len(stations), 1)  # Only ABO has both temp and precip data
         self.assertEqual(stations[0].abbr, "ABO")
+
+    def test_read_stations_localized_string(self):
+        stations = db.read_stations(self.conn, exclude_empty=False)
+        station = next((s for s in stations if s.abbr == "BER"), None)
+        self.assertIsNotNone(station)
+        self.assertEqual(station.exposition.de, "Ebene")
+        self.assertEqual(station.exposition.it, "Pianura")
 
     def test_read_stations_exclude_empty_false(self):
         stations = db.read_stations(self.conn, exclude_empty=False)
@@ -370,10 +420,6 @@ class TestDbHourly(TestDb):
         df = db.read_hourly_measurements(self.conn, "ABO", from_date, to_date)
         self.assertIsInstance(df, pd.DataFrame)
         self.assertTrue(df.empty)
-
-
-def _testdata_dir():
-    return os.path.join(os.path.dirname(__file__), "testdata")
 
 
 class TestCreateDb(unittest.TestCase):

@@ -64,8 +64,8 @@
     safeUpdateYearInputs(
         {{.Stats.FirstDate.Year }},
         {{.Stats.LastDate.Year }},
-        {{ datefmt "Y" .Station.FirstAvailableDate }},
-        {{ datefmt "Y" .Station.LastAvailableDate }}
+        {{ datefmt "Y" .Station.MinDate }},
+        {{ datefmt "Y" .Station.MaxDate }}
     );
 </script>
 
