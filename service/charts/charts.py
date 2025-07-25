@@ -15,6 +15,8 @@ class NoDataError(ValueError):
     """Raised when a request is valid, but no data is available."""
 
 
+PERIOD_ALL = "all"
+
 MEASUREMENT_LABELS = {
     db.TEMP_DAILY_MEAN: "temp_2m_mean",
     db.TEMP_DAILY_MAX: "temp_2m_max",
@@ -69,7 +71,7 @@ def period_to_title(period: str) -> str:
         return MONTH_NAMES[int(period)]
     elif period in SEASON_NAMES:
         return SEASON_NAMES[period]
-    elif period == "all":
+    elif period == PERIOD_ALL:
         return "Whole Year"
     return "Unknown Period"
 
@@ -100,7 +102,7 @@ def verify_period(df: pd.DataFrame, period: str):
             raise ValueError(
                 f"Data contains months outside the expected season {period} ({expected_months})"
             )
-    elif period == "all":
+    elif period == PERIOD_ALL:
         # All months are fine
         pass
     else:
@@ -253,7 +255,7 @@ def create_dynamic_baseline_bars(
     )
 
 
-def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -282,7 +284,7 @@ def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     ).to_dict()
 
 
-def sunny_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+def sunny_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -311,7 +313,7 @@ def sunny_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     ).to_dict()
 
 
-def frost_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+def frost_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -338,7 +340,7 @@ def frost_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     ).to_dict()
 
 
-def summer_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+def summer_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -365,7 +367,7 @@ def summer_days_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
     ).to_dict()
 
 
-def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
+def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -399,7 +401,10 @@ def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = "6"):
 
 
 def temperature_deviation_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
 ):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
@@ -422,7 +427,10 @@ def temperature_deviation_chart(
 
 
 def temperature_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
 ) -> alt.LayerChart:
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
@@ -455,7 +463,10 @@ def temperature_chart(
 
 
 def precipitation_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = "6", window: int | None = None
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
 ):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
@@ -489,7 +500,7 @@ def create_chart(
     chart_type: str,
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = "6",
+    period: str = PERIOD_ALL,
     window: int | None = None,
 ):
     if chart_type == "temperature":
@@ -519,7 +530,7 @@ def create_chart(
 
 
 def station_stats(
-    df: pd.DataFrame, station_abbr: str, period: str = "6"
+    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> models.StationStats:
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")

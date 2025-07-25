@@ -40,7 +40,7 @@ type Server struct {
 type ServerOptions struct {
 	Addr                 string // Ex: "localhost:8080"
 	ChartServiceEndpoint string // Ex: "http://localhost:8000"
-	TemplateDir          string // Ex: "./templates"
+	BaseDir              string // Directory under which "templates" and "static" dirs are expected
 	DebugMode            bool
 	LogRequests          bool
 	CacheSize            int // Maximum approx. size for the response cache in bytes
@@ -57,7 +57,7 @@ func (s *Server) reloadTemplates() error {
 		"wgs84tosvg": ui.WGS84ToSVG,
 	})
 	var err error
-	s.template, err = tmpl.ParseGlob(path.Join(s.opts.TemplateDir, "*.html"))
+	s.template, err = tmpl.ParseGlob(path.Join(s.opts.BaseDir, "templates/*.html"))
 	return err
 }
 
@@ -328,20 +328,6 @@ func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (s *Server) serveSummarySnippet(w http.ResponseWriter, r *http.Request) {
-	serveChartServiceURL[types.StationSummaryResponse](s, w, r, "station_summary.html", nil)
-}
-
-func (s *Server) serveDailySnippet(w http.ResponseWriter, r *http.Request) {
-	serveChartServiceURL[types.StationMeasurementsResponse](s, w, r, "daily_measurements.html", nil)
-}
-
-func (s *Server) serveStationsSnippet(w http.ResponseWriter, r *http.Request) {
-	serveChartServiceURL[types.StationsResponse](s, w, r, "station_options.html", map[string]any{
-		"SelectedStation": r.URL.Query().Get("station"),
-	})
-}
-
 func (s *Server) serveStatus(w http.ResponseWriter) {
 	type ServerStatus struct {
 		StartTime           time.Time
@@ -392,6 +378,11 @@ func (s *Server) Serve() error {
 		s.serveHTMLPage(w, r, "map.html")
 	})
 
+	// Static resources (JavaScript, CSS, etc.)
+	staticDir := path.Join(s.opts.BaseDir, "static")
+	mux.Handle("GET /static/", http.StripPrefix("/static/",
+		http.FileServer(http.Dir(staticDir))))
+
 	// Health check. Useful for cloud deployments.
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -415,7 +406,15 @@ func (s *Server) Serve() error {
 	mux.HandleFunc("GET /stations/{stationID}/summary",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
-				s.serveSummarySnippet(w, r)
+				serveChartServiceURL[types.StationSummaryResponse](s, w, r, "station_summary.html", nil)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
+	mux.HandleFunc("GET /stations/{stationID}/info",
+		func(w http.ResponseWriter, r *http.Request) {
+			if acceptsHTML(r.Header.Get("Accept")) {
+				serveChartServiceURL[types.StationSummaryResponse](s, w, r, "station_info.html", nil)
 				return
 			}
 			proxy.ServeHTTP(w, r)
@@ -423,7 +422,7 @@ func (s *Server) Serve() error {
 	mux.HandleFunc("GET /stations/{stationID}/daily",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
-				s.serveDailySnippet(w, r)
+				serveChartServiceURL[types.StationMeasurementsResponse](s, w, r, "daily_measurements.html", nil)
 				return
 			}
 			proxy.ServeHTTP(w, r)
@@ -432,7 +431,10 @@ func (s *Server) Serve() error {
 		func(w http.ResponseWriter, r *http.Request) {
 			accept := r.Header.Get("Accept")
 			if acceptsHTML(accept) {
-				s.serveStationsSnippet(w, r)
+				serveChartServiceURL[types.StationsResponse](s, w, r, "station_options.html",
+					map[string]any{
+						"SelectedStation": r.URL.Query().Get("station"),
+					})
 				return
 			}
 			proxy.ServeHTTP(w, r)

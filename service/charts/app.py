@@ -46,6 +46,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+def period_default(period: str | None) -> str:
+    if period:
+        return period
+    return charts.PERIOD_ALL
+
+
 @app.exception_handler(charts.StationNotFoundError)
 async def station_not_found_handler(request, exc: charts.StationNotFoundError):
     return JSONResponse(
@@ -72,7 +78,7 @@ def health():
 async def get_chart(
     station_abbr: str,
     chart_type: str,
-    period: str = "6",
+    period: str | None = None,
     from_year: str | None = None,
     to_year: str | None = None,
     window: str | None = None,
@@ -82,6 +88,7 @@ async def get_chart(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Invalid chart type: {chart_type}",
         )
+    period = period_default(period)
 
     station_abbr = station_abbr.upper()
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
@@ -131,10 +138,30 @@ async def get_daily_measurements(
 @app.get("/stations/{station_abbr}/summary")
 async def get_summary(
     station_abbr: str,
-    period: str = "6",
+    period: str | None = None,
     from_year: str | None = None,
     to_year: str | None = None,
+    response: Response = None,
 ):
+    period = period_default(period)
+    return await get_info(
+        station_abbr=station_abbr,
+        period=period,
+        from_year=from_year,
+        to_year=to_year,
+        response=response,
+    )
+
+
+@app.get("/stations/{station_abbr}/info")
+async def get_info(
+    station_abbr: str,
+    period: str | None = None,
+    from_year: str | None = None,
+    to_year: str | None = None,
+    response: Response = None,
+):
+    period = period_default(period)
     station_abbr = station_abbr.upper()
 
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
@@ -157,6 +184,8 @@ async def get_summary(
 
     station = db.read_station(app.state.db, station_abbr)
 
+    # Stations don't change often, use 1 day TTL for caching.
+    response.headers["Cache-Control"] = "public, max-age=86400"
     return {
         "summary": models.StationSummary(
             station=station,

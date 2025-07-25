@@ -5,6 +5,8 @@
     <meta charset="utf-8" />
     <title>Weather Data CH</title>
 
+    <script src="/static/js/helpers.js"></script>
+
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -30,6 +32,15 @@
             {{template "suisse_svg.html" .}}
         </div>
 
+        <!-- Detailed station info -->
+        <h2 class="text-lg text-gray-800 text-left">Station info</h2>
+        <div>
+            <div id="station-info-container">
+                <div class="font-medium text-gray-800 py-2 text-sm">Click on a station to show information about it.</div>
+            </div>
+        </div>
+
+        <!-- Disclaimers -->
         <div class="text-center text-gray-500 text-xs mt-4">
             Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
         </div>
@@ -44,6 +55,7 @@
         <div class="text-center text-gray-500 text-xs mt-2">
             Disclaimer: No responsibility is taken for the accuracy or use of the data shown.
         </div>
+
     </main>
 
     <script>
@@ -66,6 +78,11 @@
                     // Highlight the shape inside this marker
                     const shape = marker.querySelector(".marker-shape");
                     if (shape) shape.setAttribute("fill", HIGHLIGHT_COLOR);
+
+                    htmx.ajax('GET', `/stations/${abbr}/info`, {
+                        target: "#station-info-container",
+                        swap: 'innerHTML'
+                    });
                 });
             });
         });

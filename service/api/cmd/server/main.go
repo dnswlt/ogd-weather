@@ -27,7 +27,7 @@ func main() {
 	var opts api.ServerOptions
 	flag.StringVar(&opts.Addr, "addr", addr, "Address that the server listens on.")
 	flag.StringVar(&opts.ChartServiceEndpoint, "chart-service-endpoint", chartServiceEndpoint, "URL of the chart service backend.")
-	flag.StringVar(&opts.TemplateDir, "template-dir", "./templates", "Directory containing server templates.")
+	flag.StringVar(&opts.BaseDir, "base-dir", ".", "Base directory containing templates/ and static/ subdirectories.")
 	flag.BoolVar(&opts.DebugMode, "debug", false, "If specified, the server runs in debug mode.")
 	flag.BoolVar(&opts.LogRequests, "log-requests", false, "If true, the server write request logs.")
 	flag.IntVar(&opts.CacheSize, "cache-size", cacheSize, "Approximate size of the response cache in bytes. (0 = disabled, -1 = unlimited)")
