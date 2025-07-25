@@ -73,6 +73,8 @@ func DateFmt(format string, date any) (string, error) {
 			sb.WriteString("01")
 		case 'd':
 			sb.WriteString("02")
+		case 'a':
+			sb.WriteString("2")
 		case 'H':
 			sb.WriteString("15")
 		case 'M':

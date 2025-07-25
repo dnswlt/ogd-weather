@@ -66,7 +66,7 @@
                 Available temperature data
             </td>
             <td class="py-2 text-gray-800">
-                {{.Station.TemperatureMinDate}} &ndash; {{.Station.TemperatureMaxDate}}
+                {{datefmt "a J Y" .Station.TemperatureMinDate}} &ndash; {{datefmt "a J Y" .Station.TemperatureMaxDate}}
             </td>
         </tr>
         <tr class="border-b">
@@ -74,7 +74,7 @@
                 Available precipitation data
             </td>
             <td class="py-2 text-gray-800">
-                {{.Station.PrecipitationMinDate}} &ndash; {{.Station.PrecipitationMaxDate}}
+                {{datefmt "a J Y" .Station.PrecipitationMinDate}} &ndash; {{datefmt "a J Y" .Station.PrecipitationMaxDate}}
             </td>
         </tr>
         <tr class="border-b">
