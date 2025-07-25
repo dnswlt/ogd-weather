@@ -1,0 +1,37 @@
+[
+  {
+    "svg_x": 250.71,
+    "svg_y": 472.64,
+    "wsg84_lon": 6.92705,
+    "wsg84_lat": 46.40307,
+    "notes": "Lac Leman East"
+  },
+  {
+    "svg_x": 950.63,
+    "svg_y": 528.35,
+    "wsg84_lon": 10.069,
+    "wsg84_lat": 46.2169,
+    "notes": "Poschiavo S"
+  },
+  {
+    "svg_x": 414.78,
+    "svg_y": 81.03,
+    "wsg84_lon": 7.6798,
+    "wsg84_lat": 47.5953,
+    "notes": "Basel NE"
+  },
+  {
+    "svg_x": 576.16,
+    "svg_y": 454.82,
+    "wsg84_lon": 8.3833,
+    "wsg84_lat": 46.4521,
+    "notes": "VS/TI S"
+  },
+  {
+    "svg_x": 665.76,
+    "svg_y": 201.03,
+    "wsg84_lon": 8.79576,
+    "wsg84_lat": 47.23985,
+    "notes": "ZH/SG Rapperswil"
+  }
+]
