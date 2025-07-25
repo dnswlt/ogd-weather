@@ -33,7 +33,12 @@ func main() {
 	flag.IntVar(&opts.CacheSize, "cache-size", cacheSize, "Approximate size of the response cache in bytes. (0 = disabled, -1 = unlimited)")
 	flag.Parse()
 
-	server, err := api.NewServer(opts)
+	var moreOpts []api.ServerOption
+
+	if token := os.Getenv("OGD_BEARER_TOKEN"); token != "" {
+		moreOpts = append(moreOpts, api.WithBearerToken(token))
+	}
+	server, err := api.NewServer(opts, moreOpts...)
 	if err != nil {
 		log.Fatalf("Error creating server: %v", err)
 

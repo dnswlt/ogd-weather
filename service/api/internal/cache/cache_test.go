@@ -398,3 +398,25 @@ func TestPutPanicsOnZeroOrNegativeSize(t *testing.T) {
 		})
 	}
 }
+
+func TestCachePurge(t *testing.T) {
+	clock := &FakeClock{now: time.Now()}
+	c := newWithClock(clock, 10)
+
+	c.Put("A", "A", 1, 0)
+
+	c.Purge()
+
+	if capa := c.Capacity(); capa != 10 {
+		t.Errorf("Expected Capacity=10 after explicit purge, got %d", capa)
+	}
+	if l := c.Len(); l != 0 {
+		t.Errorf("Expected Len=0 after explicit purge, got %d", l)
+	}
+	if u := c.Usage(); u != 0 {
+		t.Errorf("Expected Usage=0 after explicit purge, got %d", u)
+	}
+	if _, found := c.Get("A"); found {
+		t.Error("Found item A after purge")
+	}
+}

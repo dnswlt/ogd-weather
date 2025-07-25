@@ -14,6 +14,7 @@ type Cache interface {
 	Usage() int
 	Get(key string) (any, bool)
 	Put(key string, item any, size int, ttl time.Duration)
+	Purge()
 }
 
 type clock interface {
@@ -66,6 +67,7 @@ func (c disabledCache) Capacity() int                                         { 
 func (c disabledCache) Usage() int                                            { return 0 }
 func (c disabledCache) Get(key string) (any, bool)                            { return nil, false }
 func (c disabledCache) Put(key string, item any, size int, ttl time.Duration) {}
+func (c disabledCache) Purge()                                                {}
 
 func newWithClock(clock clock, capacity int) *lruCache {
 	return &lruCache{
@@ -104,6 +106,19 @@ func (c *lruCache) Capacity() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.capacity
+}
+
+// Purge resets the cache to an empty state.
+func (c *lruCache) Purge() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	clear(c.data)
+	c.lru.Init()
+	// Best practice: nil out pointers in the slice to help the GC
+	clear(c.ttlHeap)
+	c.ttlHeap = c.ttlHeap[:0]
+	c.usage = 0
 }
 
 // Put adds or updates an item, its size, and its TTL.

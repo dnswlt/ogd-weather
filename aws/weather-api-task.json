@@ -28,6 +28,12 @@
                     "value": "http://weather-charts.weather.local:8080"
                 }
             ],
+            "secrets": [
+                {
+                    "name": "OGD_BEARER_TOKEN",
+                    "valueFrom": "arn:aws:ssm:eu-central-1:006725292903:parameter/weather/api/BearerToken"
+                }
+            ],
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {

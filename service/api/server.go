@@ -35,6 +35,7 @@ type Server struct {
 	client              *http.Client
 	cache               cache.Cache
 	startTime           time.Time
+	bearerToken         string // Used for pages requiring simple Authorization
 }
 
 type ServerOptions struct {
@@ -61,7 +62,16 @@ func (s *Server) reloadTemplates() error {
 	return err
 }
 
-func NewServer(opts ServerOptions) (*Server, error) {
+type ServerOption func(s *Server) error
+
+func WithBearerToken(token string) ServerOption {
+	return func(s *Server) error {
+		s.bearerToken = token
+		return nil
+	}
+}
+
+func NewServer(opts ServerOptions, moreOpts ...ServerOption) (*Server, error) {
 	chartServiceBaseURL, err := url.Parse(opts.ChartServiceEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid chartServiceEndpoint URL: %v", err)
@@ -84,6 +94,12 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		client:              client,
 		cache:               cache.New(opts.CacheSize),
 		startTime:           time.Now(),
+	}
+	for _, o := range moreOpts {
+		err := o(s)
+		if err != nil {
+			return nil, fmt.Errorf("error applying ServerOption: %v", err)
+		}
 	}
 
 	if err := s.reloadTemplates(); err != nil {
@@ -154,6 +170,32 @@ func (s *Server) withRequestLogging(next http.Handler) http.Handler {
 			r.RemoteAddr,
 		)
 	})
+}
+
+// withAuth is a middleware that checks for a valid Bearer token in the Authorization header.
+func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.bearerToken == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		authHeader := r.Header.Get("Authorization")
+
+		var token string
+		n, err := fmt.Sscanf(authHeader, "Bearer %s", &token)
+		if err != nil || n != 1 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		if token != s.bearerToken {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
 }
 
 type loggingResponseWriter struct {
@@ -340,6 +382,7 @@ func (s *Server) serveStatus(w http.ResponseWriter) {
 		Hostname            string
 		NumCPU              int
 		BuildInfo           string
+		HasBearerToken      bool
 	}
 
 	hostname, _ := os.Hostname()
@@ -354,6 +397,7 @@ func (s *Server) serveStatus(w http.ResponseWriter) {
 		Hostname:            hostname,
 		NumCPU:              runtime.NumCPU(),
 		BuildInfo:           version.FullVersion(),
+		HasBearerToken:      s.bearerToken != "",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -377,6 +421,11 @@ func (s *Server) Serve() error {
 	mux.HandleFunc("GET /map", func(w http.ResponseWriter, r *http.Request) {
 		s.serveHTMLPage(w, r, "map.html")
 	})
+	mux.Handle("DELETE /admin/cache/responses", s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+		s.cache.Purge()
+		w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
+		w.Write([]byte("OK\n"))
+	}))
 
 	// Static resources (JavaScript, CSS, etc.)
 	staticDir := path.Join(s.opts.BaseDir, "static")
