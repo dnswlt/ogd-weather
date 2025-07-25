@@ -346,7 +346,15 @@ def read_stations(
     """
 
     sql = f"""
-        SELECT station_abbr, station_name, station_canton
+        SELECT 
+            station_abbr,
+            station_name,
+            station_canton,
+            station_type_en,
+            station_exposition_en,
+            station_height_masl,
+            station_coordinates_wgs84_lat,
+            station_coordinates_wgs84_lon
         FROM {STATION_DATA_SUMMARY_TABLE_NAME}
     """
     filters = []
@@ -376,6 +384,11 @@ def read_stations(
             abbr=row["station_abbr"],
             name=row["station_name"],
             canton=row["station_canton"],
+            typ=row["station_type_en"],
+            exposition=row["station_exposition_en"],
+            height_masl=row["station_height_masl"],
+            coordinates_wgs84_lat=row["station_coordinates_wgs84_lat"],
+            coordinates_wgs84_lon=row["station_coordinates_wgs84_lon"],
         )
         for row in rows
     ]

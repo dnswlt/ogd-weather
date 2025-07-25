@@ -126,7 +126,7 @@ def main():
         print("Failed to calculate transform")
         sys.exit(1)
 
-    print("\nResulting transform:\n", transf.model_dump_json(indent=2))
+    print(f"\nResulting transform:\n{transf.model_dump_json(indent=2)}")
 
     print("\n--- Transforming New Points ---")
     # Example: Transform Zurich HB

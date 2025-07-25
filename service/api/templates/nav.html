@@ -1,0 +1,13 @@
+<nav class="bg-white shadow mb-4 max-w-screen-lg mx-auto rounded-xl">
+    <div class="px-4">
+        <div class="flex space-x-4">
+            {{range .Nav}}
+                {{if .Active }}
+                <a href="{{.Path}}" class="py-3 px-4 text-blue-600 font-semibold border-b-2 border-blue-600">{{.Title}}</a>
+                {{else}}
+                <a href="{{.Path}}" class="py-3 px-4 text-gray-700 hover:text-blue-600 font-medium">{{.Title}}</a>
+                {{end}}
+            {{end}}
+        </div>
+    </div>
+</nav>

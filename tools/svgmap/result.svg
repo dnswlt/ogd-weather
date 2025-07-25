@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://creativecommons.org/ns#"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   version="1.1"
-   id="svg2"
-   sodipodi:version="0.32"
-   inkscape:version="1.0beta2 (2b71d25, 2019-12-03)"
-   sodipodi:docname="Suisse_cantons.svg"
-   inkscape:output_extension="org.inkscape.output.svg.inkscape"
-   x="0px"
-   y="0px"
-   width="1122.5183"
-   height="793.70026"
-   viewBox="0 0 1052.361 744.09399"
-   enable-background="new 0 0 1052.361 744.094"
-   xml:space="preserve"><metadata
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:cc="http://creativecommons.org/ns#"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:svg="http://www.w3.org/2000/svg"
+    xmlns="http://www.w3.org/2000/svg"
+    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+    version="1.1"
+    id="svg2"
+    sodipodi:version="0.32"
+    inkscape:version="1.0beta2 (2b71d25, 2019-12-03)"
+    sodipodi:docname="Suisse_cantons.svg"
+    inkscape:output_extension="org.inkscape.output.svg.inkscape"
+    x="0px"
+    y="0px"
+    width="1122.5183"
+    height="793.70026"
+    viewBox="0 0 1052.361 744.09399"
+    enable-background="new 0 0 1052.361 744.094"
+    xml:space="preserve"><metadata
    id="metadata1108"><rdf:RDF><cc:Work
        rdf:about=""><dc:format>image/svg+xml</dc:format><dc:type
          rdf:resource="http://purl.org/dc/dcmitype/StillImage" /><dc:title></dc:title></cc:Work></rdf:RDF></metadata><defs
@@ -1589,17 +1589,17 @@
 <g id="wsg84-plotted-points-transformed"
    transform="matrix(222.7456099377238 -0.9799860475869895 -2.6828866160026887 -325.44941520771715 -1167.4821813828262 15580.77103793717)">
 
-    <!-- Zurich City Center: WGS84 (8.5359, 47.3783) -->
+        <!-- Zurich City Center: WGS84 (8.5359, 47.3783) -->
     <circle cx="8.5359" cy="47.3783" r="0.02" fill="red">
         <title>Zurich City Center (8.5359, 47.3783)</title>
     </circle>
 
-    <!-- Interlaken Train Station: WGS84 (7.8691, 46.6908) -->
+        <!-- Interlaken Train Station: WGS84 (7.8691, 46.6908) -->
     <circle cx="7.8691" cy="46.6908" r="0.02" fill="red">
         <title>Interlaken Train Station (7.8691, 46.6908)</title>
     </circle>
 
-    <!-- Pontresina, Grisons: WGS84 (9.905044, 46.488868) -->
+        <!-- Pontresina, Grisons: WGS84 (9.905044, 46.488868) -->
     <circle cx="9.9050" cy="46.4888" r="0.02" fill="red">
         <title>Interlaken Train Station (7.8691, 46.6908)</title>
     </circle>

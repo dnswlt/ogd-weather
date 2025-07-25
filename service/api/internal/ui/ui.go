@@ -102,3 +102,67 @@ func DateFmt(format string, date any) (string, error) {
 	}
 	return t.In(zurichLoc).Format(sb.String()), nil
 }
+
+type SVGPoint struct {
+	X float64
+	Y float64
+}
+
+type affineTransform struct {
+	a float64
+	b float64
+	c float64
+	d float64
+	e float64
+	f float64
+}
+
+func (at affineTransform) Apply(p SVGPoint) SVGPoint {
+	x := at.a*p.X + at.b*p.Y + at.c
+	y := at.d*p.X + at.e*p.Y + at.f
+	return SVGPoint{x, y}
+}
+
+var (
+	affineTransforms = map[string]affineTransform{
+		// See tools/svgmap/README.md
+		"suisse": {
+			a: 222.7456099377238,
+			b: -2.6828866160026887,
+			c: -1167.4821813828262,
+			d: -0.9799860475869895,
+			e: -325.44941520771715,
+			f: 15580.77103793717,
+		},
+	}
+)
+
+func WGS84ToSVG(transform string, lon, lat float64) (SVGPoint, error) {
+	at, ok := affineTransforms[transform]
+	if !ok {
+		return SVGPoint{}, fmt.Errorf("invalid affine transform %q", transform)
+	}
+	return at.Apply(SVGPoint{lon, lat}), nil
+}
+
+type NavItem struct {
+	Path   string
+	Title  string
+	Active bool
+}
+
+func Nav(path, title string) *NavItem {
+	return &NavItem{
+		Path:  path,
+		Title: title,
+	}
+}
+
+func NavBar(path string, item ...*NavItem) []*NavItem {
+	path = strings.TrimSuffix(path, "/")
+	for _, n := range item {
+		active := path == strings.TrimSuffix(n.Path, "/")
+		n.Active = active
+	}
+	return item
+}

@@ -43,7 +43,7 @@ Avg Abs Error X: 0.68
 Avg Abs Error Y: 1.46
 
 Resulting transform:
- {
+{
   "a": 222.7456099377238,
   "b": -2.6828866160026887,
   "c": -1167.4821813828262,

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Weather Data CH</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Vega stack -->
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+
+    <!-- htmx + path‑params -->
+    <script src="https://unpkg.com/htmx.org@2.0.6"></script>
+    <script src="https://unpkg.com/htmx-ext-path-params@2.0.0/path-params.js"></script>
+</head>
+
+<body class="min-h-screen bg-gray-50 p-4">
+    <!-- Navbar -->
+    {{template "nav.html" .}}
+
+    <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
+        <h1 class="text-2xl font-semibold text-center">Automatic Weather Stations</h1>
+
+        <!-- Map -->
+        <div id="map-container" class="w-full max-w-screen-lg mx-auto">
+            {{template "suisse_svg.html" .}}
+        </div>
+
+        <div class="text-center text-gray-500 text-xs mt-4">
+            Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
+        </div>
+        <div class="text-center text-gray-500 text-xs mt-4">
+            The map outline SVG is based on
+            <a href="https://commons.wikimedia.org/wiki/File:Suisse_cantons.svg" target="_blank">Suisse_cantons.svg</a>
+            licensed under
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank">CC BY-SA 4.0</a>.
+            Only the map graphic is covered by this license;
+            all other parts of this application remain under their respective licenses.
+        </div>
+        <div class="text-center text-gray-500 text-xs mt-2">
+            Disclaimer: No responsibility is taken for the accuracy or use of the data shown.
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const DEFAULT_COLOR = "#DA291C";
+            const HIGHLIGHT_COLOR = "#38bdf8";
+
+            // Every marker is a <g> now
+            const markers = document.querySelectorAll('g[id^="station-marker-"]');
+
+            markers.forEach(marker => {
+                marker.addEventListener("click", () => {
+                    const abbr = marker.id.replace("station-marker-", "");
+                    console.log("Clicked station:", abbr);
+
+                    // Reset all shapes
+                    document.querySelectorAll(".marker-shape")
+                        .forEach(shape => shape.setAttribute("fill", DEFAULT_COLOR));
+
+                    // Highlight the shape inside this marker
+                    const shape = marker.querySelector(".marker-shape");
+                    if (shape) shape.setAttribute("fill", HIGHLIGHT_COLOR);
+                });
+            });
+        });
+    </script>
+
+</body>
+
+</html>

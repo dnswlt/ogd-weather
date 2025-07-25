@@ -53,7 +53,8 @@ func (s *Server) uptime() time.Duration {
 func (s *Server) reloadTemplates() error {
 	tmpl := template.New("root")
 	tmpl = tmpl.Funcs(map[string]any{
-		"datefmt": ui.DateFmt,
+		"datefmt":    ui.DateFmt,
+		"wgs84tosvg": ui.WGS84ToSVG,
 	})
 	var err error
 	s.template, err = tmpl.ParseGlob(path.Join(s.opts.TemplateDir, "*.html"))
@@ -117,6 +118,12 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 		"Periods":  periods,
 		"Stations": stations.Stations,
 		"Selected": flatQuery["station"],
+		"Nav": ui.NavBar(r.URL.Path,
+			ui.Nav("/", "Trends"),
+			ui.Nav("/sun_rain", "Sun & Rain"),
+			ui.Nav("/day", "Daily"),
+			ui.Nav("/map", "Map"),
+		),
 	})
 	if err != nil {
 		log.Printf("Failed to render template %q: %v", templateFile, err)
@@ -380,6 +387,9 @@ func (s *Server) Serve() error {
 	})
 	mux.HandleFunc("GET /sun_rain", func(w http.ResponseWriter, r *http.Request) {
 		s.serveHTMLPage(w, r, "sun_rain.html")
+	})
+	mux.HandleFunc("GET /map", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "map.html")
 	})
 
 	// Health check. Useful for cloud deployments.
