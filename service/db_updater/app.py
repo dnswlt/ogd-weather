@@ -1,3 +1,4 @@
+import argparse
 from concurrent.futures import ThreadPoolExecutor
 import datetime
 import logging
@@ -388,21 +389,50 @@ def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvReso
     return update_csvs
 
 
+def recreate_views(conn: sqlite3.Connection) -> None:
+    db.recreate_station_data_summary(conn)
+
+
 def main():
-    if len(sys.argv) == 2:
-        weather_dir = sys.argv[1]
+    parser = argparse.ArgumentParser(
+        description="Update weather DB.", allow_abbrev=False
+    )
+    parser.add_argument(
+        "weather_dir",
+        nargs="?",  # optional, can come from env
+        help="Directory for weather data (defaults to $OGD_BASE_DIR).",
+    )
+    parser.add_argument(
+        "--recreate-views",
+        action="store_true",
+        help="Only recreate database views, do not update any data.",
+    )
+
+    args = parser.parse_args()
+
+    if args.weather_dir:
+        weather_dir = args.weather_dir
     elif "OGD_BASE_DIR" in os.environ:
         weather_dir = os.environ["OGD_BASE_DIR"]
     else:
-        print(f"Usage: python3 -m service.charts.ogd <output_dir>")
-        sys.exit(1)
+        parser.error("weather_dir is required if $OGD_BASE_DIR is not set.")
 
     db_path = os.path.join(weather_dir, db.DATABASE_FILENAME)
     logger.info("Connecting to sqlite DB at %s", db_path)
 
     started_time = time.time()
 
+    if args.recreate_views:
+        with sqlite3.connect(db_path) as conn:
+            # Only recreate views, then exit.
+            recreate_views(conn)
+            logger.info(
+                "Recreated materialized views in %.1fs.", time.time() - started_time
+            )
+            return
+
     with sqlite3.connect(db_path) as conn:
+
         conn.row_factory = sqlite3.Row
         create_update_status(conn)
 
@@ -425,7 +455,7 @@ def main():
 
         # Recreate materialized views
         logger.info("Recreating materialized views...")
-        db.recreate_station_data_summary(conn)
+        recreate_views(conn)
 
     logger.info("Done. DB updated in %.1fs.", time.time() - started_time)
 
