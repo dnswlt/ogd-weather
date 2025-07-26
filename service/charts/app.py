@@ -143,23 +143,6 @@ async def get_summary(
     to_year: str | None = None,
     response: Response = None,
 ):
-    return await get_info(
-        station_abbr=station_abbr,
-        period=period,
-        from_year=from_year,
-        to_year=to_year,
-        response=response,
-    )
-
-
-@app.get("/stations/{station_abbr}/info")
-async def get_info(
-    station_abbr: str,
-    period: str | None = None,
-    from_year: str | None = None,
-    to_year: str | None = None,
-    response: Response = None,
-):
     period = period_default(period)
     station_abbr = station_abbr.upper()
 
@@ -189,6 +172,34 @@ async def get_info(
         "summary": models.StationSummary(
             station=station,
             stats=stats,
+        ),
+    }
+
+
+@app.get("/stations/{station_abbr}/info")
+async def get_info(
+    station_abbr: str,
+    response: Response = None,
+):
+    station_abbr = station_abbr.upper()
+
+    station = db.read_station(app.state.db, station_abbr)
+
+    vars = db.read_station_var_summary_stats(
+        app.state.db,
+        agg_name=db.AGG_NAME_REF_1991_2020,
+        station_abbr=station_abbr,
+    )
+    ref_period_stats = (
+        charts.ref_period_stats(vars.loc[station_abbr]) if not vars.empty else None
+    )
+
+    # Stations don't change often, use 1 day TTL for caching.
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return {
+        "info": models.StationInfo(
+            station=station,
+            ref_1991_2020_stats=ref_period_stats,
         ),
     }
 

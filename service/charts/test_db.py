@@ -27,10 +27,10 @@ class TestDb(unittest.TestCase):
     def _create_all_tables(cls):
         conn = cls.conn
         db.prepare_sql_table_from_spec(
-            _testdata_dir(), conn, db.DAILY_MEASUREMENTS_TABLE, []
+            _testdata_dir(), conn, db.TABLE_DAILY_MEASUREMENTS, []
         )
         db.prepare_sql_table_from_spec(
-            _testdata_dir(), conn, db.HOURLY_MEASUREMENTS_TABLE, []
+            _testdata_dir(), conn, db.TABLE_HOURLY_MEASUREMENTS, []
         )
         conn.execute(
             """
@@ -139,7 +139,7 @@ class TestDbStations(TestDb):
         ]
         cursor.executemany(
             f"""
-            INSERT INTO {db.STATION_DATA_SUMMARY_TABLE_NAME} (
+            INSERT INTO {db.TABLE_NAME_X_STATION_DATA_SUMMARY} (
                 station_abbr, station_name, station_canton,
                 tre200d0_min_date, tre200d0_max_date,
                 rre150d0_min_date, rre150d0_max_date,
@@ -280,7 +280,7 @@ class TestDbDaily(TestDb):
         ]
         cursor.executemany(
             f"""
-            INSERT INTO {db.DAILY_MEASUREMENTS_TABLE.name}
+            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name}
             (station_abbr, reference_timestamp, tre200d0, tre200dn, tre200dx, rre150d0)
             VALUES (?, ?, ?, ?, ?, ?)
         """,
@@ -371,7 +371,7 @@ class TestDbHourly(TestDb):
         ]
         cursor.executemany(
             f"""
-            INSERT INTO {db.HOURLY_MEASUREMENTS_TABLE.name} 
+            INSERT INTO {db.TABLE_HOURLY_MEASUREMENTS.name} 
             (station_abbr, reference_timestamp, tre200h0, tre200hn, tre200hx, rre150h0)
             VALUES (?, ?, ?, ?, ?, ?)
         """,
@@ -434,7 +434,7 @@ class TestCreateDb(unittest.TestCase):
         db.prepare_sql_table_from_spec(
             _testdata_dir(),
             self.conn,
-            db.DAILY_MEASUREMENTS_TABLE,
+            db.TABLE_DAILY_MEASUREMENTS,
             ["ogd-smn_vis_d_recent.csv"],
         )
         columns = [db.TEMP_DAILY_MAX, db.PRECIP_DAILY_MM, db.ATM_PRESSURE_DAILY_MEAN]
@@ -453,7 +453,7 @@ class TestCreateDb(unittest.TestCase):
         db.prepare_sql_table_from_spec(
             _testdata_dir(),
             self.conn,
-            db.HOURLY_MEASUREMENTS_TABLE,
+            db.TABLE_HOURLY_MEASUREMENTS,
             ["ogd-smn_vis_h_recent.csv"],
         )
         columns = [db.TEMP_HOURLY_MAX, db.PRECIP_HOURLY_MM, db.GUST_PEAK_HOURLY_MAX]
@@ -481,18 +481,18 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
 
     def test_create_empty(self):
         db.prepare_sql_table_from_spec(
-            _testdata_dir(), self.conn, db.DAILY_MEASUREMENTS_TABLE, []
+            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
         )
-        db.recreate_ref_period_1991_2020_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.conn)
 
     def test_create_select(self):
         db.prepare_sql_table_from_spec(
-            _testdata_dir(), self.conn, db.DAILY_MEASUREMENTS_TABLE, []
+            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
         )
         # Insert daily data.
         self.conn.executemany(
             f"""
-            INSERT INTO {db.DAILY_MEASUREMENTS_TABLE.name} (
+            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
                 station_abbr,
                 reference_timestamp,
                 tre200dn,
@@ -509,9 +509,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         )
         self.conn.commit()
         # Recreate derived table.
-        db.recreate_ref_period_1991_2020_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.conn)
         # Read data
-        df = db.read_ref_period_vars(self.conn, station_abbr="BER")
+        df = db.read_station_var_summary_stats(
+            self.conn, db.AGG_NAME_REF_1991_2020, station_abbr="BER"
+        )
 
         self.assertEqual(len(df), 1)
         self.assertEqual(
@@ -536,14 +538,33 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         self.assertEqual(p["source_count"], 2)  # One row has None for rre150d0
         self.assertEqual(p["source_granularity"], "daily")
 
+    def test_create_select_agg_not_exist(self):
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
+        )
+        db.recreate_station_var_summary_stats(self.conn)
+        self.conn.executemany(
+            f"""
+            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
+                station_abbr, reference_timestamp, tre200dn, rre150d0
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            [("BER", "1991-01-01", -3, 20)],
+        )
+        df = db.read_station_var_summary_stats(
+            self.conn, "AGG_DOES_NOT_EXIST", station_abbr="BER"
+        )
+        self.assertTrue(df.empty)
+
     def test_create_select_nan(self):
         db.prepare_sql_table_from_spec(
-            _testdata_dir(), self.conn, db.DAILY_MEASUREMENTS_TABLE, []
+            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
         )
         # Insert daily data. rre150d0 is always empty.
         self.conn.executemany(
             f"""
-            INSERT INTO {db.DAILY_MEASUREMENTS_TABLE.name} (
+            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
                 station_abbr,
                 reference_timestamp,
                 tre200dn,
@@ -559,9 +580,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         )
         self.conn.commit()
         # Recreate derived table.
-        db.recreate_ref_period_1991_2020_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.conn)
         # Read data
-        df = db.read_ref_period_vars(self.conn, station_abbr="BER")
+        df = db.read_station_var_summary_stats(
+            self.conn, db.AGG_NAME_REF_1991_2020, station_abbr="BER"
+        )
 
         self.assertEqual(len(df), 1)
         # Should only have data for tre200dn:

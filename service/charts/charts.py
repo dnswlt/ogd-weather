@@ -1,7 +1,7 @@
+from datetime import date
 from typing import Iterable
 import altair as alt
 import numpy as np
-import os
 import pandas as pd
 from . import db
 from . import models
@@ -589,4 +589,30 @@ def daily_measurements(
             )
             for c in measurements.columns
         ],
+    )
+
+
+def ref_period_stats(s: pd.Series) -> models.StationPeriodStats:
+    def var_if(var: str):
+        if var not in s:
+            return None
+        v = s[var]
+        return models.VariableStats(
+            min_value=float(v["min_value"]),
+            min_value_date=date.fromisoformat(v["min_value_date"]),
+            mean_value=float(v["mean_value"]),
+            max_value=float(v["max_value"]),
+            max_value_date=date.fromisoformat(v["max_value_date"]),
+            source_granularity=v["source_granularity"],
+            source_count=v["source_count"],
+        )
+
+    return models.StationPeriodStats(
+        start_date=date(1991, 1, 1),
+        end_date=date(2020, 12, 31),
+        daily_min_temperature=var_if(db.TEMP_DAILY_MIN),
+        daily_max_temperature=var_if(db.TEMP_DAILY_MAX),
+        daily_mean_temperature=var_if(db.TEMP_DAILY_MEAN),
+        daily_precipication=var_if(db.PRECIP_DAILY_MM),
+        daily_sunshine_minutes=var_if(db.SUNSHINE_DAILY_MINUTES),
     )

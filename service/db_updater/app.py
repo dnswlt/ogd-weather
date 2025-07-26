@@ -291,20 +291,20 @@ def import_into_db(conn: sqlite3.Connection, weather_dir: str, csvs: list[CsvRes
         db.prepare_sql_table_from_spec(
             weather_dir,
             conn,
-            table_spec=db.DAILY_MEASUREMENTS_TABLE,
+            table_spec=db.TABLE_DAILY_MEASUREMENTS,
             csv_filenames=daily_files,
         )
     if hourly_files:
         db.prepare_sql_table_from_spec(
             weather_dir,
             conn,
-            table_spec=db.HOURLY_MEASUREMENTS_TABLE,
+            table_spec=db.TABLE_HOURLY_MEASUREMENTS,
             csv_filenames=hourly_files,
         )
     if meta_files:
         table_map = {
-            "ogd-smn_meta_parameters.csv": db.META_PARAMETERS_TABLE_NAME,
-            "ogd-smn_meta_stations.csv": db.META_STATIONS_TABLE_NAME,
+            "ogd-smn_meta_parameters.csv": db.TABLE_NAME_META_PARAMETERS,
+            "ogd-smn_meta_stations.csv": db.TABLE_NAME_META_STATIONS,
         }
         for meta_file in meta_files:
             table_name = table_map.get(meta_file)
@@ -391,7 +391,7 @@ def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvReso
 
 def recreate_views(conn: sqlite3.Connection) -> None:
     db.recreate_station_data_summary(conn)
-    db.recreate_ref_period_1991_2020_stats(conn)
+    db.recreate_station_var_summary_stats(conn)
 
 
 def main():

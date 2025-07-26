@@ -63,7 +63,7 @@ SUNSHINE_HOURLY_MINUTES = "sre000h0"
 
 # Table definitions
 
-HOURLY_MEASUREMENTS_TABLE = TableSpec(
+TABLE_HOURLY_MEASUREMENTS = TableSpec(
     name="ogd_smn_hourly",
     primary_key=[
         "station_abbr",
@@ -86,7 +86,7 @@ HOURLY_MEASUREMENTS_TABLE = TableSpec(
     ],
 )
 
-DAILY_MEASUREMENTS_TABLE = TableSpec(
+TABLE_DAILY_MEASUREMENTS = TableSpec(
     name="ogd_smn_daily",
     primary_key=[
         "station_abbr",
@@ -110,13 +110,19 @@ DAILY_MEASUREMENTS_TABLE = TableSpec(
 )
 
 # Metadata tables
-META_STATIONS_TABLE_NAME = "ogd_smn_meta_stations"
-META_PARAMETERS_TABLE_NAME = "ogd_smn_meta_parameters"
+TABLE_NAME_META_STATIONS = "ogd_smn_meta_stations"
+TABLE_NAME_META_PARAMETERS = "ogd_smn_meta_parameters"
 
 
-# Derived tables / materialized views
-STATION_DATA_SUMMARY_TABLE_NAME = "ogd_smn_station_data_summary"
-REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME = "ogd_smn_ref_period_1991_2020_summary"
+# Derived tables / materialized views.
+# To distinguish them from SoT data and mark them as derived,
+# we prefix them all by "x_"
+TABLE_NAME_X_STATION_DATA_SUMMARY = "ogd_smn_x_station_data_summary"
+TABLE_NAME_X_STATION_VAR_SUMMARY_STATS = "ogd_smn_x_station_var_summary_stats"
+
+
+# Aggregation names in STATION_VAR_SUMMARY_STATS_TABLE_NAME
+AGG_NAME_REF_1991_2020 = "ref_1991_2020"
 
 
 def agg_none(func, items):
@@ -207,15 +213,15 @@ def prepare_sql_table_from_spec(
         conn.commit()
 
 
-def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
-    """Creates a materialized view of summary data for the reference period 1991 to 2020."""
-    # Drop old table
-    conn.execute(f"DROP TABLE IF EXISTS {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME};")
-
-    # Create it with proper schema & PK
+def recreate_station_var_summary_stats(conn: sqlite3.Connection) -> None:
+    """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020."""
+    # Drop existing data
+    conn.execute(f"DROP TABLE IF EXISTS {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS};")
+    # Create table.
     conn.execute(
         f"""
-        CREATE TABLE {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME} (
+        CREATE TABLE IF NOT EXISTS {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS} (
+            agg_name TEXT,
             station_abbr TEXT,
             variable TEXT,
             source_granularity TEXT,
@@ -225,11 +231,16 @@ def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
             max_value REAL,
             max_value_date TEXT,
             source_count INTEGER,
-            PRIMARY KEY (station_abbr, variable)
+            PRIMARY KEY (agg_name, station_abbr, variable)
         );
     """
     )
-    # Query daily table to compute daily granularity summary stats.
+    # Insert data for aggregations (for now, just one).
+    insert_ref_1991_2020_summary_stats(conn)
+
+
+def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
+    """Inserts summary stats for the 1991-2020 reference period into STATION_VAR_SUMMARY_STATS_TABLE_NAME."""
     variables = [
         TEMP_DAILY_MIN,
         TEMP_DAILY_MAX,
@@ -244,7 +255,7 @@ def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
             station_abbr,
             reference_timestamp,
             {', '.join(variables)}
-        FROM {DAILY_MEASUREMENTS_TABLE.name}
+        FROM {TABLE_DAILY_MEASUREMENTS.name}
         WHERE reference_timestamp >= '1991-01-01' AND reference_timestamp < '2021-01-01'
     """
     df = pd.read_sql_query(
@@ -277,7 +288,8 @@ def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
             )
     if params:
         insert_sql = f"""
-            INSERT INTO {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME} (
+            INSERT INTO {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS} (
+                agg_name,
                 station_abbr,
                 variable,
                 source_granularity,
@@ -288,7 +300,7 @@ def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
                 max_value_date,
                 source_count
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES ('{AGG_NAME_REF_1991_2020}', ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         conn.executemany(insert_sql, params)
 
@@ -298,15 +310,15 @@ def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
 def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
     """Creates a materialized view of summary data per station_abbr.
 
-    The data is based on a JOIN of the ogd_smn_meta_stations and ogd_smn_d_historical tables.
+    The summary stats in this table are calculated across the whole dataset.
     """
     # Drop old table
-    conn.execute(f"DROP TABLE IF EXISTS {STATION_DATA_SUMMARY_TABLE_NAME};")
+    conn.execute(f"DROP TABLE IF EXISTS {TABLE_NAME_X_STATION_DATA_SUMMARY};")
 
     # Create it with proper schema & PK
     conn.execute(
         f"""
-        CREATE TABLE {STATION_DATA_SUMMARY_TABLE_NAME} (
+        CREATE TABLE {TABLE_NAME_X_STATION_DATA_SUMMARY} (
             station_abbr TEXT PRIMARY KEY,
             station_name TEXT,
             station_canton TEXT,
@@ -338,7 +350,7 @@ def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
 
     conn.execute(
         f"""
-        INSERT INTO {STATION_DATA_SUMMARY_TABLE_NAME}
+        INSERT INTO {TABLE_NAME_X_STATION_DATA_SUMMARY}
         SELECT
             m.station_abbr,
             m.station_name,
@@ -366,8 +378,7 @@ def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
             h.rre150d0_min_date,
             h.rre150d0_max_date
 
-        FROM {META_STATIONS_TABLE_NAME} AS m
-
+        FROM {TABLE_NAME_META_STATIONS} AS m
         LEFT JOIN (
             SELECT
                 station_abbr,
@@ -377,7 +388,7 @@ def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
                 SUM(CASE WHEN rre150d0 IS NOT NULL THEN 1 END) AS rre150d0_count,
                 MIN(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_min_date,
                 MAX(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_max_date
-            FROM {DAILY_MEASUREMENTS_TABLE.name}
+            FROM {TABLE_DAILY_MEASUREMENTS.name}
             GROUP BY station_abbr
         ) AS h
         ON m.station_abbr = h.station_abbr;
@@ -411,7 +422,7 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
             tre200d0_max_date,
             rre150d0_min_date,
             rre150d0_max_date
-        FROM {STATION_DATA_SUMMARY_TABLE_NAME}
+        FROM {TABLE_NAME_X_STATION_DATA_SUMMARY}
         WHERE station_abbr = ?
     """
     cur = conn.execute(sql, [station_abbr])
@@ -474,7 +485,7 @@ def read_stations(
             station_height_masl,
             station_coordinates_wgs84_lat,
             station_coordinates_wgs84_lon
-        FROM {STATION_DATA_SUMMARY_TABLE_NAME}
+        FROM {TABLE_NAME_X_STATION_DATA_SUMMARY}
     """
     filters = []
     params = []
@@ -536,7 +547,7 @@ def read_daily_measurements(
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""
         SELECT {', '.join(select_columns)}
-        FROM {DAILY_MEASUREMENTS_TABLE.name}
+        FROM {TABLE_DAILY_MEASUREMENTS.name}
     """
     # Filter by station.
     filters = ["station_abbr = ?"]
@@ -609,7 +620,7 @@ def read_hourly_measurements(
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""
         SELECT {', '.join(select_columns)}
-        FROM {HOURLY_MEASUREMENTS_TABLE.name}
+        FROM {TABLE_HOURLY_MEASUREMENTS.name}
     """
     # Filter by station.
     filters = ["station_abbr = ?"]
@@ -651,7 +662,7 @@ def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
             parameter_group_en,
             parameter_datatype,
             parameter_unit
-        FROM {META_PARAMETERS_TABLE_NAME}
+        FROM {TABLE_NAME_META_PARAMETERS}
         ORDER BY parameter_shortname
     """
     df = pd.read_sql_query(sql, conn)
@@ -659,23 +670,25 @@ def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
     return df
 
 
-def read_ref_period_vars(
+def read_station_var_summary_stats(
     conn: sqlite3.Connection,
+    agg_name: str,
     station_abbr: str | None = None,
     variables: Collection[str] | None = None,
 ) -> pd.DataFrame:
     """
-    Reads reference period summary data in wide format with hierarchical columns.
+    Reads summary stats for variables for the aggregation with the given `agg_name`.
 
     Usage examples:
 
         # Get summary values of a variable for a given station:
-        df = read_ref_period_vars(conn, "BER")
+        df = read_station_var_summary_stats(conn, AGG_NAME_REF_1991_2020, "BER")
         p = df.loc["BER", "rre150dn"]
         print("Min precipitation level was", p["min_value"], "on", p["min_value_date"])
 
     Args:
         conn: An active SQLite database connection.
+        agg_name: The name of the aggregataion to read data for.
         station_abbr: Optional abbreviation of the station to filter by.
         variables: Optional collection of variable names to filter by.
 
@@ -684,8 +697,8 @@ def read_ref_period_vars(
         columns as (variable, measurement_type)).
         Returns an empty DataFrame if no data matches the filters.
     """
-    filters = []
-    params = []
+    filters = ["agg_name = ?"]
+    params = [agg_name]
     if station_abbr:
         filters.append("station_abbr = ?")
         params.append(station_abbr)
@@ -707,7 +720,7 @@ def read_ref_period_vars(
             station_abbr,
             variable,
             {', '.join(measure_cols)}
-        FROM {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME}
+        FROM {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS}
     """
     if filters:
         sql += f"WHERE {' AND '.join(filters)}"
@@ -715,6 +728,6 @@ def read_ref_period_vars(
     df_long = pd.read_sql_query(sql, conn, params=params)
 
     if df_long.empty:
-        return pd.DataFrame(index=pd.Index([], name="station_abbr"))
+        return pd.DataFrame(index=pd.Index([], name="station_abbr"), dtype=str)
 
     return df_long.set_index(["station_abbr", "variable"]).unstack().swaplevel(axis=1)

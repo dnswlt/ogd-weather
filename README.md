@@ -42,7 +42,10 @@ Run the server via `uvicorn`:
 
 ```bash
 source .venv/bin/activate
+# To use the service:
 uvicorn service.charts.app:app --host 127.0.0.1 --port 8000 --workers 1
+# During development, for fast reloads and more logging:
+uvicorn service.charts.app:app --host 127.0.0.1 --port 8000 --workers 1 --log-level debug --reload
 ```
 
 ### api

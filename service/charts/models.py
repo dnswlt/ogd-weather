@@ -59,6 +59,36 @@ class StationSummary(BaseModel):
     stats: StationStats
 
 
+class VariableStats(BaseModel):
+    min_value: float
+    min_value_date: date
+    mean_value: float
+    max_value: float
+    max_value_date: date
+    source_granularity: str
+    source_count: int
+
+
+class StationPeriodStats(BaseModel):
+    """Commonly used summary stats for a given period."""
+
+    start_date: date
+    end_date: date
+    daily_min_temperature: VariableStats
+    daily_max_temperature: VariableStats
+    daily_mean_temperature: VariableStats
+    daily_precipication: VariableStats
+    daily_sunshine_minutes: VariableStats
+
+
+class StationInfo(BaseModel):
+    """Station information and summary statistics."""
+
+    station: Station
+    # Summary statistics for the 1991-2020 period.
+    ref_1991_2020_stats: StationPeriodStats
+
+
 class MeasurementsRow(BaseModel):
     reference_timestamp: datetime.datetime
     measurements: list[float]
