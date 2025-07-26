@@ -503,7 +503,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             [
                 ("BER", "1991-01-01", -3, 0),
                 ("BER", "1991-01-02", -4, 1.5),
-                ("BER", "2001-06-03", 20, 0),
+                ("BER", "2001-06-03", 22, None),
                 ("XXX", "2001-06-03", 30, 12),
             ],
         )
@@ -511,16 +511,60 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         # Recreate derived table.
         db.recreate_ref_period_1991_2020_stats(self.conn)
         # Read data
-        df = db.read_ref_period_vars(self.conn, "BER")
-        self.assertEqual(len(df), 2)
-        temp = df[df["variable"] == "tre200dn"]
-        self.assertEqual(len(temp), 1)
-        t = temp.iloc[0]
+        df = db.read_ref_period_vars(self.conn, station_abbr="BER")
+
+        self.assertEqual(len(df), 1)
+        self.assertEqual(
+            df.columns.levels[1].tolist(),
+            [
+                "source_granularity",
+                "min_value",
+                "min_value_date",
+                "mean_value",
+                "max_value",
+                "max_value_date",
+                "source_count",
+            ],
+        )
+        t = df.loc["BER", "tre200dn"]
+        self.assertAlmostEqual(t["mean_value"], 5.0)
         self.assertEqual(t["min_value_date"], "1991-01-02")
         self.assertEqual(t["max_value_date"], "2001-06-03")
-        precip = df[df["variable"] == "rre150d0"]
-        self.assertEqual(len(precip), 1)
-        p = precip.iloc[0]
+        p = df.loc["BER", "rre150d0"]
+        self.assertEqual(p["min_value"], 0)
         self.assertEqual(p["max_value_date"], "1991-01-02")
-        self.assertEqual(p["source_count"], 3)
+        self.assertEqual(p["source_count"], 2)  # One row has None for rre150d0
         self.assertEqual(p["source_granularity"], "daily")
+
+    def test_create_select_nan(self):
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(), self.conn, db.DAILY_MEASUREMENTS_TABLE, []
+        )
+        # Insert daily data. rre150d0 is always empty.
+        self.conn.executemany(
+            f"""
+            INSERT INTO {db.DAILY_MEASUREMENTS_TABLE.name} (
+                station_abbr,
+                reference_timestamp,
+                tre200dn,
+                rre150d0
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                ("BER", "1991-01-01", -3, None),
+                ("BER", "1991-01-02", -4, None),
+                ("BER", "2001-06-03", 22, None),
+            ],
+        )
+        self.conn.commit()
+        # Recreate derived table.
+        db.recreate_ref_period_1991_2020_stats(self.conn)
+        # Read data
+        df = db.read_ref_period_vars(self.conn, station_abbr="BER")
+
+        self.assertEqual(len(df), 1)
+        # Should only have data for tre200dn:
+        self.assertEqual(df.columns.levels[0].tolist(), ["tre200dn"])
+        with self.assertRaises(KeyError):
+            df.loc["BER", "rre150d0"]

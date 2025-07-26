@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+from typing import Collection
 import pandas as pd
 from pydantic import BaseModel
 import re
@@ -198,7 +199,7 @@ def prepare_sql_table_from_spec(
             df[col] = normalize_timestamp(df[col])
 
         # Insert row by row, ignoring duplicates
-        placeholders = ",".join(["?"] * len(df.columns))
+        placeholders = ", ".join(["?"] * len(df.columns))
         insert_sql = f"INSERT OR IGNORE INTO {table_spec.name} VALUES ({placeholders})"
 
         c = conn.executemany(insert_sql, df.itertuples(index=False, name=None))
@@ -260,17 +261,17 @@ def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
         for var in variables:
             if grp[var].isna().all():
                 continue  # No data for this variable
-            a = grp[var].agg(["min", "max", "argmin", "argmax", "mean", "count"])
+            a = grp[var].agg(["min", "max", "idxmin", "idxmax", "mean", "count"])
             params.append(
                 (
                     station_abbr,
                     var,
                     "daily",
                     a["min"],
-                    grp["reference_timestamp"].iloc[int(a["argmin"])],
+                    grp.loc[a["idxmin"], "reference_timestamp"],
                     a["mean"],
                     a["max"],
-                    grp["reference_timestamp"].iloc[int(a["argmax"])],
+                    grp.loc[a["idxmax"], "reference_timestamp"],
                     a["count"],
                 )
             )
@@ -289,7 +290,6 @@ def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        print(params)
         conn.executemany(insert_sql, params)
 
     conn.commit()
@@ -659,19 +659,62 @@ def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
     return df
 
 
-def read_ref_period_vars(conn: sqlite3.Connection, station_abbr: str) -> pd.DataFrame:
+def read_ref_period_vars(
+    conn: sqlite3.Connection,
+    station_abbr: str | None = None,
+    variables: Collection[str] | None = None,
+) -> pd.DataFrame:
+    """
+    Reads reference period summary data in wide format with hierarchical columns.
+
+    Usage examples:
+
+        # Get summary values of a variable for a given station:
+        df = read_ref_period_vars(conn, "BER")
+        p = df.loc["BER", "rre150dn"]
+        print("Min precipitation level was", p["min_value"], "on", p["min_value_date"])
+
+    Args:
+        conn: An active SQLite database connection.
+        station_abbr: Optional abbreviation of the station to filter by.
+        variables: Optional collection of variable names to filter by.
+
+    Returns:
+        A pandas DataFrame in wide format (rows indexed by 'station_abbr',
+        columns as (variable, measurement_type)).
+        Returns an empty DataFrame if no data matches the filters.
+    """
+    filters = []
+    params = []
+    if station_abbr:
+        filters.append("station_abbr = ?")
+        params.append(station_abbr)
+    if variables:
+        placeholders = ", ".join(["?"] * len(variables))
+        filters.append(f"variable IN ({placeholders})")
+        params.extend(variables)
+    measure_cols = [
+        "source_granularity",
+        "min_value",
+        "min_value_date",
+        "mean_value",
+        "max_value",
+        "max_value_date",
+        "source_count",
+    ]
     sql = f"""
         SELECT
             station_abbr,
             variable,
-            source_granularity,
-            min_value,
-            min_value_date,
-            mean_value,
-            max_value,
-            max_value_date,
-            source_count
+            {', '.join(measure_cols)}
         FROM {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME}
-        WHERE station_abbr = ?
     """
-    return pd.read_sql_query(sql, conn, params=[station_abbr])
+    if filters:
+        sql += f"WHERE {' AND '.join(filters)}"
+
+    df_long = pd.read_sql_query(sql, conn, params=params)
+
+    if df_long.empty:
+        return pd.DataFrame(index=pd.Index([], name="station_abbr"))
+
+    return df_long.set_index(["station_abbr", "variable"]).unstack().swaplevel(axis=1)
