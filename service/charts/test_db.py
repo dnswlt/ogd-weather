@@ -469,3 +469,58 @@ class TestCreateDb(unittest.TestCase):
             (df[columns].sum() > 0).all(),
             "All measurement columns should have some nonzero values.",
         )
+
+
+class TestDbRefPeriod1991_2020(unittest.TestCase):
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_create_empty(self):
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(), self.conn, db.DAILY_MEASUREMENTS_TABLE, []
+        )
+        db.recreate_ref_period_1991_2020_stats(self.conn)
+
+    def test_create_select(self):
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(), self.conn, db.DAILY_MEASUREMENTS_TABLE, []
+        )
+        # Insert daily data.
+        self.conn.executemany(
+            f"""
+            INSERT INTO {db.DAILY_MEASUREMENTS_TABLE.name} (
+                station_abbr,
+                reference_timestamp,
+                tre200dn,
+                rre150d0
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                ("BER", "1991-01-01", -3, 0),
+                ("BER", "1991-01-02", -4, 1.5),
+                ("BER", "2001-06-03", 20, 0),
+                ("XXX", "2001-06-03", 30, 12),
+            ],
+        )
+        self.conn.commit()
+        # Recreate derived table.
+        db.recreate_ref_period_1991_2020_stats(self.conn)
+        # Read data
+        df = db.read_ref_period_vars(self.conn, "BER")
+        self.assertEqual(len(df), 2)
+        temp = df[df["variable"] == "tre200dn"]
+        self.assertEqual(len(temp), 1)
+        t = temp.iloc[0]
+        self.assertEqual(t["min_value_date"], "1991-01-02")
+        self.assertEqual(t["max_value_date"], "2001-06-03")
+        precip = df[df["variable"] == "rre150d0"]
+        self.assertEqual(len(precip), 1)
+        p = precip.iloc[0]
+        self.assertEqual(p["max_value_date"], "1991-01-02")
+        self.assertEqual(p["source_count"], 3)
+        self.assertEqual(p["source_granularity"], "daily")

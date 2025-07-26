@@ -115,6 +115,7 @@ META_PARAMETERS_TABLE_NAME = "ogd_smn_meta_parameters"
 
 # Derived tables / materialized views
 STATION_DATA_SUMMARY_TABLE_NAME = "ogd_smn_station_data_summary"
+REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME = "ogd_smn_ref_period_1991_2020_summary"
 
 
 def agg_none(func, items):
@@ -203,6 +204,95 @@ def prepare_sql_table_from_spec(
         c = conn.executemany(insert_sql, df.itertuples(index=False, name=None))
         logger.info(f"Inserted {c.rowcount} rows")
         conn.commit()
+
+
+def recreate_ref_period_1991_2020_stats(conn: sqlite3.Connection) -> None:
+    """Creates a materialized view of summary data for the reference period 1991 to 2020."""
+    # Drop old table
+    conn.execute(f"DROP TABLE IF EXISTS {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME};")
+
+    # Create it with proper schema & PK
+    conn.execute(
+        f"""
+        CREATE TABLE {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME} (
+            station_abbr TEXT,
+            variable TEXT,
+            source_granularity TEXT,
+            min_value REAL,
+            min_value_date TEXT,
+            mean_value REAL,
+            max_value REAL,
+            max_value_date TEXT,
+            source_count INTEGER,
+            PRIMARY KEY (station_abbr, variable)
+        );
+    """
+    )
+    # Query daily table to compute daily granularity summary stats.
+    variables = [
+        TEMP_DAILY_MIN,
+        TEMP_DAILY_MAX,
+        TEMP_DAILY_MEAN,
+        PRECIP_DAILY_MM,
+        SUNSHINE_DAILY_MINUTES,
+        WIND_SPEED_DAILY_MEAN,
+        GUST_PEAK_DAILY_MAX,
+    ]
+    sql = f"""
+        SELECT
+            station_abbr,
+            reference_timestamp,
+            {', '.join(variables)}
+        FROM {DAILY_MEASUREMENTS_TABLE.name}
+        WHERE reference_timestamp >= '1991-01-01' AND reference_timestamp < '2021-01-01'
+    """
+    df = pd.read_sql_query(
+        sql,
+        conn,
+        dtype={
+            "station_abbr": str,
+            "reference_timestamp": str,
+            **{v: float for v in variables},
+        },
+    )
+    params = []
+    for station_abbr, grp in df.groupby("station_abbr"):
+        for var in variables:
+            if grp[var].isna().all():
+                continue  # No data for this variable
+            a = grp[var].agg(["min", "max", "argmin", "argmax", "mean", "count"])
+            params.append(
+                (
+                    station_abbr,
+                    var,
+                    "daily",
+                    a["min"],
+                    grp["reference_timestamp"].iloc[int(a["argmin"])],
+                    a["mean"],
+                    a["max"],
+                    grp["reference_timestamp"].iloc[int(a["argmax"])],
+                    a["count"],
+                )
+            )
+    if params:
+        insert_sql = f"""
+            INSERT INTO {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME} (
+                station_abbr,
+                variable,
+                source_granularity,
+                min_value,
+                min_value_date,
+                mean_value,
+                max_value,
+                max_value_date,
+                source_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        print(params)
+        conn.executemany(insert_sql, params)
+
+    conn.commit()
 
 
 def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
@@ -567,3 +657,21 @@ def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
     df = pd.read_sql_query(sql, conn)
     df.columns = [c.removeprefix("parameter_") for c in df.columns]
     return df
+
+
+def read_ref_period_vars(conn: sqlite3.Connection, station_abbr: str) -> pd.DataFrame:
+    sql = f"""
+        SELECT
+            station_abbr,
+            variable,
+            source_granularity,
+            min_value,
+            min_value_date,
+            mean_value,
+            max_value,
+            max_value_date,
+            source_count
+        FROM {REF_PERIOD_1991_2020_SUMMARY_TABLE_NAME}
+        WHERE station_abbr = ?
+    """
+    return pd.read_sql_query(sql, conn, params=[station_abbr])
