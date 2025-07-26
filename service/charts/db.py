@@ -249,6 +249,7 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
         SUNSHINE_DAILY_MINUTES,
         WIND_SPEED_DAILY_MEAN,
         GUST_PEAK_DAILY_MAX,
+        ATM_PRESSURE_DAILY_MEAN,
     ]
     sql = f"""
         SELECT

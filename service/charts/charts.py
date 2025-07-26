@@ -615,4 +615,6 @@ def ref_period_stats(s: pd.Series) -> models.StationPeriodStats:
         daily_mean_temperature=var_if(db.TEMP_DAILY_MEAN),
         daily_precipication=var_if(db.PRECIP_DAILY_MM),
         daily_sunshine_minutes=var_if(db.SUNSHINE_DAILY_MINUTES),
+        daily_mean_atm_pressure=var_if(db.ATM_PRESSURE_DAILY_MEAN),
+        daily_max_gust=var_if(db.GUST_PEAK_DAILY_MAX),
     )

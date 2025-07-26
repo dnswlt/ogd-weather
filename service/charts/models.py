@@ -74,11 +74,13 @@ class StationPeriodStats(BaseModel):
 
     start_date: date
     end_date: date
-    daily_min_temperature: VariableStats
-    daily_max_temperature: VariableStats
-    daily_mean_temperature: VariableStats
-    daily_precipication: VariableStats
-    daily_sunshine_minutes: VariableStats
+    daily_min_temperature: VariableStats | None
+    daily_max_temperature: VariableStats | None
+    daily_mean_temperature: VariableStats | None
+    daily_precipication: VariableStats | None
+    daily_sunshine_minutes: VariableStats | None
+    daily_mean_atm_pressure: VariableStats | None
+    daily_max_gust: VariableStats | None
 
 
 class StationInfo(BaseModel):

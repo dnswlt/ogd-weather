@@ -1,4 +1,7 @@
-{{with .Response.Summary}}
+<h2 class="text-lg text-gray-800 text-left">Station info</h2>
+
+
+{{with .Response.Info}}
 <table id="station-summary" class="w-full table-auto border-collapse text-sm">
     <tbody>
         <tr class="border-b">
@@ -77,22 +80,7 @@
                 {{datefmt "a J Y" .Station.PrecipitationMinDate}} &ndash; {{datefmt "a J Y" .Station.PrecipitationMaxDate}}
             </td>
         </tr>
-        <tr class="border-b">
-            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
-                Coldest year (daily mean)
-            </td>
-            <td class="py-2 text-gray-800">
-                {{.Stats.ColdestYear}} ({{printf "%.1f" .Stats.ColdestYearTemp}} &deg;C)
-            </td>
-        </tr>
-        <tr>
-            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
-                Warmest year (daily mean)
-            </td>
-            <td class="py-2 text-gray-800">
-                {{.Stats.WarmestYear}} ({{printf "%.1f" .Stats.WarmestYearTemp}} &deg;C)
-            </td>
-        </tr>
+        <!-- MeteoSwiss URL -->
         {{if .Station.URL.EN}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
@@ -110,6 +98,93 @@
                 </a>
             </td>
         </tr>
+        {{end}}
+    </tbody>
+</table>
+
+<!-- TODO: proper padding for headings, this mt-4 mb-4 is a bit hacky. -->
+<h3 class="text-base text-gray-800 text-left font-medium mt-4 mb-4">Reference period statistics (1991 &ndash; 2020)</h3>
+
+<table id="station-summary" class="w-full table-auto border-collapse text-sm">
+    <tbody>
+        {{with .Ref1991To2020Stats}}
+
+        {{if .DailyPrecipication}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Lowest temperature
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .DailyMinTemperature.MinValue}} &deg;C
+                ({{datefmt "a J Y" .DailyMinTemperature.MinValueDate}})
+            </td>
+        </tr>
+        {{end}}
+        {{if .DailyPrecipication}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Highest temperature
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .DailyMaxTemperature.MaxValue}} &deg;C
+                ({{datefmt "a J Y" .DailyMaxTemperature.MaxValueDate}})
+            </td>
+        </tr>
+        {{end}}
+        {{if .DailyPrecipication}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. daily rainfall 
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .DailyPrecipication.MeanValue}} mm
+            </td>
+        </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Highest daily rainfall
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .DailyPrecipication.MaxValue}} mm
+                ({{datefmt "a J Y" .DailyPrecipication.MaxValueDate}})
+            </td>
+        </tr>
+        {{end}}
+        {{if .DailySunshineMinutes}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. daily sunshine
+            </td>
+            <td class="py-2 text-gray-800">
+                {{min2hours .DailySunshineMinutes.MeanValue}} hours
+            </td>
+        </tr>
+        {{end}}
+        {{if .DailyMeanAtmPressure}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. atmospheric pressure
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .DailyMeanAtmPressure.MeanValue}} hPa
+            </td>
+        </tr>
+        {{end}}
+        {{if .DailyMaxGust}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Max. wind speed
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" (ms2kmh .DailyMaxGust.MaxValue)}} km/h 
+                
+                ({{datefmt "a J Y" .DailyMaxGust.MaxValueDate}})
+            </td>
+        </tr>
+        {{end}}
+
+        
+        
         {{end}}
     </tbody>
 </table>

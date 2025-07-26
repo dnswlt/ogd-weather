@@ -8,6 +8,42 @@ import (
 	"github.com/dnswlt/ogd-weather/service/api/internal/types"
 )
 
+func TestMinutesToHours(t *testing.T) {
+	tests := []struct {
+		minutes float64
+		want    string
+	}{
+		// Whole hours
+		{0, "0:00"},
+		{60, "1:00"},
+		{120, "2:00"},
+
+		// Regular minutes
+		{15, "0:15"},
+		{59, "0:59"},
+		{61, "1:01"},
+		{135, "2:15"},
+
+		// Rounded minutes
+		{90.4, "1:30"},  // round down
+		{90.5, "1:31"},  // round up
+		{59.6, "1:00"},  // rolls to next hour
+		{119.6, "2:00"}, // correctly carries over
+
+		// Negative
+		{-30, "-0:30"},
+		{-59.6, "-1:00"},
+		{-119.6, "-2:00"},
+	}
+
+	for _, tt := range tests {
+		got := MinutesToHours(tt.minutes)
+		if got != tt.want {
+			t.Errorf("MinutesToHours(%v) = %q, want %q", tt.minutes, got, tt.want)
+		}
+	}
+}
+
 func TestDateFmt(t *testing.T) {
 	// Define a sample date for testing using your actual types.Date struct
 	sampleTime := time.Date(2023, time.January, 15, 0, 0, 0, 0, time.UTC)

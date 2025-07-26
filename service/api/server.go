@@ -56,6 +56,8 @@ func (s *Server) reloadTemplates() error {
 	tmpl = tmpl.Funcs(map[string]any{
 		"datefmt":    ui.DateFmt,
 		"wgs84tosvg": ui.WGS84ToSVG,
+		"min2hours":  ui.MinutesToHours,
+		"ms2kmh":     ui.MetersPerSecondToKilometersPerHour,
 	})
 	var err error
 	s.template, err = tmpl.ParseGlob(path.Join(s.opts.BaseDir, "templates/*.html"))
@@ -463,7 +465,7 @@ func (s *Server) Serve() error {
 	mux.HandleFunc("GET /stations/{stationID}/info",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
-				serveChartServiceURL[types.StationSummaryResponse](s, w, r, "station_info.html", nil)
+				serveChartServiceURL[types.StationInfoResponse](s, w, r, "station_info.html", nil)
 				return
 			}
 			proxy.ServeHTTP(w, r)

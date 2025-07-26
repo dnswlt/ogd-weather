@@ -90,12 +90,43 @@ type StationStats struct {
 }
 
 type StationSummary struct {
-	Station *Station
-	Stats   *StationStats
+	Station *Station      `json:"station"`
+	Stats   *StationStats `json:"stats"`
 }
 
 type StationSummaryResponse struct {
 	Summary *StationSummary `json:"summary,omitempty"`
+}
+
+type VariableStats struct {
+	MinValue          float64 `json:"min_value"`
+	MinValueDate      Date    `json:"min_value_date"`
+	MeanValue         float64 `json:"mean_value"`
+	MaxValue          float64 `json:"max_value"`
+	MaxValueDate      Date    `json:"max_value_date"`
+	SourceGranularity string  `json:"source_granularity"`
+	SourceCount       int     `json:"source_count"`
+}
+
+type StationPeriodStats struct {
+	StartDate            Date           `json:"start_date"`
+	EndDate              Date           `json:"end_date"`
+	DailyMinTemperature  *VariableStats `json:"daily_min_temperature"`
+	DailyMaxTemperature  *VariableStats `json:"daily_max_temperature"`
+	DailyMeanTemperature *VariableStats `json:"daily_mean_temperature"`
+	DailyPrecipication   *VariableStats `json:"daily_precipication"`
+	DailySunshineMinutes *VariableStats `json:"daily_sunshine_minutes"`
+	DailyMeanAtmPressure *VariableStats `json:"daily_mean_atm_pressure"`
+	DailyMaxGust         *VariableStats `json:"daily_max_gust"`
+}
+
+type StationInfo struct {
+	Station            *Station            `json:"station"`
+	Ref1991To2020Stats *StationPeriodStats `json:"ref_1991_2020_stats"`
+}
+
+type StationInfoResponse struct {
+	Info *StationInfo `json:"info"`
 }
 
 type VegaSpecResponse struct {

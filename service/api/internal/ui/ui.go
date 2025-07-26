@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -60,6 +61,24 @@ func mustLoadLocation(name string) *time.Location {
 		panic(err) // or handle gracefully
 	}
 	return loc
+}
+
+func MinutesToHours(minutes float64) string {
+	sign := ""
+	if minutes < 0 {
+		sign = "-"
+		minutes = -minutes
+	}
+
+	totalMinutes := math.Round(minutes)
+	h := int(totalMinutes) / 60
+	m := int(totalMinutes) % 60
+
+	return fmt.Sprintf("%s%d:%02d", sign, h, m)
+}
+
+func MetersPerSecondToKilometersPerHour(mps float64) float64 {
+	return 3.6 * mps
 }
 
 func DateFmt(format string, date any) (string, error) {
