@@ -391,6 +391,7 @@ def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvReso
 
 def recreate_views(conn: sqlite3.Connection) -> None:
     db.recreate_station_data_summary(conn)
+    db.recreate_ref_period_1991_2020_stats(conn)
 
 
 def main():
