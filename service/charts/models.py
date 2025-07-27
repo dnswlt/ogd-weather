@@ -75,17 +75,7 @@ class StationPeriodStats(BaseModel):
 
     start_date: date
     end_date: date
-    daily_min_temperature: VariableStats | None
-    daily_max_temperature: VariableStats | None
-    daily_mean_temperature: VariableStats | None
-    daily_precipication: VariableStats | None
-    daily_sunshine_minutes: VariableStats | None
-    daily_mean_atm_pressure: VariableStats | None
-    daily_max_gust: VariableStats | None
-    annual_summer_days: VariableStats | None
-    annual_sunny_days: VariableStats | None
-    annual_frost_days: VariableStats | None
-    annual_growing_degree_days: VariableStats | None
+    variable_stats: dict[str, VariableStats]
 
 
 class StationInfo(BaseModel):

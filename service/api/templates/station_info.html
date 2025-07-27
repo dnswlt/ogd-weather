@@ -110,35 +110,35 @@
     <tbody>
         {{with .Ref1991To2020Stats}}
 
-        {{if .DailyPrecipication}}
+        {{if .Vars.TemperatureDailyMin}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Lowest temperature
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.1f" .DailyMinTemperature.MinValue}} &deg;C
-                ({{datefmt "a J Y" .DailyMinTemperature.MinValueDate}})
+                {{printf "%.1f" .Vars.TemperatureDailyMin.MinValue}} &deg;C
+                ({{datefmt "a J Y" .Vars.TemperatureDailyMin.MinValueDate}})
             </td>
         </tr>
         {{end}}
-        {{if .DailyPrecipication}}
+        {{if .Vars.TemperatureDailyMax}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Highest temperature
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.1f" .DailyMaxTemperature.MaxValue}} &deg;C
-                ({{datefmt "a J Y" .DailyMaxTemperature.MaxValueDate}})
+                {{printf "%.1f" .Vars.TemperatureDailyMax.MaxValue}} &deg;C
+                ({{datefmt "a J Y" .Vars.TemperatureDailyMax.MaxValueDate}})
             </td>
         </tr>
         {{end}}
-        {{if .DailyPrecipication}}
+        {{if .Vars.PrecipitationDailyMillimeters}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. daily rainfall
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.1f" .DailyPrecipication.MeanValue}} mm
+                {{printf "%.1f" .Vars.PrecipitationDailyMillimeters.MeanValue}} mm
             </td>
         </tr>
         <tr class="border-b">
@@ -146,80 +146,90 @@
                 Highest daily rainfall
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.1f" .DailyPrecipication.MaxValue}} mm
-                ({{datefmt "a J Y" .DailyPrecipication.MaxValueDate}})
+                {{printf "%.1f" .Vars.PrecipitationDailyMillimeters.MaxValue}} mm
+                ({{datefmt "a J Y" .Vars.PrecipitationDailyMillimeters.MaxValueDate}})
             </td>
         </tr>
         {{end}}
-        {{if .DailySunshineMinutes}}
+        {{if .Vars.SunshineDailyMinutes}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. daily sunshine
             </td>
             <td class="py-2 text-gray-800">
-                {{min2hours .DailySunshineMinutes.MeanValue}} hours
+                {{min2hours .Vars.SunshineDailyMinutes.MeanValue}} hours
             </td>
         </tr>
         {{end}}
-        {{if .DailyMeanAtmPressure}}
+        {{if .Vars.AtmPressureDailyMean}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. atmospheric pressure
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.0f" .DailyMeanAtmPressure.MeanValue}} hPa
+                {{printf "%.0f" .Vars.AtmPressureDailyMean.MeanValue}} hPa
             </td>
         </tr>
         {{end}}
-        {{if .DailyMaxGust}}
+        {{if .Vars.GustPeakDailyMax}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Max. wind speed
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.1f" (ms2kmh .DailyMaxGust.MaxValue)}} km/h
+                {{printf "%.1f" (ms2kmh .Vars.GustPeakDailyMax.MaxValue)}} km/h
 
-                ({{datefmt "a J Y" .DailyMaxGust.MaxValueDate}})
+                ({{datefmt "a J Y" .Vars.GustPeakDailyMax.MaxValueDate}})
             </td>
         </tr>
         {{end}}
-        {{if .AnnualSummerDays}}
+        {{if .Vars.SummerDaysAnnualCount}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. summer days (&geq; 25&deg;C)
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.0f" .AnnualSummerDays.MeanValue}} days
+                {{printf "%.0f" .Vars.SummerDaysAnnualCount.MeanValue}} days
             </td>
         </tr>
         {{end}}
-        {{if .AnnualSunnyDays}}
+        {{if .Vars.SunnyDaysAnnualCount}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. sunny days (&geq; 6 h sunshine)
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.0f" .AnnualSunnyDays.MeanValue}} days
+                {{printf "%.0f" .Vars.SunnyDaysAnnualCount.MeanValue}} days
             </td>
         </tr>
         {{end}}
-        {{if .AnnualFrostDays}}
+        {{if .Vars.TropicalNightsAnnualCount}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. no. of tropical nights (&ge; 20&deg;C)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .Vars.TropicalNightsAnnualCount.MeanValue}} nights
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.FrostDaysAnnualCount}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. frost days (&lt; 0&deg;C)
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.0f" .AnnualFrostDays.MeanValue}} days
+                {{printf "%.0f" .Vars.FrostDaysAnnualCount.MeanValue}} days
             </td>
         </tr>
         {{end}}
-        {{if .AnnualGrowingDegreeDays}}
+        {{if .Vars.GrowingDegreeDaysAnnualSum}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. growing degree days
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.0f" .AnnualGrowingDegreeDays.MeanValue}}
+                {{printf "%.0f" .Vars.GrowingDegreeDaysAnnualSum.MeanValue}}
                 <a class="text-blue-600 hover:underline"
                     href="https://en.wikipedia.org/wiki/Growing_degree-day" target="_blank">GDD</a>
             </td>

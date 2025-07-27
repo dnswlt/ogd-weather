@@ -575,7 +575,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
 
         self.assertEqual(len(df), 1)
 
-        s = df.loc["BER", db.DX_SUMMER_DAYS]
+        s = df.loc["BER", db.DX_SUMMER_DAYS_ANNUAL_COUNT]
         self.assertAlmostEqual(
             s["mean_value"], 2.0, msg="2 years with data, 4 summer days."
         )
@@ -604,9 +604,31 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
-        fd = df.loc["BER", db.DX_FROST_DAYS]
+        fd = df.loc["BER", db.DX_FROST_DAYS_ANNUAL_COUNT]
         self.assertEqual(fd["min_value"], 0.0)
         self.assertEqual(fd["max_value"], 2.0)
+
+    def test_derived_tropical_nights(self):
+        # Insert daily data.
+        self._insert_var(
+            "tre200dn",
+            [
+                ("LUG", "1991-07-01", 21),
+                ("LUG", "1992-07-01", 19),
+                ("LUG", "1992-07-02", 18),
+            ],
+        )
+        self.conn.commit()
+        # Recreate derived table.
+        db.recreate_station_var_summary_stats(self.conn)
+        # Read data
+        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+
+        # Check summary stats
+        fd = df.loc["LUG", db.DX_TROPICAL_NIGHTS_ANNUAL_COUNT]
+        self.assertEqual(fd["min_value"], 0.0)
+        self.assertEqual(fd["max_value"], 1.0)
+        self.assertEqual(fd["max_value_date"], "1991-01-01")
 
     def test_derived_sunny_days(self):
         # Insert daily data.
@@ -633,7 +655,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
-        fd = df.loc["BER", db.DX_SUNNY_DAYS]
+        fd = df.loc["BER", db.DX_SUNNY_DAYS_ANNUAL_COUNT]
         self.assertEqual(fd["min_value"], 0.0)
         self.assertEqual(fd["max_value"], 3.0)
         # This is annual granularity, so expect 1 value per year
@@ -667,7 +689,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
 
         # BER
         self.assertTrue("BER" in df.index)
-        ber = df.loc["BER", db.DX_SUNNY_DAYS]
+        ber = df.loc["BER", db.DX_SUNNY_DAYS_ANNUAL_COUNT]
         self.assertEqual(ber["min_value"], 0.0)
         self.assertEqual(ber["max_value"], 0.0)
         self.assertEqual(ber["value_count"], 1)  # Data for 1 year

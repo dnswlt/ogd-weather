@@ -1648,6 +1648,7 @@ ALL = {
     },
     "tre200d0": {
         "shortname": "tre200d0",
+        "api_name": "daily_mean_temperature",
         "description_de": "Lufttemperatur 2 m über Boden; Tagesmittel",
         "description_fr": "Température de l'air à 2 m du sol; moyenne journalière",
         "description_it": "Temperatura dell'aria a 2 m dal suolo; media giornaliera",
@@ -1661,6 +1662,7 @@ ALL = {
     },
     "tre200dn": {
         "shortname": "tre200dn",
+        "api_name": "daily_min_temperature",
         "description_de": "Lufttemperatur 2 m über Boden; Tagesminimum",
         "description_fr": "Température de l'air à 2 m du sol; minimum journalier",
         "description_it": "Temperatura dell'aria a 2 m dal suolo; minima giornaliera",
@@ -1674,6 +1676,7 @@ ALL = {
     },
     "tre200dx": {
         "shortname": "tre200dx",
+        "api_name": "daily_max_temperature",
         "description_de": "Lufttemperatur 2 m über Boden; Tagesmaximum",
         "description_fr": "Température de l'air à 2 m du sol; maximum journalier",
         "description_it": "Temperatura dell'aria a 2 m dal suolo; massima giornaliera",
@@ -1687,6 +1690,7 @@ ALL = {
     },
     "tre200h0": {
         "shortname": "tre200h0",
+        "api_name": "hourly_mean_temperature",
         "description_de": "Lufttemperatur 2 m über Boden; Stundenmittel",
         "description_fr": "Température de l'air à 2 m du sol; moyenne horaire",
         "description_it": "Temperatura dell'aria a 2 m dal suolo; media oraria",

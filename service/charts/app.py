@@ -192,7 +192,7 @@ async def get_info(
         station_abbr=station_abbr,
     )
     ref_period_stats = (
-        charts.ref_period_stats(vars.loc[station_abbr]) if not vars.empty else None
+        charts.station_period_stats(vars.loc[station_abbr]) if not vars.empty else None
     )
 
     # Stations don't change often, use 1 day TTL for caching.

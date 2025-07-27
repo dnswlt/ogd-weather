@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -109,19 +110,21 @@ type VariableStats struct {
 }
 
 type StationPeriodStats struct {
-	StartDate               Date           `json:"start_date"`
-	EndDate                 Date           `json:"end_date"`
-	DailyMinTemperature     *VariableStats `json:"daily_min_temperature"`
-	DailyMaxTemperature     *VariableStats `json:"daily_max_temperature"`
-	DailyMeanTemperature    *VariableStats `json:"daily_mean_temperature"`
-	DailyPrecipication      *VariableStats `json:"daily_precipication"`
-	DailySunshineMinutes    *VariableStats `json:"daily_sunshine_minutes"`
-	DailyMeanAtmPressure    *VariableStats `json:"daily_mean_atm_pressure"`
-	DailyMaxGust            *VariableStats `json:"daily_max_gust"`
-	AnnualSummerDays        *VariableStats `json:"annual_summer_days"`
-	AnnualSunnyDays         *VariableStats `json:"annual_sunny_days"`
-	AnnualFrostDays         *VariableStats `json:"annual_frost_days"`
-	AnnualGrowingDegreeDays *VariableStats `json:"annual_growing_degree_days"`
+	StartDate     Date                      `json:"start_date"`
+	EndDate       Date                      `json:"end_date"`
+	VariableStats map[string]*VariableStats `json:"variable_stats"`
+	templateVars  map[string]*VariableStats
+}
+
+// A helper for HTML templates: Access variables in CamelCase.
+func (s *StationPeriodStats) Vars() map[string]*VariableStats {
+	if s.templateVars == nil {
+		s.templateVars = make(map[string]*VariableStats)
+		for k, v := range s.VariableStats {
+			s.templateVars[snakeToCamelCase(k)] = v
+		}
+	}
+	return s.templateVars
 }
 
 type StationInfo struct {
@@ -187,3 +190,13 @@ func (d Date) String() string {
 
 func (l LocalizedString) MarshalJSON() ([]byte, error)  { return json.Marshal(l.f) }
 func (l *LocalizedString) UnmarshalJSON(b []byte) error { return json.Unmarshal(b, &l.f) }
+
+func snakeToCamelCase(s string) string {
+	parts := strings.Split(strings.ToLower(s), "_")
+	for i, p := range parts {
+		if len(p) > 0 {
+			parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return strings.Join(parts, "")
+}

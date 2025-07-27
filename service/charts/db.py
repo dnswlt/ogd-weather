@@ -61,11 +61,30 @@ REL_HUMITIDY_HOURLY_MEAN = "ure200h0"
 SUNSHINE_DAILY_MINUTES = "sre000d0"
 SUNSHINE_HOURLY_MINUTES = "sre000h0"
 
+
+# Map SwissMetNet parameter names to readable names to use at the API level
+# (e.g. when returning summary stats for variables).
+VARIABLE_API_NAMES = {
+    TEMP_DAILY_MIN: "temperature_daily_min",
+    TEMP_DAILY_MAX: "temperature_daily_max",
+    TEMP_DAILY_MEAN: "temperature_daily_mean",
+    PRECIP_DAILY_MM: "precipitation_daily_millimeters",
+    WIND_SPEED_DAILY_MEAN: "wind_speed_daily_mean",
+    WIND_DIRECTION_DAILY_MEAN: "wind_direction_daily_mean",
+    SUNSHINE_DAILY_MINUTES: "sunshine_daily_minutes",
+    GUST_PEAK_DAILY_MAX: "gust_peak_daily_max",
+    ATM_PRESSURE_DAILY_MEAN: "atm_pressure_daily_mean",
+    REL_HUMITIDY_DAILY_MEAN: "rel_humidity_daily_mean",
+    SUNSHINE_DAILY_MINUTES: "sunshine_daily_minutes",
+}
+
 # Derived metric names (prefix DX_):
-DX_SUNNY_DAYS = "sunny_days"
-DX_SUMMER_DAYS = "summer_days"
-DX_FROST_DAYS = "frost_days"
-DX_GROWING_DEGREE_DAYS = "growing_degree_days"
+DX_SUNNY_DAYS_ANNUAL_COUNT = "sunny_days_annual_count"
+DX_SUMMER_DAYS_ANNUAL_COUNT = "summer_days_annual_count"
+DX_FROST_DAYS_ANNUAL_COUNT = "frost_days_annual_count"
+DX_TROPICAL_NIGHTS_ANNUAL_COUNT = "tropical_nights_annual_count"
+
+DX_GROWING_DEGREE_DAYS_ANNUAL_SUM = "growing_degree_days_annual_sum"
 
 # Table definitions
 
@@ -329,13 +348,20 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
             "station_abbr": df["station_abbr"],
             "year": df["reference_timestamp"].str[:4] + "-01-01",
             # Day count metrics
-            DX_SUMMER_DAYS: _day_count(df[TEMP_DAILY_MAX], df[TEMP_DAILY_MAX] >= 25),
-            DX_FROST_DAYS: _day_count(df[TEMP_DAILY_MIN], df[TEMP_DAILY_MIN] < 0),
-            DX_SUNNY_DAYS: _day_count(
+            DX_SUMMER_DAYS_ANNUAL_COUNT: _day_count(
+                df[TEMP_DAILY_MAX], df[TEMP_DAILY_MAX] >= 25
+            ),
+            DX_FROST_DAYS_ANNUAL_COUNT: _day_count(
+                df[TEMP_DAILY_MIN], df[TEMP_DAILY_MIN] < 0
+            ),
+            DX_SUNNY_DAYS_ANNUAL_COUNT: _day_count(
                 df[SUNSHINE_DAILY_MINUTES], df[SUNSHINE_DAILY_MINUTES] >= 6 * 60
             ),
-            # Directly derived metrics
-            DX_GROWING_DEGREE_DAYS: (
+            DX_TROPICAL_NIGHTS_ANNUAL_COUNT: _day_count(
+                df[TEMP_DAILY_MIN], df[TEMP_DAILY_MIN] >= 20
+            ),
+            # Other derived metrics
+            DX_GROWING_DEGREE_DAYS_ANNUAL_SUM: (
                 0.5 * (df[TEMP_DAILY_MEAN].clip(upper=30) - 10).clip(lower=0)
             ),
         }

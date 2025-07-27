@@ -6,6 +6,7 @@ import pandas as pd
 from . import db
 from . import models
 from .errors import NoDataError
+from . import params
 
 PERIOD_ALL = "all"
 
@@ -584,10 +585,8 @@ def daily_measurements(
     )
 
 
-def ref_period_stats(s: pd.Series) -> models.StationPeriodStats:
-    def var_if(var: str):
-        if var not in s:
-            return None
+def station_period_stats(s: pd.Series) -> models.StationPeriodStats:
+    def _vstats(var: str):
         v = s[var]
         return models.VariableStats(
             min_value=float(v["min_value"]),
@@ -600,18 +599,14 @@ def ref_period_stats(s: pd.Series) -> models.StationPeriodStats:
             value_count=v["value_count"],
         )
 
+    def _key(k: str) -> str:
+        if d := db.VARIABLE_API_NAMES.get(k):
+            return d
+        return k
+
+    variable_stats = {_key(v): _vstats(v) for v in s.index.get_level_values(0).unique()}
     return models.StationPeriodStats(
         start_date=date(1991, 1, 1),
         end_date=date(2020, 12, 31),
-        daily_min_temperature=var_if(db.TEMP_DAILY_MIN),
-        daily_max_temperature=var_if(db.TEMP_DAILY_MAX),
-        daily_mean_temperature=var_if(db.TEMP_DAILY_MEAN),
-        daily_precipication=var_if(db.PRECIP_DAILY_MM),
-        daily_sunshine_minutes=var_if(db.SUNSHINE_DAILY_MINUTES),
-        daily_mean_atm_pressure=var_if(db.ATM_PRESSURE_DAILY_MEAN),
-        daily_max_gust=var_if(db.GUST_PEAK_DAILY_MAX),
-        annual_summer_days=var_if(db.DX_SUMMER_DAYS),
-        annual_sunny_days=var_if(db.DX_SUNNY_DAYS),
-        annual_frost_days=var_if(db.DX_FROST_DAYS),
-        annual_growing_degree_days=var_if(db.DX_GROWING_DEGREE_DAYS),
+        variable_stats=variable_stats,
     )
