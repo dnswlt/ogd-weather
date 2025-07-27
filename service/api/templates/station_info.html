@@ -178,7 +178,6 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{printf "%.1f" (ms2kmh .Vars.GustPeakDailyMax.MaxValue)}} km/h
-
                 ({{datefmt "a J Y" .Vars.GustPeakDailyMax.MaxValueDate}})
             </td>
         </tr>
@@ -212,6 +211,17 @@
                 {{printf "%.1f" .Vars.TropicalNightsAnnualCount.MeanValue}} nights
             </td>
         </tr>
+        {{if gt .Vars.TropicalNightsAnnualCount.MaxValue 0.05}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Max. tropical nights (&ge; 20&deg;C)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .Vars.TropicalNightsAnnualCount.MaxValue}} nights
+                ({{datefmt "Y" .Vars.TropicalNightsAnnualCount.MaxValueDate}})
+            </td>
+        </tr>
+        {{end}}
         {{end}}
         {{if .Vars.FrostDaysAnnualCount}}
         <tr class="border-b">
@@ -230,8 +240,8 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{printf "%.0f" .Vars.GrowingDegreeDaysAnnualSum.MeanValue}}
-                <a class="text-blue-600 hover:underline"
-                    href="https://en.wikipedia.org/wiki/Growing_degree-day" target="_blank">GDD</a>
+                <a class="text-blue-600 hover:underline" href="https://en.wikipedia.org/wiki/Growing_degree-day"
+                    target="_blank">GDD</a>
             </td>
         </tr>
         {{end}}
