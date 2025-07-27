@@ -5,15 +5,7 @@ import numpy as np
 import pandas as pd
 from . import db
 from . import models
-
-
-class StationNotFoundError(ValueError):
-    """Raised when a requested station doesn't exist."""
-
-
-class NoDataError(ValueError):
-    """Raised when a request is valid, but no data is available."""
-
+from .errors import NoDataError
 
 PERIOD_ALL = "all"
 
@@ -604,7 +596,7 @@ def ref_period_stats(s: pd.Series) -> models.StationPeriodStats:
             max_value=float(v["max_value"]),
             max_value_date=date.fromisoformat(v["max_value_date"]),
             source_granularity=v["source_granularity"],
-            source_count=v["source_count"],
+            value_count=v["value_count"],
         )
 
     return models.StationPeriodStats(
@@ -617,4 +609,7 @@ def ref_period_stats(s: pd.Series) -> models.StationPeriodStats:
         daily_sunshine_minutes=var_if(db.SUNSHINE_DAILY_MINUTES),
         daily_mean_atm_pressure=var_if(db.ATM_PRESSURE_DAILY_MEAN),
         daily_max_gust=var_if(db.GUST_PEAK_DAILY_MAX),
+        annual_summer_days=var_if(db.DX_SUMMER_DAYS),
+        annual_sunny_days=var_if(db.DX_SUNNY_DAYS),
+        annual_frost_days=var_if(db.DX_FROST_DAYS),
     )

@@ -9,6 +9,7 @@ import sqlite3
 
 from . import models
 from .models import LocalizedString
+from .errors import StationNotFoundError
 
 logger = logging.getLogger("db")
 
@@ -60,6 +61,10 @@ REL_HUMITIDY_HOURLY_MEAN = "ure200h0"
 SUNSHINE_DAILY_MINUTES = "sre000d0"
 SUNSHINE_HOURLY_MINUTES = "sre000h0"
 
+# Derived metric names (prefix DX_):
+DX_SUNNY_DAYS = "sunny_days"
+DX_SUMMER_DAYS = "summer_days"
+DX_FROST_DAYS = "frost_days"
 
 # Table definitions
 
@@ -166,7 +171,7 @@ def prepare_sql_table_from_spec(
     The time part is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
     """
 
-    files = [os.path.join(base_dir, f) for f in csv_filenames]
+    files = [os.path.join(base_dir, f) for f in csv_filenames or []]
 
     # Create table if needed.
     pk_columns = ", ".join(table_spec.primary_key)
@@ -230,7 +235,7 @@ def recreate_station_var_summary_stats(conn: sqlite3.Connection) -> None:
             mean_value REAL,
             max_value REAL,
             max_value_date TEXT,
-            source_count INTEGER,
+            value_count INTEGER,
             PRIMARY KEY (agg_name, station_abbr, variable)
         );
     """
@@ -241,7 +246,8 @@ def recreate_station_var_summary_stats(conn: sqlite3.Connection) -> None:
 
 def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
     """Inserts summary stats for the 1991-2020 reference period into STATION_VAR_SUMMARY_STATS_TABLE_NAME."""
-    variables = [
+    # All daily measurement variables for which to build summary stats.
+    daily_vars = [
         TEMP_DAILY_MIN,
         TEMP_DAILY_MAX,
         TEMP_DAILY_MEAN,
@@ -251,11 +257,41 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
         GUST_PEAK_DAILY_MAX,
         ATM_PRESSURE_DAILY_MEAN,
     ]
+
+    def _station_summary(
+        df: pd.DataFrame, date_col: str, var_cols: list[str], granularity: str
+    ) -> tuple:
+        """Returns summary stats for all vars in var_cols as an SQL INSERT tuple."""
+        params = []
+        for station_abbr, grp in df.groupby("station_abbr"):
+            for var in var_cols:
+                if grp[var].isna().all():
+                    continue  # No data for this variable
+                a = grp[var].agg(["min", "max", "idxmin", "idxmax", "mean", "count"])
+                # Get reference_timestamp value at the index of the min/max value.
+                # Convert to Python datetime, which conn.execute understands.
+                min_date = grp.loc[a["idxmin"], date_col]
+                max_date = grp.loc[a["idxmax"], date_col]
+                params.append(
+                    (
+                        station_abbr,
+                        var,
+                        granularity,
+                        a["min"],
+                        min_date,
+                        a["mean"],
+                        a["max"],
+                        max_date,
+                        int(a["count"]),
+                    )
+                )
+        return params
+
     sql = f"""
         SELECT
             station_abbr,
             reference_timestamp,
-            {', '.join(variables)}
+            {', '.join(daily_vars)}
         FROM {TABLE_DAILY_MEASUREMENTS.name}
         WHERE reference_timestamp >= '1991-01-01' AND reference_timestamp < '2021-01-01'
     """
@@ -265,28 +301,49 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
         dtype={
             "station_abbr": str,
             "reference_timestamp": str,
-            **{v: float for v in variables},
+            **{v: float for v in daily_vars},
         },
     )
-    params = []
-    for station_abbr, grp in df.groupby("station_abbr"):
-        for var in variables:
-            if grp[var].isna().all():
-                continue  # No data for this variable
-            a = grp[var].agg(["min", "max", "idxmin", "idxmax", "mean", "count"])
-            params.append(
-                (
-                    station_abbr,
-                    var,
-                    "daily",
-                    a["min"],
-                    grp.loc[a["idxmin"], "reference_timestamp"],
-                    a["mean"],
-                    a["max"],
-                    grp.loc[a["idxmax"], "reference_timestamp"],
-                    a["count"],
-                )
-            )
+
+    # Summary stats across the whole period for all daily vars.
+    params = _station_summary(
+        df, date_col="reference_timestamp", var_cols=daily_vars, granularity="daily"
+    )
+
+    # Summary stats for generated annual "day count" metrics.
+    # For each column: get a boolean value for the daily measurement,
+    # convert it to a float (0 or 1), calculate the annual sum.
+    # The solution respects NAs, i.e. if no data was available at all
+    # for a given variable, it won't have summary stats.
+    dc = pd.DataFrame(
+        {
+            "station_abbr": df["station_abbr"],
+            "year": df["reference_timestamp"].str[:4] + "-01-01",
+            DX_SUMMER_DAYS: (df[TEMP_DAILY_MAX] >= 25)
+            .where(df[TEMP_DAILY_MAX].notna())
+            .astype(float),
+            DX_FROST_DAYS: (df[TEMP_DAILY_MIN] < 0)
+            .where(df[TEMP_DAILY_MIN].notna())
+            .astype(float),
+            DX_SUNNY_DAYS: (df[SUNSHINE_DAILY_MINUTES] >= 6 * 60)
+            .where(df[SUNSHINE_DAILY_MINUTES].notna())
+            .astype(float),
+        }
+    )
+    # All variables defined in dc:
+    dc_vars = [c for c in dc.columns if c not in ("station_abbr", "year")]
+
+    # Sum the 0/1 daily values to get day counts by year, retaining NaNs.
+    def _nan_safe_sum(s):
+        return s.sum() if s.notna().any() else float("nan")
+
+    dcy = dc.groupby(["station_abbr", "year"])[dc_vars].agg(_nan_safe_sum).reset_index()
+    # Now aggregate away the year (for each station) to compute summary stats
+    # (same as above for plain daily variables).
+    params.extend(
+        _station_summary(dcy, date_col="year", var_cols=dc_vars, granularity="annual")
+    )
+
     if params:
         insert_sql = f"""
             INSERT INTO {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS} (
@@ -299,7 +356,7 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
                 mean_value,
                 max_value,
                 max_value_date,
-                source_count
+                value_count
             )
             VALUES ('{AGG_NAME_REF_1991_2020}', ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
@@ -429,7 +486,7 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
     cur = conn.execute(sql, [station_abbr])
     row = cur.fetchone()
     if row is None:
-        raise ValueError(f"No station found with abbr={station_abbr!r}")
+        raise StationNotFoundError(f"No station found with abbr={station_abbr}")
 
     # Parse possible date strings into actual dates (None stays None)
     def d(v: str | None) -> datetime.date | None:
@@ -714,7 +771,7 @@ def read_station_var_summary_stats(
         "mean_value",
         "max_value",
         "max_value_date",
-        "source_count",
+        "value_count",
     ]
     sql = f"""
         SELECT
@@ -726,8 +783,22 @@ def read_station_var_summary_stats(
     if filters:
         sql += f"WHERE {' AND '.join(filters)}"
 
-    df_long = pd.read_sql_query(sql, conn, params=params)
-
+    df_long = pd.read_sql_query(
+        sql,
+        conn,
+        params=params,
+        dtype={
+            "station_abbr": str,
+            "variable": str,
+            "source_granularity": str,
+            "min_value": float,
+            "min_value_date": str,
+            "mean_value": float,
+            "max_value": float,
+            "max_value_date": str,
+            "value_count": float,
+        },
+    )
     if df_long.empty:
         return pd.DataFrame(index=pd.Index([], name="station_abbr"), dtype=str)
 

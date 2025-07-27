@@ -11,6 +11,7 @@ from . import charts
 from . import db
 from . import models
 from . import logging_config as _  # configure logging
+from .errors import NoDataError, StationNotFoundError
 
 
 class ChartRequest(BaseModel):
@@ -52,16 +53,16 @@ def period_default(period: str | None) -> str:
     return charts.PERIOD_ALL
 
 
-@app.exception_handler(charts.StationNotFoundError)
-async def station_not_found_handler(request, exc: charts.StationNotFoundError):
+@app.exception_handler(StationNotFoundError)
+async def station_not_found_handler(request, exc: StationNotFoundError):
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": str(exc)},
     )
 
 
-@app.exception_handler(charts.NoDataError)
-async def no_data_error_handler(request, exc: charts.NoDataError):
+@app.exception_handler(NoDataError)
+async def no_data_error_handler(request, exc: NoDataError):
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": str(exc)},

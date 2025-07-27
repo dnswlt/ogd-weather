@@ -182,11 +182,39 @@
             </td>
         </tr>
         {{end}}
-
-        
-        
+        {{if .AnnualSummerDays}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. summer days (&geq; 25&deg;C)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .AnnualSummerDays.MeanValue}} days
+            </td>
+        </tr>
         {{end}}
+        {{if .AnnualSunnyDays}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. sunny days (&geq; 6 h sunshine)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .AnnualSunnyDays.MeanValue}} days
+            </td>
+        </tr>
+        {{end}}
+        {{if .AnnualFrostDays}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. frost days (&lt; 0&deg;C)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .AnnualFrostDays.MeanValue}} days
+            </td>
+        </tr>
+        {{end}}
+        
+        {{end}} <!-- {{/* with .Ref1991To2020Stats */}} -->
     </tbody>
 </table>
 
-{{end}}
+{{end}} 

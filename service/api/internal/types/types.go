@@ -105,7 +105,7 @@ type VariableStats struct {
 	MaxValue          float64 `json:"max_value"`
 	MaxValueDate      Date    `json:"max_value_date"`
 	SourceGranularity string  `json:"source_granularity"`
-	SourceCount       int     `json:"source_count"`
+	ValueCount        int     `json:"value_count"`
 }
 
 type StationPeriodStats struct {
@@ -118,6 +118,9 @@ type StationPeriodStats struct {
 	DailySunshineMinutes *VariableStats `json:"daily_sunshine_minutes"`
 	DailyMeanAtmPressure *VariableStats `json:"daily_mean_atm_pressure"`
 	DailyMaxGust         *VariableStats `json:"daily_max_gust"`
+	AnnualSummerDays     *VariableStats `json:"annual_summer_days"`
+	AnnualSunnyDays      *VariableStats `json:"annual_sunny_days"`
+	AnnualFrostDays      *VariableStats `json:"annual_frost_days"`
 }
 
 type StationInfo struct {

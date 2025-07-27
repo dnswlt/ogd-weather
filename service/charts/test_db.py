@@ -6,6 +6,7 @@ import pandas as pd
 
 from . import db
 from . import models
+from .errors import StationNotFoundError
 
 
 def _testdata_dir():
@@ -163,9 +164,9 @@ class TestDbStations(TestDb):
         self.assertEqual(station.precipitation_max_date, datetime.date(2020, 12, 31))
 
     def test_read_station_not_found(self):
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(StationNotFoundError) as cm:
             db.read_station(self.conn, "XYZ")
-        self.assertEqual(str(cm.exception), "No station found with abbr='XYZ'")
+        self.assertEqual(str(cm.exception), "No station found with abbr=XYZ")
 
     def test_read_station_partial_dates(self):
         station = db.read_station(self.conn, "BAS")
@@ -525,7 +526,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 "mean_value",
                 "max_value",
                 "max_value_date",
-                "source_count",
+                "value_count",
             ],
         )
         t = df.loc["BER", "tre200dn"]
@@ -535,14 +536,147 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         p = df.loc["BER", "rre150d0"]
         self.assertEqual(p["min_value"], 0)
         self.assertEqual(p["max_value_date"], "1991-01-02")
-        self.assertEqual(p["source_count"], 2)  # One row has None for rre150d0
+        self.assertEqual(p["value_count"], 2)  # One row has None for rre150d0
         self.assertEqual(p["source_granularity"], "daily")
+
+    def _insert_var(self, var_col: str, params: list[tuple]) -> str:
+        db.prepare_sql_table_from_spec(
+            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS
+        )
+        sql = f"""
+            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
+                station_abbr,
+                reference_timestamp,
+                {var_col}
+            )
+            VALUES (?, ?, ?)
+            """
+        self.conn.executemany(sql, params)
+
+    def test_derived_summer_days(self):
+        # Insert daily data.
+        self._insert_var(
+            "tre200dx",
+            [
+                ("BER", "1991-07-01", 24.9),
+                ("BER", "1991-07-02", 25.1),
+                ("BER", "2001-06-03", 25),
+                ("BER", "2001-06-04", 28),
+                ("BER", "2001-06-05", 27),
+            ],
+        )
+        self.conn.commit()
+        # Recreate derived table.
+        db.recreate_station_var_summary_stats(self.conn)
+        # Read data
+        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+
+        self.assertEqual(len(df), 1)
+
+        s = df.loc["BER", db.DX_SUMMER_DAYS]
+        self.assertAlmostEqual(
+            s["mean_value"], 2.0, msg="2 years with data, 4 summer days."
+        )
+        self.assertEqual(s["min_value"], 1.0)
+        self.assertEqual(s["max_value"], 3.0)
+        # Dates for annual granularity are stored as 01 Jan.
+        self.assertEqual(s["min_value_date"], "1991-01-01")
+        self.assertEqual(s["max_value_date"], "2001-01-01")
+        self.assertEqual(s["source_granularity"], "annual")
+        self.assertEqual(s["value_count"], 2)
+
+    def test_derived_frost_days(self):
+        # Insert daily data.
+        self._insert_var(
+            "tre200dn",
+            [
+                ("BER", "1991-01-01", 0.5),
+                ("BER", "1992-02-02", -1),
+                ("BER", "1992-02-03", -0.5),
+            ],
+        )
+        self.conn.commit()
+        # Recreate derived table.
+        db.recreate_station_var_summary_stats(self.conn)
+        # Read data
+        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+
+        # Check summary stats
+        fd = df.loc["BER", db.DX_FROST_DAYS]
+        self.assertEqual(fd["min_value"], 0.0)
+        self.assertEqual(fd["max_value"], 2.0)
+
+    def test_derived_sunny_days(self):
+        # Insert daily data.
+        self._insert_var(
+            "sre000d0",
+            [
+                ("BER", "1991-06-01", 8 * 60),
+                ("BER", "1991-06-02", 5.8 * 60),
+                ("BER", "1991-06-03", 6.0 * 60),
+                ("BER", "1991-06-04", 8 * 60),
+                ("BER", "1992-06-01", 8 * 60),
+                ("BER", "1993-06-01", 8 * 60),
+                ("BER", "1994-06-01", 8 * 60),
+                ("BER", "1995-06-01", 8 * 60),
+                # No sunny days in 1996 and 1997
+                ("BER", "1996-06-01", 30),
+                ("BER", "1997-06-01", 30),
+            ],
+        )
+        self.conn.commit()
+        # Recreate derived table.
+        db.recreate_station_var_summary_stats(self.conn)
+        # Read data
+        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+
+        # Check summary stats
+        fd = df.loc["BER", db.DX_SUNNY_DAYS]
+        self.assertEqual(fd["min_value"], 0.0)
+        self.assertEqual(fd["max_value"], 3.0)
+        # This is annual granularity, so expect 1 value per year
+        self.assertEqual(fd["value_count"], 7)
+        self.assertEqual(fd["source_granularity"], "annual")
+        self.assertAlmostEqual(fd["mean_value"], 1.0)
+        self.assertEqual(fd["max_value_date"], "1991-01-01")
+
+    def test_derived_sunny_days_no_data(self):
+        # This tests that derived data "preserves NaNs":
+        # If there was not a single day matching the criteria,
+        # we want 0. But if there was simply no data for the variable
+        # from which the derived metric is ... derived, then we
+        # should not have 0, but NA.
+        self._insert_var(
+            "sre000d0",
+            [
+                # BER has zeros sunny days
+                ("BER", "1991-06-01", 0),
+                ("BER", "1991-06-02", 0),
+                # GES does not have data at all
+                ("GES", "1991-06-01", None),
+                ("GES", "1991-06-02", None),
+            ],
+        )
+        self.conn.commit()
+        # Recreate derived table.
+        db.recreate_station_var_summary_stats(self.conn)
+        # Read data
+        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+
+        # BER
+        self.assertTrue("BER" in df.index)
+        ber = df.loc["BER", db.DX_SUNNY_DAYS]
+        self.assertEqual(ber["min_value"], 0.0)
+        self.assertEqual(ber["max_value"], 0.0)
+        self.assertEqual(ber["value_count"], 1)  # Data for 1 year
+        self.assertEqual(ber["source_granularity"], "annual")
+        # GES shouldn't even be there
+        self.assertTrue("GET" not in df.index)
 
     def test_create_select_agg_not_exist(self):
         db.prepare_sql_table_from_spec(
             _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
         )
-        db.recreate_station_var_summary_stats(self.conn)
         self.conn.executemany(
             f"""
             INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
@@ -552,6 +686,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             """,
             [("BER", "1991-01-01", -3, 20)],
         )
+        db.recreate_station_var_summary_stats(self.conn)
         df = db.read_station_var_summary_stats(
             self.conn, "AGG_DOES_NOT_EXIST", station_abbr="BER"
         )
@@ -587,7 +722,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         )
 
         self.assertEqual(len(df), 1)
-        # Should only have data for tre200dn:
-        self.assertEqual(df.columns.levels[0].tolist(), ["tre200dn"])
+
+        # Should not have data for rre150d0:
         with self.assertRaises(KeyError):
             df.loc["BER", "rre150d0"]

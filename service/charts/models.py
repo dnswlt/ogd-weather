@@ -66,7 +66,7 @@ class VariableStats(BaseModel):
     max_value: float
     max_value_date: date
     source_granularity: str
-    source_count: int
+    value_count: int
 
 
 class StationPeriodStats(BaseModel):
@@ -81,6 +81,9 @@ class StationPeriodStats(BaseModel):
     daily_sunshine_minutes: VariableStats | None
     daily_mean_atm_pressure: VariableStats | None
     daily_max_gust: VariableStats | None
+    annual_summer_days: VariableStats | None
+    annual_sunny_days: VariableStats | None
+    annual_frost_days: VariableStats | None
 
 
 class StationInfo(BaseModel):

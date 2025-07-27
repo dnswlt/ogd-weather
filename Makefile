@@ -22,6 +22,9 @@ CLUSTER = weather-cluster
 
 ## Local Dev =========================================================
 
+build: ## Build all local images
+	$(COMPOSE) build
+
 rebuild: ## Force rebuild of all local images
 	$(COMPOSE) build --no-cache
 

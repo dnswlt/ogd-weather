@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -111,6 +112,14 @@ func NewServer(opts ServerOptions, moreOpts ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
+func statusCodeFromError(err error) int {
+	var be *BackendError
+	if errors.As(err, &be) {
+		return be.StatusCode()
+	}
+	return http.StatusInternalServerError
+}
+
 func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateFile string) {
 	var output bytes.Buffer
 	// Pass on query parameters to the template.
@@ -127,7 +136,7 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 	stations, err := fetchBackendData[types.StationsResponse](r.Context(), s, u.String())
 	if err != nil {
 		log.Printf("Failed to fetch stations from backend: %v", err)
-		http.Error(w, "backend error", http.StatusInternalServerError)
+		http.Error(w, "Backend error", statusCodeFromError(err))
 		return
 	}
 
@@ -303,7 +312,7 @@ func fetchBackendData[Response any](ctx context.Context, s *Server, backendURL s
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("backend returned status %s for %s.", resp.Status, backendURL)
+		return nil, NewBackendError(backendURL, resp.StatusCode)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -343,7 +352,7 @@ func serveChartServiceURL[Response any](
 	response, err := fetchBackendData[Response](r.Context(), s, backendURL)
 	if err != nil {
 		log.Printf("Error fetching backend data: %v", err)
-		http.Error(w, "Backend error", http.StatusInternalServerError)
+		http.Error(w, "Backend error", statusCodeFromError(err))
 		return
 	}
 
