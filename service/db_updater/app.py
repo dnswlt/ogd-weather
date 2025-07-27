@@ -111,8 +111,13 @@ def fetch_data_csv_resources() -> list[CsvResource]:
     resources = []
     for asset in assets:
         href = asset["href"]
+        # TODO: Re-enable _now_ data at some point.
+        # It had a few missing points recently,
+        # we don't reconcile with recent data yet, and we're currently
+        # focusing on historical data anyway.
         mo = re.search(
-            r".*_(d|h)_(historical|historical_2020-2029|recent|now).csv$", href
+            r".*_(d|h)_(historical|historical_2020-2029|recent|now__DISABLED__).csv$",
+            href,
         )
         if not mo:
             continue
@@ -424,8 +429,8 @@ def main():
     started_time = time.time()
 
     if args.recreate_views:
+        # Only recreate views, then exit.
         with sqlite3.connect(db_path) as conn:
-            # Only recreate views, then exit.
             recreate_views(conn)
             logger.info(
                 "Recreated materialized views in %.1fs.", time.time() - started_time
@@ -448,11 +453,11 @@ def main():
             c.status = status_map.get(c.href)
 
         updated_csvs = fetch_latest_data(weather_dir, csvs)
+        if updated_csvs:
+            import_into_db(conn, weather_dir, updated_csvs)
 
-        import_into_db(conn, weather_dir, updated_csvs)
-
-        # Update status after successful import
-        update_update_status(conn, [c.status for c in updated_csvs])
+            # Update status after successful import
+            update_update_status(conn, [c.status for c in updated_csvs])
 
         # Recreate materialized views
         logger.info("Recreating materialized views...")
