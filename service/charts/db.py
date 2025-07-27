@@ -65,6 +65,7 @@ SUNSHINE_HOURLY_MINUTES = "sre000h0"
 DX_SUNNY_DAYS = "sunny_days"
 DX_SUMMER_DAYS = "summer_days"
 DX_FROST_DAYS = "frost_days"
+DX_GROWING_DEGREE_DAYS = "growing_degree_days"
 
 # Table definitions
 
@@ -235,6 +236,7 @@ def recreate_station_var_summary_stats(conn: sqlite3.Connection) -> None:
             mean_value REAL,
             max_value REAL,
             max_value_date TEXT,
+            value_sum REAL,
             value_count INTEGER,
             PRIMARY KEY (agg_name, station_abbr, variable)
         );
@@ -267,7 +269,9 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
             for var in var_cols:
                 if grp[var].isna().all():
                     continue  # No data for this variable
-                a = grp[var].agg(["min", "max", "idxmin", "idxmax", "mean", "count"])
+                a = grp[var].agg(
+                    ["min", "max", "idxmin", "idxmax", "mean", "sum", "count"]
+                )
                 # Get reference_timestamp value at the index of the min/max value.
                 # Convert to Python datetime, which conn.execute understands.
                 min_date = grp.loc[a["idxmin"], date_col]
@@ -282,6 +286,7 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
                         a["mean"],
                         a["max"],
                         max_date,
+                        a["sum"],
                         int(a["count"]),
                     )
                 )
@@ -310,24 +315,29 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
         df, date_col="reference_timestamp", var_cols=daily_vars, granularity="daily"
     )
 
-    # Summary stats for generated annual "day count" metrics.
-    # For each column: get a boolean value for the daily measurement,
-    # convert it to a float (0 or 1), calculate the annual sum.
+    def _day_count(series, condition):
+        return condition.where(series.notna()).astype(float)
+
+    # Summary stats for generated annual metrics based on daily values.
+    # For "day count" metrics, we calculate a true/false value per day
+    # and interpret it as 1/0. Other metrics like Growing Degree Days
+    # are derived from other daily variables and then summed up.
     # The solution respects NAs, i.e. if no data was available at all
     # for a given variable, it won't have summary stats.
     dc = pd.DataFrame(
         {
             "station_abbr": df["station_abbr"],
             "year": df["reference_timestamp"].str[:4] + "-01-01",
-            DX_SUMMER_DAYS: (df[TEMP_DAILY_MAX] >= 25)
-            .where(df[TEMP_DAILY_MAX].notna())
-            .astype(float),
-            DX_FROST_DAYS: (df[TEMP_DAILY_MIN] < 0)
-            .where(df[TEMP_DAILY_MIN].notna())
-            .astype(float),
-            DX_SUNNY_DAYS: (df[SUNSHINE_DAILY_MINUTES] >= 6 * 60)
-            .where(df[SUNSHINE_DAILY_MINUTES].notna())
-            .astype(float),
+            # Day count metrics
+            DX_SUMMER_DAYS: _day_count(df[TEMP_DAILY_MAX], df[TEMP_DAILY_MAX] >= 25),
+            DX_FROST_DAYS: _day_count(df[TEMP_DAILY_MIN], df[TEMP_DAILY_MIN] < 0),
+            DX_SUNNY_DAYS: _day_count(
+                df[SUNSHINE_DAILY_MINUTES], df[SUNSHINE_DAILY_MINUTES] >= 6 * 60
+            ),
+            # Directly derived metrics
+            DX_GROWING_DEGREE_DAYS: (
+                0.5 * (df[TEMP_DAILY_MEAN].clip(upper=30) - 10).clip(lower=0)
+            ),
         }
     )
     # All variables defined in dc:
@@ -356,9 +366,10 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
                 mean_value,
                 max_value,
                 max_value_date,
+                value_sum,
                 value_count
             )
-            VALUES ('{AGG_NAME_REF_1991_2020}', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES ('{AGG_NAME_REF_1991_2020}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         conn.executemany(insert_sql, params)
 
@@ -771,6 +782,7 @@ def read_station_var_summary_stats(
         "mean_value",
         "max_value",
         "max_value_date",
+        "value_sum",
         "value_count",
     ]
     sql = f"""
@@ -796,6 +808,7 @@ def read_station_var_summary_stats(
             "mean_value": float,
             "max_value": float,
             "max_value_date": str,
+            "value_sum": float,
             "value_count": float,
         },
     )

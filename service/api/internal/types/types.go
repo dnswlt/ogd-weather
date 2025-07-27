@@ -109,18 +109,19 @@ type VariableStats struct {
 }
 
 type StationPeriodStats struct {
-	StartDate            Date           `json:"start_date"`
-	EndDate              Date           `json:"end_date"`
-	DailyMinTemperature  *VariableStats `json:"daily_min_temperature"`
-	DailyMaxTemperature  *VariableStats `json:"daily_max_temperature"`
-	DailyMeanTemperature *VariableStats `json:"daily_mean_temperature"`
-	DailyPrecipication   *VariableStats `json:"daily_precipication"`
-	DailySunshineMinutes *VariableStats `json:"daily_sunshine_minutes"`
-	DailyMeanAtmPressure *VariableStats `json:"daily_mean_atm_pressure"`
-	DailyMaxGust         *VariableStats `json:"daily_max_gust"`
-	AnnualSummerDays     *VariableStats `json:"annual_summer_days"`
-	AnnualSunnyDays      *VariableStats `json:"annual_sunny_days"`
-	AnnualFrostDays      *VariableStats `json:"annual_frost_days"`
+	StartDate               Date           `json:"start_date"`
+	EndDate                 Date           `json:"end_date"`
+	DailyMinTemperature     *VariableStats `json:"daily_min_temperature"`
+	DailyMaxTemperature     *VariableStats `json:"daily_max_temperature"`
+	DailyMeanTemperature    *VariableStats `json:"daily_mean_temperature"`
+	DailyPrecipication      *VariableStats `json:"daily_precipication"`
+	DailySunshineMinutes    *VariableStats `json:"daily_sunshine_minutes"`
+	DailyMeanAtmPressure    *VariableStats `json:"daily_mean_atm_pressure"`
+	DailyMaxGust            *VariableStats `json:"daily_max_gust"`
+	AnnualSummerDays        *VariableStats `json:"annual_summer_days"`
+	AnnualSunnyDays         *VariableStats `json:"annual_sunny_days"`
+	AnnualFrostDays         *VariableStats `json:"annual_frost_days"`
+	AnnualGrowingDegreeDays *VariableStats `json:"annual_growing_degree_days"`
 }
 
 type StationInfo struct {

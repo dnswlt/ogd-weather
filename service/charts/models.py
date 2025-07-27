@@ -65,8 +65,9 @@ class VariableStats(BaseModel):
     mean_value: float
     max_value: float
     max_value_date: date
-    source_granularity: str
+    value_sum: float
     value_count: int
+    source_granularity: str
 
 
 class StationPeriodStats(BaseModel):
@@ -84,6 +85,7 @@ class StationPeriodStats(BaseModel):
     annual_summer_days: VariableStats | None
     annual_sunny_days: VariableStats | None
     annual_frost_days: VariableStats | None
+    annual_growing_degree_days: VariableStats | None
 
 
 class StationInfo(BaseModel):

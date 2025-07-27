@@ -502,7 +502,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             VALUES (?, ?, ?, ?)
             """,
             [
-                ("BER", "1991-01-01", -3, 0),
+                ("BER", "1991-01-01", -3, 0.5),
                 ("BER", "1991-01-02", -4, 1.5),
                 ("BER", "2001-06-03", 22, None),
                 ("XXX", "2001-06-03", 30, 12),
@@ -526,6 +526,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 "mean_value",
                 "max_value",
                 "max_value_date",
+                "value_sum",
                 "value_count",
             ],
         )
@@ -534,8 +535,9 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         self.assertEqual(t["min_value_date"], "1991-01-02")
         self.assertEqual(t["max_value_date"], "2001-06-03")
         p = df.loc["BER", "rre150d0"]
-        self.assertEqual(p["min_value"], 0)
+        self.assertEqual(p["min_value"], 0.5)
         self.assertEqual(p["max_value_date"], "1991-01-02")
+        self.assertEqual(p["value_sum"], 2.0)
         self.assertEqual(p["value_count"], 2)  # One row has None for rre150d0
         self.assertEqual(p["source_granularity"], "daily")
 

@@ -596,6 +596,7 @@ def ref_period_stats(s: pd.Series) -> models.StationPeriodStats:
             max_value=float(v["max_value"]),
             max_value_date=date.fromisoformat(v["max_value_date"]),
             source_granularity=v["source_granularity"],
+            value_sum=v["value_sum"],
             value_count=v["value_count"],
         )
 
@@ -612,4 +613,5 @@ def ref_period_stats(s: pd.Series) -> models.StationPeriodStats:
         annual_summer_days=var_if(db.DX_SUMMER_DAYS),
         annual_sunny_days=var_if(db.DX_SUNNY_DAYS),
         annual_frost_days=var_if(db.DX_FROST_DAYS),
+        annual_growing_degree_days=var_if(db.DX_GROWING_DEGREE_DAYS),
     )
