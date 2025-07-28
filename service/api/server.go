@@ -54,12 +54,7 @@ func (s *Server) uptime() time.Duration {
 
 func (s *Server) reloadTemplates() error {
 	tmpl := template.New("root")
-	tmpl = tmpl.Funcs(map[string]any{
-		"datefmt":    ui.DateFmt,
-		"wgs84tosvg": ui.WGS84ToSVG,
-		"min2hours":  ui.MinutesToHours,
-		"ms2kmh":     ui.MetersPerSecondToKilometersPerHour,
-	})
+	tmpl = tmpl.Funcs(ui.AllFuncs)
 	var err error
 	s.template, err = tmpl.ParseGlob(path.Join(s.opts.BaseDir, "templates/*.html"))
 	return err

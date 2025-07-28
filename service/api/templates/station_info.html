@@ -33,7 +33,7 @@
                 Elevation
             </td>
             <td class="py-2 text-gray-800">
-                {{printf "%.0f" .Station.HeightMASL}} m a.s.l.
+                {{float "%.0f" .Station.HeightMASL}} m a.s.l.
             </td>
         </tr>
         <tr class="border-b">
@@ -44,14 +44,14 @@
                 {{.Station.Exposition.EN}} (<em>de: {{.Station.Exposition.DE}}</em>)
             </td>
         </tr>
-        {{if ne .Station.CoordinatesWGS84Lat 0.0}}
+        {{if .Station.CoordinatesWGS84Lat.HasValue}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Long. / Lat. (WGS84)
             </td>
             <td class="py-2 text-gray-800">
-                {{$lat := printf "%.4f" .Station.CoordinatesWGS84Lat}}
-                {{$lon := printf "%.4f" .Station.CoordinatesWGS84Lon}}
+                {{$lat := float "%.4f" .Station.CoordinatesWGS84Lat}}
+                {{$lon := float "%.4f" .Station.CoordinatesWGS84Lon}}
                 <a href="https://www.openstreetmap.org/?mlat={{$lat}}&mlon={{$lon}}#map=12/{{$lat}}/{{$lon}}"
                     target="_blank" class="text-blue-600 hover:underline inline-flex items-center">
                     {{$lon}} / {{$lat}}

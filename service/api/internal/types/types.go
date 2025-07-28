@@ -1,7 +1,11 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -29,47 +33,30 @@ func (l LocalizedString) FR() string { return l.f.FR }
 func (l LocalizedString) IT() string { return l.f.IT }
 func (l LocalizedString) EN() string { return l.f.EN }
 
+type NullFloat64 struct {
+	Value    float64
+	HasValue bool
+}
+
+type NullDate struct {
+	Value    Date
+	HasValue bool
+}
+
 type Station struct {
-	Abbr                string          `json:"abbr"`
-	Name                string          `json:"name"`
-	Canton              string          `json:"canton"`
-	Typ                 string          `json:"typ"`
-	Exposition          LocalizedString `json:"exposition"`
-	URL                 LocalizedString `json:"url"`
-	HeightMASL          float64         `json:"height_masl"`
-	CoordinatesWGS84Lat float64         `json:"coordinates_wgs84_lat"`
-	CoordinatesWGS84Lon float64         `json:"coordinates_wgs84_lon"`
-	// These dates must be optional so they don't get serialized as 0000-00-00 in JSON.
-	TemperatureMinDate   *Date `json:"temperature_min_date,omitempty"`
-	TemperatureMaxDate   *Date `json:"temperature_max_date,omitempty"`
-	PrecipitationMinDate *Date `json:"precipitation_min_date,omitempty"`
-	PrecipitationMaxDate *Date `json:"precipitation_max_date,omitempty"`
-}
-
-func (s *Station) MinDate() Date {
-	var m Date
-	if s.TemperatureMinDate != nil {
-		m = *s.TemperatureMinDate
-	}
-	if s.PrecipitationMinDate != nil {
-		if m.IsZero() || m.After(s.PrecipitationMinDate.Time) {
-			m = *s.PrecipitationMinDate
-		}
-	}
-	return m
-}
-
-func (s *Station) MaxDate() Date {
-	var m Date
-	if s.TemperatureMaxDate != nil {
-		m = *s.TemperatureMaxDate
-	}
-	if s.PrecipitationMaxDate != nil {
-		if m.IsZero() || m.Before(s.PrecipitationMaxDate.Time) {
-			m = *s.PrecipitationMaxDate
-		}
-	}
-	return m
+	Abbr                 string          `json:"abbr"`
+	Name                 string          `json:"name"`
+	Canton               string          `json:"canton"`
+	Typ                  string          `json:"typ"`
+	Exposition           LocalizedString `json:"exposition"`
+	URL                  LocalizedString `json:"url"`
+	HeightMASL           NullFloat64     `json:"height_masl"`
+	CoordinatesWGS84Lat  NullFloat64     `json:"coordinates_wgs84_lat"`
+	CoordinatesWGS84Lon  NullFloat64     `json:"coordinates_wgs84_lon"`
+	TemperatureMinDate   NullDate        `json:"temperature_min_date"`
+	TemperatureMaxDate   NullDate        `json:"temperature_max_date"`
+	PrecipitationMinDate NullDate        `json:"precipitation_min_date"`
+	PrecipitationMaxDate NullDate        `json:"precipitation_max_date"`
 }
 
 type StationsResponse struct {
@@ -77,17 +64,16 @@ type StationsResponse struct {
 }
 
 type StationStats struct {
-	FirstDate            Date    `json:"first_date"`
-	LastDate             Date    `json:"last_date"`
-	Period               string  `json:"period"`
-	AnnualTempIncrease   float64 `json:"annual_temp_increase"`
-	AnnualPrecipIncrease float64 `json:"annual_precip_increase"`
-	ColdestYear          int     `json:"coldest_year,omitempty"`
-	ColdestYearTemp      float64 `json:"coldest_year_temp,omitempty"`
-	WarmestYear          int     `json:"warmest_year,omitempty"`
-	WarmestYearTemp      float64 `json:"warmest_year_temp,omitempty"`
-	DriestYear           int     `json:"driest_year,omitempty"`
-	WettestYear          int     `json:"wettest_year,omitempty"`
+	FirstDate          Date        `json:"first_date"`
+	LastDate           Date        `json:"last_date"`
+	Period             string      `json:"period"`
+	AnnualTempIncrease NullFloat64 `json:"annual_temp_increase"`
+	ColdestYear        int         `json:"coldest_year,omitempty"`
+	ColdestYearTemp    NullFloat64 `json:"coldest_year_temp,omitempty"`
+	WarmestYear        int         `json:"warmest_year,omitempty"`
+	WarmestYearTemp    NullFloat64 `json:"warmest_year_temp,omitempty"`
+	DriestYear         int         `json:"driest_year,omitempty"`
+	WettestYear        int         `json:"wettest_year,omitempty"`
 }
 
 type StationSummary struct {
@@ -162,6 +148,35 @@ type StationMeasurementsResponse struct {
 	Data *StationMeasurementsData `json:"data"`
 }
 
+// MinDate returns the smaller of TemperatureMinDate and PrecipitationMinDate.
+// It is used in JavaScript to get the lowest possible year to select.
+func (s *Station) MinDate() NullDate {
+	var m NullDate
+	if s.TemperatureMinDate.HasValue {
+		m = s.TemperatureMinDate
+	}
+	if s.PrecipitationMinDate.HasValue {
+		if !m.HasValue || m.Value.After(s.PrecipitationMinDate.Value.Time) {
+			m = s.PrecipitationMinDate
+		}
+	}
+	return m
+}
+
+// MaxDate returns the larger of TemperatureMinDate and PrecipitationMinDate.
+func (s *Station) MaxDate() NullDate {
+	var m NullDate
+	if s.TemperatureMinDate.HasValue {
+		m = s.TemperatureMinDate
+	}
+	if s.PrecipitationMinDate.HasValue {
+		if !m.HasValue || m.Value.Before(s.PrecipitationMinDate.Value.Time) {
+			m = s.PrecipitationMinDate
+		}
+	}
+	return m
+}
+
 // Date wraps time.Time but marshals/unmarshals as YYYY-MM-DD.
 type Date struct {
 	time.Time
@@ -188,6 +203,45 @@ func (d Date) String() string {
 	return d.Format("2006-01-02")
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (d *NullDate) UnmarshalJSON(data []byte) error {
+	// If the value is the JSON literal 'null' or empty, it's not set.
+	if bytes.Equal(data, []byte("null")) || len(data) == 0 {
+		d.HasValue = false
+		d.Value = Date{}
+		return nil
+	}
+
+	// Try to unmarshal into the float64 value.
+	var v Date
+	if err := json.Unmarshal(data, &v); err != nil {
+		return fmt.Errorf("error unmarshaling Date: %w", err)
+	}
+
+	d.Value = v
+	d.HasValue = true
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (d NullDate) MarshalJSON() ([]byte, error) {
+	// If the value was not set, marshal as JSON null.
+	if !d.HasValue {
+		return []byte("null"), nil
+	}
+	// Marshal the underlying value.
+	return json.Marshal(d.Value)
+}
+
+// String implements the fmt.Stringer interface and makes Float64
+// more convenient to use in templates.
+func (d NullDate) String() string {
+	if !d.HasValue {
+		return "null"
+	}
+	return d.Value.String()
+}
+
 func (l LocalizedString) MarshalJSON() ([]byte, error)  { return json.Marshal(l.f) }
 func (l *LocalizedString) UnmarshalJSON(b []byte) error { return json.Unmarshal(b, &l.f) }
 
@@ -199,4 +253,44 @@ func snakeToCamelCase(s string) string {
 		}
 	}
 	return strings.Join(parts, "")
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (f *NullFloat64) UnmarshalJSON(data []byte) error {
+	// If the value is the JSON literal 'null' or empty, it's not set.
+	if bytes.Equal(data, []byte("null")) || len(data) == 0 {
+		f.HasValue = false
+		f.Value = 0
+		return nil
+	}
+
+	// Try to unmarshal into the float64 value.
+	var v float64
+	if err := json.Unmarshal(data, &v); err != nil {
+		return fmt.Errorf("error unmarshaling float: %w", err)
+	}
+
+	f.Value = v
+	f.HasValue = true
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (f NullFloat64) MarshalJSON() ([]byte, error) {
+	// If the value was not set or is NaN or Inf, marshal as JSON null.
+	if !f.HasValue || math.IsNaN(f.Value) || math.IsInf(f.Value, 0) {
+		return []byte("null"), nil
+	}
+
+	// Otherwise, marshal the underlying float64 value.
+	return json.Marshal(f.Value)
+}
+
+// String implements the fmt.Stringer interface and makes Float64
+// more convenient to use in templates.
+func (f NullFloat64) String() string {
+	if !f.HasValue {
+		return "null"
+	}
+	return strconv.FormatFloat(f.Value, 'f', -1, 64)
 }

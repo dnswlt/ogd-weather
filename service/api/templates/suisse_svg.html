@@ -485,7 +485,8 @@
     <!-- Stations -->
     <g id="station-markers">
         {{range .Stations}}
-        {{$p := wgs84tosvg "suisse" .CoordinatesWGS84Lon .CoordinatesWGS84Lat}}
+        {{if .CoordinatesWGS84Lon.HasValue}}
+        {{$p := wgs84tosvg "suisse" .CoordinatesWGS84Lon.Value .CoordinatesWGS84Lat.Value}}
         {{if eq .Exposition.EN "crest" }}
         <g id="station-marker-{{.Abbr}}" transform="translate({{$p.X}}, {{$p.Y}})">
             <!-- Larger invisible hit area -->
@@ -502,6 +503,7 @@
             <circle class="marker-shape" cx="{{$p.X}}" cy="{{$p.Y}}" r="5" fill="#DA291C"/>
             <title>{{.Name}} {{.Canton}} ({{.Abbr}})</title>
         </g>
+        {{end}}
         {{end}}
         {{end}}
     </g>

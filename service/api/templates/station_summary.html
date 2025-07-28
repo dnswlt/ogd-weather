@@ -8,14 +8,14 @@
             <td class="py-2 text-gray-800">
                 {{.Station.Name}} {{.Station.Canton}} ({{.Station.Abbr}})
                 &bull;
-                {{printf "%.0f" .Station.HeightMASL}} m a.s.l.
+                {{float "%.0f" .Station.HeightMASL}} m a.s.l.
                 &bull;
-                exposition: {{.Station.Exposition}}
+                exposition: {{.Station.Exposition.EN}}
 
-                {{if ne .Station.CoordinatesWGS84Lat 0.0}}
+                {{if .Station.CoordinatesWGS84Lat.HasValue}}
                 &bull;
-                {{$lat := printf "%.4f" .Station.CoordinatesWGS84Lat}}
-                {{$lon := printf "%.4f" .Station.CoordinatesWGS84Lon}}
+                {{$lat := float "%.4f" .Station.CoordinatesWGS84Lat}}
+                {{$lon := float "%.4f" .Station.CoordinatesWGS84Lon}}
                 <a href="https://www.openstreetmap.org/?mlat={{$lat}}&mlon={{$lon}}#map=12/{{$lat}}/{{$lon}}"
                     target="_blank" class="text-blue-600 hover:underline inline-flex items-center">
                     Map
@@ -30,32 +30,49 @@
         </tr>
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
-                Date range
+                Available temperature data
             </td>
-            <td class="py-2 text-gray-800">{{.Stats.FirstDate}} &ndash; {{.Stats.LastDate}}</td>
+            <td class="py-2 text-gray-800">
+                {{datefmt "a J Y" .Station.TemperatureMinDate}} &ndash; {{datefmt "a J Y" .Station.TemperatureMaxDate}}
+            </td>
         </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Available precipitation data
+            </td>
+            <td class="py-2 text-gray-800">
+                {{datefmt "a J Y" .Station.PrecipitationMinDate}} &ndash; {{datefmt "a J Y"
+                .Station.PrecipitationMaxDate}}
+            </td>
+        </tr>
+        {{if .Stats.AnnualTempIncrease.HasValue}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
                 Avg. annual temp. increase
             </td>
-            <td class="py-2 text-gray-800">{{printf "%.2f" .Stats.AnnualTempIncrease}} &deg;C</td>
+            <td class="py-2 text-gray-800">{{float "%.2f" .Stats.AnnualTempIncrease}} &deg;C</td>
         </tr>
+        {{end}}
+        {{if .Stats.ColdestYearTemp.HasValue}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
-                Coldest year (daily mean)
+                Coldest year (avg. temp.)
             </td>
             <td class="py-2 text-gray-800">
-                {{.Stats.ColdestYear}} ({{printf "%.1f" .Stats.ColdestYearTemp}} &deg;C)
+                {{.Stats.ColdestYear}} ({{float "%.1f" .Stats.ColdestYearTemp}} &deg;C)
             </td>
         </tr>
+        {{end}}
+        {{if .Stats.WarmestYearTemp.HasValue}}
         <tr>
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
-                Warmest year (daily mean)
+                Warmest year (avg. temp.)
             </td>
             <td class="py-2 text-gray-800">
-                {{.Stats.WarmestYear}} ({{printf "%.1f" .Stats.WarmestYearTemp}} &deg;C)
+                {{.Stats.WarmestYear}} ({{float "%.1f" .Stats.WarmestYearTemp}} &deg;C)
             </td>
         </tr>
+        {{end}}
     </tbody>
 </table>
 

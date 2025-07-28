@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Any, Collection, Iterable
 import uuid
+import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 import re
@@ -346,7 +347,8 @@ def insert_csv_metadata(
     with engine.begin() as conn:
         if drop_existing:
             conn.execute(sa.delete(table))
-        conn.execute(sa.insert(table), df.to_dict(orient="records"))
+        records = df.replace({np.nan: None}).to_dict(orient="records")
+        conn.execute(sa.insert(table), records)
 
 
 def insert_csv_data(
@@ -404,7 +406,8 @@ def insert_csv_data(
             # Bulk insert into staging table
             staging_table = sa.Table(staging_name, sa.MetaData(), autoload_with=conn)
             insert_stmt = sa.insert(staging_table)
-            records = df.to_dict(orient="records")
+            # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
+            records = df.replace({np.nan: None}).to_dict(orient="records")
             conn.execute(insert_stmt, records)
             logger.info(f"Inserted {len(records)} rows into staging table")
             # Merge into data table

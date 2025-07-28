@@ -44,8 +44,7 @@ class StationStats(BaseModel):
     first_date: date
     last_date: date
     period: str
-    annual_temp_increase: float
-    annual_precip_increase: float
+    annual_temp_increase: float | None = None
     coldest_year: int | None = None
     coldest_year_temp: float | None = None
     warmest_year: int | None = None

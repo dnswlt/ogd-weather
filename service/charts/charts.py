@@ -413,6 +413,9 @@ def temperature_deviation_chart(
 
     data_long = long_format(data_m).dropna()
 
+    if data_long.empty:
+        raise NoDataError(f"No aggregate temperature data for {station_abbr}")
+
     return create_dynamic_baseline_bars(
         data_long,
         f"Temperature deviation from mean in {period_to_title(period)}",
@@ -438,6 +441,9 @@ def temperature_chart(
         data_m = rolling_mean(data_m, window=window)
 
     data_long = long_format(data_m).dropna()
+
+    if data_long.empty:
+        raise NoDataError(f"No aggregated temperature data for {station_abbr}")
 
     _, trend = polyfit_columns(data_m, deg=1)
     trend_long = long_format(trend).dropna()
@@ -528,7 +534,7 @@ def station_stats(
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
-        raise NoDataError(f"No temperature data for {station_abbr}")
+        raise NoDataError(f"No stats data for {station_abbr}")
     verify_period(df, period)
 
     df = df[
@@ -537,20 +543,25 @@ def station_stats(
     first_date = df.index.min().to_pydatetime().date()
     last_date = df.index.max().to_pydatetime().date()
     df_m = annual_agg(df, "mean")
-    coldest_year = df_m[db.TEMP_DAILY_MEAN].idxmin()
-    coldest_year_temp = df_m[db.TEMP_DAILY_MEAN].min()
-    warmest_year = df_m[db.TEMP_DAILY_MEAN].idxmax()
-    warmest_year_temp = df_m[db.TEMP_DAILY_MEAN].max()
-    driest_year = df_m[db.PRECIP_DAILY_MM].idxmin()
-    wettest_year = df_m[db.PRECIP_DAILY_MM].idxmax()
+    temp_dm = df_m[db.TEMP_DAILY_MEAN].dropna()
+    coldest_year = temp_dm.idxmin() if not temp_dm.empty else None
+    coldest_year_temp = temp_dm.min() if not temp_dm.empty else None
+    warmest_year = temp_dm.idxmax() if not temp_dm.empty else None
+    warmest_year_temp = temp_dm.max() if not temp_dm.empty else None
+    precip = df_m[db.PRECIP_DAILY_MM].dropna()
+    driest_year = precip.idxmin() if not precip.empty else None
+    wettest_year = precip.idxmax() if not precip.empty else None
 
-    coeffs, _ = polyfit_columns(df_m, deg=1)
+    annual_temp_increase = None
+    if not temp_dm.empty:
+        coeffs, _ = polyfit_columns(df_m[[db.TEMP_DAILY_MEAN]], deg=1)
+        annual_temp_increase = coeffs[db.TEMP_DAILY_MEAN].iloc[0]
+
     return models.StationStats(
         first_date=first_date,
         last_date=last_date,
         period=period_to_title(period),
-        annual_temp_increase=coeffs[db.TEMP_DAILY_MEAN].iloc[0],
-        annual_precip_increase=coeffs[db.PRECIP_DAILY_MM].iloc[0],
+        annual_temp_increase=annual_temp_increase,
         coldest_year=coldest_year,
         coldest_year_temp=coldest_year_temp,
         warmest_year=warmest_year,

@@ -391,7 +391,7 @@ def main():
     logger.info("Recreating materialized views...")
     db.recreate_views(engine)
 
-    logger.info("Done. DB updated in %.1fs.", time.time() - started_time)
+    logger.info("Done. DB %s updated in %.1fs.", engine.url, time.time() - started_time)
 
 
 if __name__ == "__main__":

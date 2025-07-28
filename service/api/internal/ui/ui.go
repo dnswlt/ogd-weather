@@ -11,6 +11,14 @@ import (
 
 var (
 	zurichLoc = mustLoadLocation("Europe/Zurich")
+
+	AllFuncs = map[string]any{
+		"datefmt":    DateFmt,
+		"wgs84tosvg": WGS84ToSVG,
+		"min2hours":  MinutesToHours,
+		"ms2kmh":     MetersPerSecondToKilometersPerHour,
+		"float":      PrintfFloat64,
+	}
 )
 
 type Option struct {
@@ -53,6 +61,13 @@ func Periods(selected string) []Option {
 		}
 	}
 	return opts
+}
+
+func PrintfFloat64(format string, f types.NullFloat64) string {
+	if !f.HasValue {
+		return ""
+	}
+	return fmt.Sprintf(format, f.Value)
 }
 
 func mustLoadLocation(name string) *time.Location {
@@ -116,6 +131,11 @@ func DateFmt(format string, date any) (string, error) {
 		t = d.Time
 	case types.Date:
 		t = d.Time
+	case types.NullDate:
+		if !d.HasValue {
+			return "", nil
+		}
+		t = d.Value.Time
 	case time.Time:
 		t = d
 	default:
