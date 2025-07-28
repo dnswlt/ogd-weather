@@ -169,7 +169,7 @@ def fetch_metadata_csv_resources() -> list[CsvResource]:
 
 
 def import_into_db(engine: sa.Engine, weather_dir: str, csvs: list[CsvResource]):
-    """Imports all SwissMetNet (smn) CSV files into the sqlite3 database.
+    """Imports all SwissMetNet (smn) CSV files into the database.
 
     Assumes that all files have already been downloaded to `weather_dir`.
     """
@@ -302,13 +302,28 @@ def main():
         description="Update weather DB.", allow_abbrev=False
     )
     parser.add_argument(
-        "--base_dir",
+        "--base-dir",
         dest="base_dir",
         metavar="PATH",
         help="Directory for weather data (defaults to $OGD_BASE_DIR).",
     )
     parser.add_argument(
-        "--csv_filter",
+        "--postgres-url",
+        dest="postgres_url",
+        metavar="URL",
+        help=(
+            "Connection URL for Postgres "
+            "(e.g., postgresql+psycopg://user@host:port/dbname). "
+            "Avoid hardcoding the password — use ~/.pgpass or PGPASSWORD env variable."
+        ),
+    )
+    parser.add_argument(
+        "--force-recreate",
+        action="store_true",
+        help="If set, ALL DATA IS DROPPED from the database before updating it.",
+    )
+    parser.add_argument(
+        "--csv-filter",
         dest="csv_filter",
         metavar="REGEX",
         help="Optional regular expression to update only a subset of data.",
@@ -326,20 +341,31 @@ def main():
     elif "OGD_BASE_DIR" in os.environ:
         base_dir = os.environ["OGD_BASE_DIR"]
     else:
-        parser.error("weather_dir is required if $OGD_BASE_DIR is not set.")
+        parser.error("base_dir is required if $OGD_BASE_DIR is not set.")
 
-    db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
-    logger.info("Connecting to sqlite DB at %s", db_path)
+    postgres_url = args.postgres_url or os.environ.get("OGD_POSTGRES_URL")
 
     started_time = time.time()
 
-    sa_engine = sa.create_engine(f"sqlite:///{db_path}", echo=False)
+    if postgres_url:
+        logger.info("Connecting to postgres DB at %s", postgres_url)
+        engine = sa.create_engine(postgres_url, echo=False)
+    else:
+        db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
+        logger.info("Connecting to sqlite DB at %s", db_path)
+        engine = sa.create_engine(f"sqlite:///{db_path}", echo=False)
+
+    # Drop old data if requested.
+    if args.force_recreate:
+        logger.info("Dropping existing data from all tables.")
+        db.metadata.drop_all(bind=engine)
+
     # Create tables if needed.
-    db.metadata.create_all(sa_engine)
+    db.metadata.create_all(engine)
 
     if args.recreate_views:
         # Only recreate views, then exit.
-        db.recreate_views(sa_engine)
+        db.recreate_views(engine)
         logger.info(
             "Recreated materialized views in %.1fs.", time.time() - started_time
         )
@@ -349,7 +375,7 @@ def main():
     meta_csvs = fetch_metadata_csv_resources()
     csvs = meta_csvs + data_csvs
 
-    statuses = db.read_update_status(sa_engine)
+    statuses = db.read_update_status(engine)
     logger.debug("Fetched %d update statuses from DB", len(statuses))
 
     # Assign statuses to corresponding CsvResource.
@@ -359,11 +385,11 @@ def main():
 
     updated_csvs = fetch_latest_data(base_dir, csvs)
     if updated_csvs:
-        import_into_db(sa_engine, base_dir, updated_csvs)
+        import_into_db(engine, base_dir, updated_csvs)
 
     # Recreate materialized views
     logger.info("Recreating materialized views...")
-    db.recreate_views(sa_engine)
+    db.recreate_views(engine)
 
     logger.info("Done. DB updated in %.1fs.", time.time() - started_time)
 

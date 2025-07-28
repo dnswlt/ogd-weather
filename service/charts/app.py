@@ -26,11 +26,19 @@ logger = logging.getLogger("app")
 async def lifespan(app: FastAPI):
     # Startup: open SQLite connection once
     base_dir = os.environ.get("OGD_BASE_DIR", ".")
-    db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
-    logger.info("Connecting to sqlite DB at %s", db_path)
+    postgres_url = os.environ.get("OGD_POSTGRES_URL")
 
-    engine = sa.create_engine(f"sqlite:///{db_path}", echo=True)
-    logger.info("Connected to sqlite3 at %s", db_path)
+    if postgres_url:
+        logger.info("Connecting to postgres DB at %s", postgres_url)
+        engine = sa.create_engine(postgres_url, echo=False)
+        with engine.connect() as conn:
+            conn.execute(sa.text("SELECT 1"))
+        logger.info("Successfully connected to postgres DB at %s", postgres_url)
+    else:
+        # Use SQLite database
+        db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
+        logger.info("Connecting to sqlite DB at %s", db_path)
+        engine = sa.create_engine(f"sqlite:///{db_path}", echo=True)
 
     app.state.engine = engine
 

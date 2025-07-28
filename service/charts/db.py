@@ -320,13 +320,11 @@ def normalize_timestamp(series: pd.Series) -> pd.Series:
 
 
 def insert_csv_metadata(
-    engine: sa.Engine,
-    table: sa.Table,
-    csv_file: str,
-    sep: str = ";",
-    encoding: str = "cp1252",
+    engine: sa.Engine, table: sa.Table, csv_file: str, drop_existing: bool = True
 ) -> None:
     """Loads CSV and insert rows into an existing metadata table.
+
+    Existing rows in the metadata table are dropped if `drop_existing` is True.
 
     - Requires all table columns to be present in the CSV.
     """
@@ -335,7 +333,7 @@ def insert_csv_metadata(
     table_columns = [col.name for col in table.columns]
 
     # Load CSV
-    df = pd.read_csv(csv_file, sep=sep, encoding=encoding)
+    df = pd.read_csv(csv_file, sep=";", encoding="cp1252")
 
     # Validate all columns present
     missing = [c for c in table_columns if c not in df.columns]
@@ -345,18 +343,10 @@ def insert_csv_metadata(
     # Select only required columns, in correct order
     df = df[table_columns]
 
-    # Prepare insert
-    placeholders = ", ".join([f":{c}" for c in table_columns])
-    insert_sql = sa.text(
-        f"INSERT OR IGNORE INTO {table.name} ({', '.join(table_columns)}) VALUES ({placeholders})"
-    )
-
-    # Convert to list-of-dicts (SQLAlchemy will bind params safely)
-    rows = df.to_dict(orient="records")
-
-    # Insert in one transaction
     with engine.begin() as conn:
-        conn.execute(insert_sql, rows)
+        if drop_existing:
+            conn.execute(sa.delete(table))
+        conn.execute(sa.insert(table), df.to_dict(orient="records"))
 
 
 def insert_csv_data(
@@ -418,16 +408,22 @@ def insert_csv_data(
             conn.execute(insert_stmt, records)
             logger.info(f"Inserted {len(records)} rows into staging table")
             # Merge into data table
-            merge_sql = sa.text(
-                f"""
+            where_conditions = " AND ".join(
+                [f"DataTable.{pk} = StagingTable.{pk}" for pk in table_spec.primary_key]
+            )
+            # Construct the final query
+            insert_sql = f"""
                 INSERT INTO {table_spec.name}
                 SELECT StagingTable.*
                 FROM {staging_table.name} AS StagingTable
-                LEFT JOIN {table_spec.name} AS DataTable USING ({', '.join(table_spec.primary_key)})
-                WHERE DataTable.{table_spec.primary_key[0]} IS NULL
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM {table_spec.name} AS DataTable
+                    WHERE {where_conditions}
+                )
                 """
-            )
-            conn.execute(merge_sql)
+
+            conn.execute(sa.text(insert_sql))
             conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
 
 
@@ -836,6 +832,30 @@ def read_stations(
     ]
 
 
+def _sql_filter_by_period(period: str) -> str:
+    """Returns an SQL expression that matches reference_timestamp values for the given period.
+
+    NOTE: This function relies on the fact that `reference_timestamp` is
+        stored as a string that always starts with YYYY-MM.
+    """
+    if period == "all":
+        return "1=1"
+
+    if period.isdigit():
+        return f"SUBSTR(reference_timestamp, 6, 2) = '{int(period):02d}'"
+
+    if period == "spring":
+        return "SUBSTR(reference_timestamp, 6, 2) IN ('03', '04', '05')"
+    elif period == "summer":
+        return "SUBSTR(reference_timestamp, 6, 2) IN ('06', '07', '08')"
+    elif period == "autumn":
+        return "SUBSTR(reference_timestamp, 6, 2) IN ('09', '10', '11')"
+    elif period == "winter":
+        return "SUBSTR(reference_timestamp, 6, 2) IN ('12', '01', '02')"
+
+    raise ValueError(f"Invalid period {period} for SQL filter")
+
+
 def read_daily_measurements(
     conn: sa.Connection,
     station_abbr: str,
@@ -860,20 +880,8 @@ def read_daily_measurements(
     filters = ["station_abbr = :station_abbr"]
     params = {"station_abbr": station_abbr}
 
-    # Filter by period.
     if period is not None:
-        if period.isdigit():
-            filters.append(f"strftime('%m', reference_timestamp) = '{int(period):02d}'")
-        elif period == "spring":
-            filters.append("strftime('%m', reference_timestamp) IN ('03', '04', '05')")
-        elif period == "summer":
-            filters.append("strftime('%m', reference_timestamp) IN ('06', '07', '08')")
-        elif period == "autumn":
-            filters.append("strftime('%m', reference_timestamp) IN ('09', '10', '11')")
-        elif period == "winter":
-            filters.append("strftime('%m', reference_timestamp) IN ('12', '01', '02')")
-        elif period == "all":
-            pass  # No month filter
+        filters.append(_sql_filter_by_period(period))
 
     if from_year is not None:
         filters.append(f"date(reference_timestamp) >= date('{from_year:04d}-01-01')")
@@ -889,7 +897,7 @@ def read_daily_measurements(
     sql += " ORDER BY reference_timestamp ASC"
 
     return pd.read_sql_query(
-        sql,
+        sa.text(sql),
         conn,
         params=params,
         parse_dates=["reference_timestamp"],
@@ -947,7 +955,7 @@ def read_hourly_measurements(
     sql += " ORDER BY reference_timestamp ASC"
 
     return pd.read_sql_query(
-        sql,
+        sa.text(sql),
         conn,
         params=params,
         parse_dates=["reference_timestamp"],
@@ -1016,7 +1024,7 @@ def read_station_var_summary_stats(
         sql += f"WHERE {' AND '.join(filters)}"
 
     df_long = pd.read_sql_query(
-        sql,
+        sa.text(sql),
         conn,
         params=params,
         dtype={

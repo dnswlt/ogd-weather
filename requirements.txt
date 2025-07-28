@@ -9,3 +9,4 @@ pytest
 pytest-cov
 pydantic
 sqlalchemy
+psycopg[binary]
