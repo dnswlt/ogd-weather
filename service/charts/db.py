@@ -1,11 +1,12 @@
 import datetime
 import logging
 import os
-from typing import Collection
+from typing import Any, Collection, Iterable
+import uuid
 import pandas as pd
 from pydantic import BaseModel
 import re
-import sqlite3
+import sqlalchemy as sa
 
 from . import models
 from .models import LocalizedString
@@ -14,14 +15,58 @@ from .errors import StationNotFoundError
 logger = logging.getLogger("db")
 
 
-class TableSpec(BaseModel):
-    """Specification for a measurement table."""
+# SQLAlchemy pattern: have a global 'metadata' variable that holds all table defs.
+metadata = sa.MetaData()
 
-    name: str
-    primary_key: list[str]
-    measurements: list[str]
-    date_format: dict[str, str] | None = None
-    description: str = ""
+
+class UpdateStatus(BaseModel):
+    """Represents a row in the update_status tracking table."""
+
+    id: str | None  # UUID-4, empty if this is a new record
+    href: str
+    table_updated_time: datetime.datetime
+    resource_updated_time: datetime.datetime | None = None
+    etag: str | None = None
+
+
+class DataTableSpec:
+    """Schema specification for a measurement table + SQLAlchmey Table binding."""
+
+    def __init__(
+        self,
+        name: str,
+        primary_key: list[str],
+        measurements: list[str],
+        date_format: dict[str, str] | None = None,
+        description: str = "",
+    ) -> None:
+        self.name: str = name
+        self.primary_key: list[str] = primary_key
+        self.measurements: list[str] = measurements
+        self.date_format: dict[str, str] | None = date_format
+        self.description: str = description
+        # Reference to the sa.Table instance:
+        # Ensure this table gets registered in metadata immediately.
+        self.sa_table: sa.Table = self._define_sa_table()
+
+    def _define_sa_table(self) -> sa.Table:
+        """Converts a DataTableSpec into a SQLAlchemy Core Table definition.
+
+        Registers this table in the global `metadata`.
+        """
+
+        # Primary key columns are always TEXT
+        pk_columns = [
+            sa.Column(col_name, sa.Text, primary_key=True)
+            for col_name in self.primary_key
+        ]
+
+        # Measurement columns are always REAL → Float in SQLAlchemy
+        measurement_columns = [
+            sa.Column(col_name, sa.Float) for col_name in self.measurements
+        ]
+
+        return sa.Table(self.name, metadata, *(pk_columns + measurement_columns))
 
 
 # Filename for the sqlite3 database.
@@ -88,7 +133,7 @@ DX_GROWING_DEGREE_DAYS_ANNUAL_SUM = "growing_degree_days_annual_sum"
 
 # Table definitions
 
-TABLE_HOURLY_MEASUREMENTS = TableSpec(
+TABLE_HOURLY_MEASUREMENTS = DataTableSpec(
     name="ogd_smn_hourly",
     primary_key=[
         "station_abbr",
@@ -111,7 +156,7 @@ TABLE_HOURLY_MEASUREMENTS = TableSpec(
     ],
 )
 
-TABLE_DAILY_MEASUREMENTS = TableSpec(
+TABLE_DAILY_MEASUREMENTS = DataTableSpec(
     name="ogd_smn_daily",
     primary_key=[
         "station_abbr",
@@ -134,16 +179,115 @@ TABLE_DAILY_MEASUREMENTS = TableSpec(
     ],
 )
 
-# Metadata tables
-TABLE_NAME_META_STATIONS = "ogd_smn_meta_stations"
-TABLE_NAME_META_PARAMETERS = "ogd_smn_meta_parameters"
+
+sa_table_meta_stations = sa.Table(
+    "ogd_smn_meta_stations",
+    metadata,
+    sa.Column("station_abbr", sa.Text, primary_key=True),
+    sa.Column("station_name", sa.Text),
+    sa.Column("station_canton", sa.Text),
+    sa.Column("station_wigos_id", sa.Text),
+    sa.Column("station_type_de", sa.Text),
+    sa.Column("station_type_fr", sa.Text),
+    sa.Column("station_type_it", sa.Text),
+    sa.Column("station_type_en", sa.Text),
+    sa.Column("station_dataowner", sa.Text),
+    sa.Column("station_data_since", sa.Text),
+    sa.Column("station_height_masl", sa.Float),
+    sa.Column("station_height_barometer_masl", sa.Float),
+    sa.Column("station_coordinates_lv95_east", sa.Float),
+    sa.Column("station_coordinates_lv95_north", sa.Float),
+    sa.Column("station_coordinates_wgs84_lat", sa.Float),
+    sa.Column("station_coordinates_wgs84_lon", sa.Float),
+    sa.Column("station_exposition_de", sa.Text),
+    sa.Column("station_exposition_fr", sa.Text),
+    sa.Column("station_exposition_it", sa.Text),
+    sa.Column("station_exposition_en", sa.Text),
+    sa.Column("station_url_de", sa.Text),
+    sa.Column("station_url_fr", sa.Text),
+    sa.Column("station_url_it", sa.Text),
+    sa.Column("station_url_en", sa.Text),
+)
+
+sa_table_meta_parameters = sa.Table(
+    "ogd_smn_meta_parameters",
+    metadata,
+    sa.Column("parameter_shortname", sa.Text, primary_key=True),
+    sa.Column("parameter_description_de", sa.Text),
+    sa.Column("parameter_description_fr", sa.Text),
+    sa.Column("parameter_description_it", sa.Text),
+    sa.Column("parameter_description_en", sa.Text),
+    sa.Column("parameter_group_de", sa.Text),
+    sa.Column("parameter_group_fr", sa.Text),
+    sa.Column("parameter_group_it", sa.Text),
+    sa.Column("parameter_group_en", sa.Text),
+    sa.Column("parameter_granularity", sa.Text),
+    sa.Column("parameter_decimals", sa.Integer),
+    sa.Column("parameter_datatype", sa.Text),
+    sa.Column("parameter_unit", sa.Text),
+)
+
+
+sa_table_update_status = sa.Table(
+    "update_status",
+    metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("href", sa.Text, unique=True, nullable=False),
+    sa.Column("table_updated_time", sa.Text, nullable=False),
+    sa.Column("resource_updated_time", sa.Text),
+    sa.Column("etag", sa.Text),
+)
 
 
 # Derived tables / materialized views.
 # To distinguish them from SoT data and mark them as derived,
 # we prefix them all by "x_"
-TABLE_NAME_X_STATION_DATA_SUMMARY = "ogd_smn_x_station_data_summary"
-TABLE_NAME_X_STATION_VAR_SUMMARY_STATS = "ogd_smn_x_station_var_summary_stats"
+
+sa_table_x_station_data_summary = sa.Table(
+    "x_station_data_summary",
+    metadata,
+    sa.Column("station_abbr", sa.Text, primary_key=True),
+    sa.Column("station_name", sa.Text),
+    sa.Column("station_canton", sa.Text),
+    sa.Column("station_wigos_id", sa.Text),
+    sa.Column("station_type_en", sa.Text),
+    sa.Column("station_exposition_de", sa.Text),
+    sa.Column("station_exposition_fr", sa.Text),
+    sa.Column("station_exposition_it", sa.Text),
+    sa.Column("station_exposition_en", sa.Text),
+    sa.Column("station_url_de", sa.Text),
+    sa.Column("station_url_fr", sa.Text),
+    sa.Column("station_url_it", sa.Text),
+    sa.Column("station_url_en", sa.Text),
+    sa.Column("station_dataowner", sa.Text),
+    sa.Column("station_data_since", sa.Text),
+    sa.Column("station_height_masl", sa.Float),
+    sa.Column("station_coordinates_wgs84_lat", sa.Float),
+    sa.Column("station_coordinates_wgs84_lon", sa.Float),
+    sa.Column("tre200d0_count", sa.Integer, nullable=False),
+    sa.Column("tre200d0_min_date", sa.Text),
+    sa.Column("tre200d0_max_date", sa.Text),
+    sa.Column("rre150d0_count", sa.Integer, nullable=False),
+    sa.Column("rre150d0_min_date", sa.Text),
+    sa.Column("rre150d0_max_date", sa.Text),
+)
+
+
+sa_table_x_station_var_summary_stats = sa.Table(
+    "x_station_var_summary_stats",
+    metadata,
+    sa.Column("agg_name", sa.Text, primary_key=True),
+    sa.Column("station_abbr", sa.Text, primary_key=True),
+    sa.Column("variable", sa.Text, primary_key=True),
+    sa.Column("source_granularity", sa.Text),
+    sa.Column("min_value", sa.Float),
+    sa.Column("min_value_date", sa.Text),
+    sa.Column("mean_value", sa.Float),
+    sa.Column("max_value", sa.Float),
+    sa.Column("max_value_date", sa.Text),
+    sa.Column("value_sum", sa.Float),
+    sa.Column("value_count", sa.Integer),
+)
 
 
 # Aggregation names in STATION_VAR_SUMMARY_STATS_TABLE_NAME
@@ -175,13 +319,53 @@ def normalize_timestamp(series: pd.Series) -> pd.Series:
         return series.dt.tz_localize("UTC").dt.strftime("%Y-%m-%d %H:%M:%SZ")
 
 
-def prepare_sql_table_from_spec(
+def insert_csv_metadata(
+    engine: sa.Engine,
+    table: sa.Table,
+    csv_file: str,
+    sep: str = ";",
+    encoding: str = "cp1252",
+) -> None:
+    """Loads CSV and insert rows into an existing metadata table.
+
+    - Requires all table columns to be present in the CSV.
+    """
+
+    # Columns defined in the SQLAlchemy table (in order)
+    table_columns = [col.name for col in table.columns]
+
+    # Load CSV
+    df = pd.read_csv(csv_file, sep=sep, encoding=encoding)
+
+    # Validate all columns present
+    missing = [c for c in table_columns if c not in df.columns]
+    if missing:
+        raise ValueError(f"CSV {csv_file} is missing required columns: {missing}")
+
+    # Select only required columns, in correct order
+    df = df[table_columns]
+
+    # Prepare insert
+    placeholders = ", ".join([f":{c}" for c in table_columns])
+    insert_sql = sa.text(
+        f"INSERT OR IGNORE INTO {table.name} ({', '.join(table_columns)}) VALUES ({placeholders})"
+    )
+
+    # Convert to list-of-dicts (SQLAlchemy will bind params safely)
+    rows = df.to_dict(orient="records")
+
+    # Insert in one transaction
+    with engine.begin() as conn:
+        conn.execute(insert_sql, rows)
+
+
+def insert_csv_data(
     base_dir: str,
-    conn: sqlite3.Connection,
-    table_spec: TableSpec,
+    engine: sa.Engine,
+    table_spec: DataTableSpec,
     csv_filenames: list[str] | None = None,
 ) -> None:
-    """Creates the table defined by table_spec if needed and inserts data from CSV files.
+    """Inserts data from CSV files.
 
     Column names in the DB tables are identical to column names in the CSV (e.g.,
     station_abbr, reference_timestamp, tre200d0).
@@ -193,28 +377,13 @@ def prepare_sql_table_from_spec(
 
     files = [os.path.join(base_dir, f) for f in csv_filenames or []]
 
-    # Create table if needed.
-    pk_columns = ", ".join(table_spec.primary_key)
-    columns = ",\n".join(
-        [f"{k} TEXT" for k in table_spec.primary_key]
-        + [f"{k} REAL" for k in table_spec.measurements]
-    )
-    sql = f"""
-        CREATE TABLE IF NOT EXISTS {table_spec.name} (
-            {columns},
-            PRIMARY KEY ({pk_columns})
-        )
-        """
-    conn.execute(sql)
-    conn.commit()
-
     csv_dtype = {}
     for c in table_spec.measurements:
         csv_dtype[c] = float
 
     columns = table_spec.primary_key + table_spec.measurements
     for fname in files:
-        logger.info(f"Importing {fname} into sqlite3 database...")
+        logger.info(f"Importing {fname} into database...")
         df = pd.read_csv(
             fname,
             sep=";",
@@ -229,44 +398,124 @@ def prepare_sql_table_from_spec(
         for col in table_spec.date_format.keys():
             df[col] = normalize_timestamp(df[col])
 
-        # Insert row by row, ignoring duplicates
-        placeholders = ", ".join(["?"] * len(df.columns))
-        insert_sql = f"INSERT OR IGNORE INTO {table_spec.name} VALUES ({placeholders})"
+        # Insert rows, ignoring duplicates
+        with engine.begin() as conn:
+            # Create staging table for bulk update
+            staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
+            conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+            conn.execute(
+                sa.text(
+                    f"""
+                CREATE TEMP TABLE {staging_name} AS
+                SELECT * FROM {table_spec.name} WHERE 0=1;
+                """
+                )
+            )
+            # Bulk insert into staging table
+            staging_table = sa.Table(staging_name, sa.MetaData(), autoload_with=conn)
+            insert_stmt = sa.insert(staging_table)
+            records = df.to_dict(orient="records")
+            conn.execute(insert_stmt, records)
+            logger.info(f"Inserted {len(records)} rows into staging table")
+            # Merge into data table
+            merge_sql = sa.text(
+                f"""
+                INSERT INTO {table_spec.name}
+                SELECT StagingTable.*
+                FROM {staging_table.name} AS StagingTable
+                LEFT JOIN {table_spec.name} AS DataTable USING ({', '.join(table_spec.primary_key)})
+                WHERE DataTable.{table_spec.primary_key[0]} IS NULL
+                """
+            )
+            conn.execute(merge_sql)
+            conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
 
-        c = conn.executemany(insert_sql, df.itertuples(index=False, name=None))
-        logger.info(f"Inserted {c.rowcount} rows")
-        conn.commit()
+
+def save_update_status(engine: sa.Engine, statuses: Iterable[UpdateStatus]) -> None:
+    """Inserts or updates the statuses in the update status table."""
+    with engine.begin() as conn:
+        for s in statuses:
+            if s.id is None:
+                # INSERT new row
+                conn.execute(
+                    sa.insert(sa_table_update_status).values(
+                        id=str(uuid.uuid4()),
+                        href=s.href,
+                        table_updated_time=s.table_updated_time.isoformat(),
+                        resource_updated_time=(
+                            s.resource_updated_time.isoformat()
+                            if s.resource_updated_time
+                            else None
+                        ),
+                        etag=s.etag,
+                    )
+                )
+            else:
+                # UPDATE existing row
+                conn.execute(
+                    sa.update(sa_table_update_status)
+                    .where(sa_table_update_status.c.id == s.id)
+                    .values(
+                        table_updated_time=s.table_updated_time.isoformat(),
+                        resource_updated_time=(
+                            s.resource_updated_time.isoformat()
+                            if s.resource_updated_time
+                            else None
+                        ),
+                        etag=s.etag,
+                    )
+                )
 
 
-def recreate_station_var_summary_stats(conn: sqlite3.Connection) -> None:
-    """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020."""
-    # Drop existing data
-    conn.execute(f"DROP TABLE IF EXISTS {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS};")
-    # Create table.
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS} (
-            agg_name TEXT,
-            station_abbr TEXT,
-            variable TEXT,
-            source_granularity TEXT,
-            min_value REAL,
-            min_value_date TEXT,
-            mean_value REAL,
-            max_value REAL,
-            max_value_date TEXT,
-            value_sum REAL,
-            value_count INTEGER,
-            PRIMARY KEY (agg_name, station_abbr, variable)
-        );
-    """
+def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
+    """Reads all rows from the update_status table."""
+
+    def parse_dt(s: str | None) -> datetime.datetime | None:
+        return datetime.datetime.fromisoformat(s) if s else None
+
+    statuses: list[UpdateStatus] = []
+
+    stmt = sa.select(
+        sa_table_update_status.c.id,
+        sa_table_update_status.c.href,
+        sa_table_update_status.c.resource_updated_time,
+        sa_table_update_status.c.table_updated_time,
+        sa_table_update_status.c.etag,
     )
-    # Insert data for aggregations (for now, just one).
-    insert_ref_1991_2020_summary_stats(conn)
+
+    with engine.connect() as conn:
+        result = conn.execute(stmt)
+        for row in result.mappings():
+            statuses.append(
+                UpdateStatus(
+                    id=row["id"],
+                    href=row["href"],
+                    resource_updated_time=parse_dt(row["resource_updated_time"]),
+                    table_updated_time=parse_dt(row["table_updated_time"]),
+                    etag=row["etag"],
+                )
+            )
+
+    return statuses
 
 
-def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
-    """Inserts summary stats for the 1991-2020 reference period into STATION_VAR_SUMMARY_STATS_TABLE_NAME."""
+def recreate_views(engine: sa.Engine) -> None:
+    recreate_station_data_summary(engine)
+    recreate_station_var_summary_stats(engine)
+
+
+def recreate_station_var_summary_stats(engine: sa.Engine) -> None:
+    """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020."""
+    with engine.begin() as conn:
+        # Recreate table
+        sa_table_x_station_var_summary_stats.drop(conn, checkfirst=True)
+        sa_table_x_station_var_summary_stats.create(conn)
+        # Insert data for aggregations (for now, just one).
+        insert_ref_1991_2020_summary_stats(conn)
+
+
+def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
+    """Inserts the 1991-2020 reference period into sa_table_x_station_var_summary_stats."""
     # All daily measurement variables for which to build summary stats.
     daily_vars = [
         TEMP_DAILY_MIN,
@@ -281,7 +530,7 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
 
     def _station_summary(
         df: pd.DataFrame, date_col: str, var_cols: list[str], granularity: str
-    ) -> tuple:
+    ) -> list[dict[str, Any]]:
         """Returns summary stats for all vars in var_cols as an SQL INSERT tuple."""
         params = []
         for station_abbr, grp in df.groupby("station_abbr"):
@@ -296,19 +545,21 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
                 min_date = grp.loc[a["idxmin"], date_col]
                 max_date = grp.loc[a["idxmax"], date_col]
                 params.append(
-                    (
-                        station_abbr,
-                        var,
-                        granularity,
-                        a["min"],
-                        min_date,
-                        a["mean"],
-                        a["max"],
-                        max_date,
-                        a["sum"],
-                        int(a["count"]),
-                    )
+                    {
+                        "agg_name": AGG_NAME_REF_1991_2020,
+                        "station_abbr": station_abbr,
+                        "variable": var,
+                        "source_granularity": granularity,
+                        "min_value": a["min"],
+                        "min_value_date": min_date,
+                        "mean_value": a["mean"],
+                        "max_value": a["max"],
+                        "max_value_date": max_date,
+                        "value_sum": a["sum"],
+                        "value_count": int(a["count"]),
+                    }
                 )
+
         return params
 
     sql = f"""
@@ -381,122 +632,81 @@ def insert_ref_1991_2020_summary_stats(conn: sqlite3.Connection) -> None:
     )
 
     if params:
-        insert_sql = f"""
-            INSERT INTO {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS} (
-                agg_name,
-                station_abbr,
-                variable,
-                source_granularity,
-                min_value,
-                min_value_date,
-                mean_value,
-                max_value,
-                max_value_date,
-                value_sum,
-                value_count
-            )
-            VALUES ('{AGG_NAME_REF_1991_2020}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        conn.executemany(insert_sql, params)
+        insert_stmt = sa.insert(sa_table_x_station_var_summary_stats)
+        conn.execute(insert_stmt, params)
 
     conn.commit()
 
 
-def recreate_station_data_summary(conn: sqlite3.Connection) -> None:
+def recreate_station_data_summary(engine: sa.Engine) -> None:
     """Creates a materialized view of summary data per station_abbr.
 
     The summary stats in this table are calculated across the whole dataset.
     """
-    # Drop old table
-    conn.execute(f"DROP TABLE IF EXISTS {TABLE_NAME_X_STATION_DATA_SUMMARY};")
 
-    # Create it with proper schema & PK
-    conn.execute(
-        f"""
-        CREATE TABLE {TABLE_NAME_X_STATION_DATA_SUMMARY} (
-            station_abbr TEXT PRIMARY KEY,
-            station_name TEXT,
-            station_canton TEXT,
-            station_wigos_id TEXT,
-            station_type_en TEXT,
-            station_exposition_de TEXT,
-            station_exposition_fr TEXT,
-            station_exposition_it TEXT,
-            station_exposition_en TEXT,
-            station_url_de TEXT,
-            station_url_fr TEXT,
-            station_url_it TEXT,
-            station_url_en TEXT,
-            station_dataowner TEXT,
-            station_data_since TEXT,
-            station_height_masl REAL,
-            station_coordinates_wgs84_lat REAL,
-            station_coordinates_wgs84_lon REAL,
+    with engine.begin() as conn:
+        # Drop old table if exists
+        sa_table_x_station_data_summary.drop(conn, checkfirst=True)
 
-            tre200d0_count INTEGER NOT NULL,
-            tre200d0_min_date TEXT,
-            tre200d0_max_date TEXT,
-            rre150d0_count INTEGER NOT NULL,
-            rre150d0_min_date TEXT,
-            rre150d0_max_date TEXT
-        );
-    """
-    )
+        # Create anew
+        sa_table_x_station_data_summary.create(conn)
 
-    conn.execute(
-        f"""
-        INSERT INTO {TABLE_NAME_X_STATION_DATA_SUMMARY}
-        SELECT
-            m.station_abbr,
-            m.station_name,
-            m.station_canton,
-            m.station_wigos_id,
-            m.station_type_en,
-            m.station_exposition_de,
-            m.station_exposition_fr,
-            m.station_exposition_it,
-            m.station_exposition_en,
-            m.station_url_de,
-            m.station_url_fr,
-            m.station_url_it,
-            m.station_url_en,
-            m.station_dataowner,
-            m.station_data_since,
-            m.station_height_masl,
-            m.station_coordinates_wgs84_lat,
-            m.station_coordinates_wgs84_lon,
-
-            COALESCE(h.tre200d0_count, 0),
-            h.tre200d0_min_date,
-            h.tre200d0_max_date,
-            COALESCE(h.rre150d0_count, 0),
-            h.rre150d0_min_date,
-            h.rre150d0_max_date
-
-        FROM {TABLE_NAME_META_STATIONS} AS m
-        LEFT JOIN (
+        # Populate
+        conn.execute(
+            sa.text(
+                f"""
+            INSERT INTO {sa_table_x_station_data_summary.name}
             SELECT
-                station_abbr,
-                SUM(CASE WHEN tre200d0 IS NOT NULL THEN 1 END) AS tre200d0_count,
-                MIN(CASE WHEN tre200d0 IS NOT NULL THEN reference_timestamp END) AS tre200d0_min_date,
-                MAX(CASE WHEN tre200d0 IS NOT NULL THEN reference_timestamp END) AS tre200d0_max_date,
-                SUM(CASE WHEN rre150d0 IS NOT NULL THEN 1 END) AS rre150d0_count,
-                MIN(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_min_date,
-                MAX(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_max_date
-            FROM {TABLE_DAILY_MEASUREMENTS.name}
-            GROUP BY station_abbr
-        ) AS h
-        ON m.station_abbr = h.station_abbr;
-    """
-    )
+                m.station_abbr,
+                m.station_name,
+                m.station_canton,
+                m.station_wigos_id,
+                m.station_type_en,
+                m.station_exposition_de,
+                m.station_exposition_fr,
+                m.station_exposition_it,
+                m.station_exposition_en,
+                m.station_url_de,
+                m.station_url_fr,
+                m.station_url_it,
+                m.station_url_en,
+                m.station_dataowner,
+                m.station_data_since,
+                m.station_height_masl,
+                m.station_coordinates_wgs84_lat,
+                m.station_coordinates_wgs84_lon,
 
-    conn.commit()
+                COALESCE(h.tre200d0_count, 0),
+                h.tre200d0_min_date,
+                h.tre200d0_max_date,
+                COALESCE(h.rre150d0_count, 0),
+                h.rre150d0_min_date,
+                h.rre150d0_max_date
+
+            FROM {sa_table_meta_stations.name} AS m
+            LEFT JOIN (
+                SELECT
+                    station_abbr,
+                    SUM(CASE WHEN tre200d0 IS NOT NULL THEN 1 END) AS tre200d0_count,
+                    MIN(CASE WHEN tre200d0 IS NOT NULL THEN reference_timestamp END) AS tre200d0_min_date,
+                    MAX(CASE WHEN tre200d0 IS NOT NULL THEN reference_timestamp END) AS tre200d0_max_date,
+                    SUM(CASE WHEN rre150d0 IS NOT NULL THEN 1 END) AS rre150d0_count,
+                    MIN(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_min_date,
+                    MAX(CASE WHEN rre150d0 IS NOT NULL THEN reference_timestamp END) AS rre150d0_max_date
+                FROM {TABLE_DAILY_MEASUREMENTS.name}
+                GROUP BY station_abbr
+            ) AS h
+            ON m.station_abbr = h.station_abbr;
+            """
+            )
+        )
 
 
-def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
+def read_station(conn: sa.Connection, station_abbr: str) -> models.Station:
     """Returns data for the given station."""
 
-    sql = f"""
+    sql = sa.text(
+        f"""
         SELECT
             station_abbr,
             station_name,
@@ -517,12 +727,13 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
             tre200d0_max_date,
             rre150d0_min_date,
             rre150d0_max_date
-        FROM {TABLE_NAME_X_STATION_DATA_SUMMARY}
-        WHERE station_abbr = ?
+        FROM {sa_table_x_station_data_summary.name}
+        WHERE station_abbr = :station_abbr
     """
-    cur = conn.execute(sql, [station_abbr])
-    row = cur.fetchone()
-    if row is None:
+    )
+
+    result = conn.execute(sql, {"station_abbr": station_abbr}).mappings().first()
+    if result is None:
         raise StationNotFoundError(f"No station found with abbr={station_abbr}")
 
     # Parse possible date strings into actual dates (None stays None)
@@ -530,44 +741,40 @@ def read_station(conn: sqlite3.Connection, station_abbr: str) -> models.Station:
         return datetime.date.fromisoformat(v) if v else None
 
     return models.Station(
-        abbr=row["station_abbr"],
-        name=row["station_name"],
-        canton=row["station_canton"],
-        typ=row["station_type_en"],
+        abbr=result["station_abbr"],
+        name=result["station_name"],
+        canton=result["station_canton"],
+        typ=result["station_type_en"],
         exposition=LocalizedString.from_nullable(
-            de=row["station_exposition_de"],
-            fr=row["station_exposition_fr"],
-            it=row["station_exposition_it"],
-            en=row["station_exposition_en"],
+            de=result["station_exposition_de"],
+            fr=result["station_exposition_fr"],
+            it=result["station_exposition_it"],
+            en=result["station_exposition_en"],
         ),
         url=LocalizedString.from_nullable(
-            de=row["station_url_de"],
-            fr=row["station_url_fr"],
-            it=row["station_url_it"],
-            en=row["station_url_en"],
+            de=result["station_url_de"],
+            fr=result["station_url_fr"],
+            it=result["station_url_it"],
+            en=result["station_url_en"],
         ),
-        height_masl=row["station_height_masl"],
-        coordinates_wgs84_lat=row["station_coordinates_wgs84_lat"],
-        coordinates_wgs84_lon=row["station_coordinates_wgs84_lon"],
-        temperature_min_date=d(row["tre200d0_min_date"]),
-        temperature_max_date=d(row["tre200d0_max_date"]),
-        precipitation_min_date=d(row["rre150d0_min_date"]),
-        precipitation_max_date=d(row["rre150d0_max_date"]),
+        height_masl=result["station_height_masl"],
+        coordinates_wgs84_lat=result["station_coordinates_wgs84_lat"],
+        coordinates_wgs84_lon=result["station_coordinates_wgs84_lon"],
+        temperature_min_date=d(result["tre200d0_min_date"]),
+        temperature_max_date=d(result["tre200d0_max_date"]),
+        precipitation_min_date=d(result["rre150d0_min_date"]),
+        precipitation_max_date=d(result["rre150d0_max_date"]),
     )
 
 
 def read_stations(
-    conn: sqlite3.Connection,
+    conn: sa.Connection,
     cantons: list[str] | None = None,
     exclude_empty: bool = True,
 ) -> list[models.Station]:
-    """Returns all stations matching the given criteria.
+    """Returns all stations matching the given criteria."""
 
-    - cantons: optional list of canton codes to filter
-    - exclude_empty: if True, skips stations with no temp/precip data
-    """
-
-    sql = f"""
+    base_sql = f"""
         SELECT 
             station_abbr,
             station_name,
@@ -580,29 +787,34 @@ def read_stations(
             station_height_masl,
             station_coordinates_wgs84_lat,
             station_coordinates_wgs84_lon
-        FROM {TABLE_NAME_X_STATION_DATA_SUMMARY}
+        FROM {sa_table_x_station_data_summary.name}
     """
-    filters = []
-    params = []
 
-    # Canton filter
+    filters = []
+    params: dict[str, Any] = {}
+    bindparams = []
+
+    # Canton filter using tuple bind
     if cantons:
-        placeholders = ",".join("?" for _ in cantons)
-        filters.append(f"station_canton IN ({placeholders})")
-        params.extend(cantons)
+        filters.append("station_canton IN :cantons")
+        params["cantons"] = tuple(cantons)
+        # Let SQLAlchemy expand 'cantons'
+        bindparams.append(sa.bindparam("cantons", expanding=True))
 
     # Exclude stations with no data
     if exclude_empty:
         filters.append("(tre200d0_count > 0 AND rre150d0_count > 0)")
 
     # Combine filters
+    sql = base_sql
     if filters:
         sql += " WHERE " + " AND ".join(filters)
-
     sql += " ORDER BY station_name"
 
-    cur = conn.execute(sql, params)
-    rows = cur.fetchall()
+    sa_sql = sa.text(sql)
+    if bindparams:
+        sa_sql = sa_sql.bindparams(*bindparams)
+    result = conn.execute(sa_sql, params).mappings().all()
 
     return [
         models.Station(
@@ -620,12 +832,12 @@ def read_stations(
             coordinates_wgs84_lat=row["station_coordinates_wgs84_lat"],
             coordinates_wgs84_lon=row["station_coordinates_wgs84_lon"],
         )
-        for row in rows
+        for row in result
     ]
 
 
 def read_daily_measurements(
-    conn: sqlite3.Connection,
+    conn: sa.Connection,
     station_abbr: str,
     columns: list[str] | None = None,
     period: str | None = None,
@@ -645,8 +857,8 @@ def read_daily_measurements(
         FROM {TABLE_DAILY_MEASUREMENTS.name}
     """
     # Filter by station.
-    filters = ["station_abbr = ?"]
-    params = [station_abbr]
+    filters = ["station_abbr = :station_abbr"]
+    params = {"station_abbr": station_abbr}
 
     # Filter by period.
     if period is not None:
@@ -699,7 +911,7 @@ def utc_timestr(d: datetime.datetime) -> str:
 
 
 def read_hourly_measurements(
-    conn: sqlite3.Connection,
+    conn: sa.Connection,
     station_abbr: str,
     from_date: datetime.datetime,
     to_date: datetime.datetime,
@@ -718,8 +930,8 @@ def read_hourly_measurements(
         FROM {TABLE_HOURLY_MEASUREMENTS.name}
     """
     # Filter by station.
-    filters = ["station_abbr = ?"]
-    params = [station_abbr]
+    filters = ["station_abbr = :station_abbr"]
+    params = {"station_abbr": station_abbr}
 
     if from_date is not None:
         filters.append(f"reference_timestamp >= '{utc_timestr(from_date)}'")
@@ -743,30 +955,8 @@ def read_hourly_measurements(
     )
 
 
-def read_parameters(conn: sqlite3.Connection) -> pd.DataFrame:
-    sql = f"""
-        SELECT
-            parameter_shortname,
-            parameter_description_de,
-            parameter_description_fr,
-            parameter_description_it,
-            parameter_description_en,
-            parameter_group_de,
-            parameter_group_fr,
-            parameter_group_it,
-            parameter_group_en,
-            parameter_datatype,
-            parameter_unit
-        FROM {TABLE_NAME_META_PARAMETERS}
-        ORDER BY parameter_shortname
-    """
-    df = pd.read_sql_query(sql, conn)
-    df.columns = [c.removeprefix("parameter_") for c in df.columns]
-    return df
-
-
 def read_station_var_summary_stats(
-    conn: sqlite3.Connection,
+    conn: sa.Connection,
     agg_name: str,
     station_abbr: str | None = None,
     variables: Collection[str] | None = None,
@@ -782,7 +972,7 @@ def read_station_var_summary_stats(
         print("Min precipitation level was", p["min_value"], "on", p["min_value_date"])
 
     Args:
-        conn: An active SQLite database connection.
+        conn: An active SQLAlchemy database connection.
         agg_name: The name of the aggregataion to read data for.
         station_abbr: Optional abbreviation of the station to filter by.
         variables: Optional collection of variable names to filter by.
@@ -792,15 +982,19 @@ def read_station_var_summary_stats(
         columns as (variable, measurement_type)).
         Returns an empty DataFrame if no data matches the filters.
     """
-    filters = ["agg_name = ?"]
-    params = [agg_name]
+    filters = ["agg_name = :agg_name"]
+    params = {"agg_name": agg_name}
     if station_abbr:
-        filters.append("station_abbr = ?")
-        params.append(station_abbr)
+        filters.append("station_abbr = :station_abbr")
+        params["station_abbr"] = station_abbr
     if variables:
-        placeholders = ", ".join(["?"] * len(variables))
-        filters.append(f"variable IN ({placeholders})")
-        params.extend(variables)
+        placeholders = []
+        for i, var in enumerate(variables):
+            p = f"var{i}"
+            placeholders.append(f":{p}")
+            params[p] = var
+        filters.append(f"variable IN ({', '.join(placeholders)})")
+
     measure_cols = [
         "source_granularity",
         "min_value",
@@ -816,7 +1010,7 @@ def read_station_var_summary_stats(
             station_abbr,
             variable,
             {', '.join(measure_cols)}
-        FROM {TABLE_NAME_X_STATION_VAR_SUMMARY_STATS}
+        FROM {sa_table_x_station_var_summary_stats.name}
     """
     if filters:
         sql += f"WHERE {' AND '.join(filters)}"

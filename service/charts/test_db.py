@@ -1,8 +1,8 @@
 import os
 import unittest
-import sqlite3
 import datetime
 import pandas as pd
+import sqlalchemy as sa
 
 from . import db
 from . import models
@@ -16,55 +16,10 @@ def _testdata_dir():
 class TestDb(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.conn = sqlite3.connect(":memory:")
-        cls.conn.row_factory = sqlite3.Row
-        cls._create_all_tables()
+        cls.engine = sa.create_engine("sqlite:///:memory:", future=True)
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
-
-    @classmethod
-    def _create_all_tables(cls):
-        conn = cls.conn
-        db.prepare_sql_table_from_spec(
-            _testdata_dir(), conn, db.TABLE_DAILY_MEASUREMENTS, []
-        )
-        db.prepare_sql_table_from_spec(
-            _testdata_dir(), conn, db.TABLE_HOURLY_MEASUREMENTS, []
-        )
-        conn.execute(
-            """
-            CREATE TABLE ogd_smn_meta_stations (
-                station_abbr TEXT,
-                station_name TEXT,
-                station_canton TEXT,
-                station_wigos_id TEXT,
-                station_type_de TEXT,
-                station_type_fr TEXT,
-                station_type_it TEXT,
-                station_type_en TEXT,
-                station_dataowner TEXT,
-                station_data_since TEXT,
-                station_height_masl REAL,
-                station_height_barometer_masl REAL,
-                station_coordinates_lv95_east REAL,
-                station_coordinates_lv95_north REAL,
-                station_coordinates_wgs84_lat REAL,
-                station_coordinates_wgs84_lon REAL,
-                station_exposition_de TEXT,
-                station_exposition_fr TEXT,
-                station_exposition_it TEXT,
-                station_exposition_en TEXT,
-                station_url_de TEXT,
-                station_url_fr TEXT,
-                station_url_it TEXT,
-                station_url_en TEXT,
-                PRIMARY KEY (station_abbr)
-            );
-            """
-        )
-        db.recreate_station_data_summary(conn)
+        # Create all tables for tests
+        db.metadata.create_all(cls.engine)
 
 
 class TestDbStations(TestDb):
@@ -73,86 +28,82 @@ class TestDbStations(TestDb):
         super().setUpClass()
         cls._insert_station_test_data()
 
+    def setUp(self):
+        self.conn = self.engine.connect()
+
+    def tearDown(self):
+        self.conn.close()
+
     @classmethod
     def _insert_station_test_data(cls):
-        cursor = cls.conn.cursor()
         stations_data = [
-            (
-                "ABO",
-                "Arosa",
-                "GR",
-                "2000-01-01",
-                "2020-12-31",
-                "2000-01-01",
-                "2020-12-31",
-                100,  # tre200d0_count
-                100,  # rre150d0_count
-                "Ebene",
-                "Plaine",
-                "Pianura",
-                "plain",
-            ),
-            (
-                "BAS",
-                "Basel / Binningen",
-                "BL",
-                "1990-01-01",
-                "2010-12-31",
-                None,
-                None,
-                50,  # tre200d0_count
-                0,  # rre150d0_count
-                "Ebene",
-                None,
-                None,
-                None,
-            ),  # Missing precip dates
-            (
-                "BER",
-                "Bern / Zollikofen",
-                "BE",
-                None,
-                None,
-                "1980-01-01",
-                "2022-12-31",
-                0,  # tre200d0_count
-                50,  # rre150d0_count
-                "Ebene",
-                "Plaine",
-                "Pianura",
-                "plain",
-            ),  # Missing temp dates
-            (
-                "LUG",
-                "Lugano",
-                "TI",
-                None,
-                None,
-                None,
-                None,
-                0,
-                0,
-                None,
-                None,
-                None,
-                None,
-            ),  # All dates missing
+            {
+                "station_abbr": "ABO",
+                "station_name": "Arosa",
+                "station_canton": "GR",
+                "tre200d0_min_date": "2000-01-01",
+                "tre200d0_max_date": "2020-12-31",
+                "rre150d0_min_date": "2000-01-01",
+                "rre150d0_max_date": "2020-12-31",
+                "tre200d0_count": 100,
+                "rre150d0_count": 100,
+                "station_exposition_de": "Ebene",
+                "station_exposition_fr": "Plaine",
+                "station_exposition_it": "Pianura",
+                "station_exposition_en": "plain",
+            },
+            {
+                "station_abbr": "BAS",
+                "station_name": "Basel / Binningen",
+                "station_canton": "BL",
+                "tre200d0_min_date": "1990-01-01",
+                "tre200d0_max_date": "2010-12-31",
+                "rre150d0_min_date": None,
+                "rre150d0_max_date": None,
+                "tre200d0_count": 50,
+                "rre150d0_count": 0,
+                "station_exposition_de": "Ebene",
+                "station_exposition_fr": None,
+                "station_exposition_it": None,
+                "station_exposition_en": None,
+            },  # Missing precip dates
+            {
+                "station_abbr": "BER",
+                "station_name": "Bern / Zollikofen",
+                "station_canton": "BE",
+                "tre200d0_min_date": None,
+                "tre200d0_max_date": None,
+                "rre150d0_min_date": "1980-01-01",
+                "rre150d0_max_date": "2022-12-31",
+                "tre200d0_count": 0,
+                "rre150d0_count": 50,
+                "station_exposition_de": "Ebene",
+                "station_exposition_fr": "Plaine",
+                "station_exposition_it": "Pianura",
+                "station_exposition_en": "plain",
+            },  # Missing temp dates
+            {
+                "station_abbr": "LUG",
+                "station_name": "Lugano",
+                "station_canton": "TI",
+                "tre200d0_min_date": None,
+                "tre200d0_max_date": None,
+                "rre150d0_min_date": None,
+                "rre150d0_max_date": None,
+                "tre200d0_count": 0,
+                "rre150d0_count": 0,
+                "station_exposition_de": None,
+                "station_exposition_fr": None,
+                "station_exposition_it": None,
+                "station_exposition_en": None,
+            },  # All dates missing
         ]
-        cursor.executemany(
-            f"""
-            INSERT INTO {db.TABLE_NAME_X_STATION_DATA_SUMMARY} (
-                station_abbr, station_name, station_canton,
-                tre200d0_min_date, tre200d0_max_date,
-                rre150d0_min_date, rre150d0_max_date,
-                tre200d0_count, rre150d0_count,
-                station_exposition_de, station_exposition_fr,
-                station_exposition_it, station_exposition_en
+
+        with cls.engine.begin() as conn:
+            conn.execute(
+                sa.insert(db.sa_table_x_station_data_summary),
+                stations_data,
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            stations_data,
-        )
-        cls.conn.commit()
 
     def test_read_station_found(self):
         station = db.read_station(self.conn, "ABO")
@@ -259,9 +210,14 @@ class TestDbDaily(TestDb):
         super().setUpClass()
         cls._insert_daily_test_data()
 
+    def setUp(self):
+        self.conn = self.engine.connect()
+
+    def tearDown(self):
+        self.conn.close()
+
     @classmethod
     def _insert_daily_test_data(cls):
-        cursor = cls.conn.cursor()
         historical_data = [
             ("ABO", "2023-01-01", 1.0, 0.5, 1.5, 10.0),
             ("ABO", "2023-02-01", 2.0, 1.5, 2.5, 12.0),
@@ -279,15 +235,29 @@ class TestDbDaily(TestDb):
             ("GEN", "2023-06-15", 20.0, 19.0, 21.0, 5.0),
             ("GEN", "2023-07-15", 22.0, 21.0, 23.0, 7.0),
         ]
-        cursor.executemany(
-            f"""
-            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name}
-            (station_abbr, reference_timestamp, tre200d0, tre200dn, tre200dx, rre150d0)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """,
-            historical_data,
-        )
-        cls.conn.commit()
+        records = [
+            dict(
+                station_abbr=station_abbr,
+                reference_timestamp=reference_timestamp,
+                tre200d0=tre200d0,
+                tre200dn=tre200dn,
+                tre200dx=tre200dx,
+                rre150d0=rre150d0,
+            )
+            for (
+                station_abbr,
+                reference_timestamp,
+                tre200d0,
+                tre200dn,
+                tre200dx,
+                rre150d0,
+            ) in historical_data
+        ]
+        with cls.engine.begin() as conn:
+            conn.execute(
+                sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table),
+                records,
+            )
 
     def test_read_daily_historical_no_filters(self):
         df = db.read_daily_measurements(self.conn, station_abbr="ABO")
@@ -355,9 +325,14 @@ class TestDbHourly(TestDb):
         super().setUpClass()
         cls._insert_hourly_test_data()
 
+    def setUp(self):
+        self.conn = self.engine.connect()
+
+    def tearDown(self):
+        self.conn.close()
+
     @classmethod
     def _insert_hourly_test_data(cls):
-        cursor = cls.conn.cursor()
         historical_data = [
             ("ABO", "2023-01-01 00:00:00Z", 1.0, 0.5, 1.5, 10.0),
             ("ABO", "2023-01-01 01:00:00Z", 2.0, 1.5, 2.5, 12.0),
@@ -370,15 +345,29 @@ class TestDbHourly(TestDb):
             ("GEN", "2023-07-15 12:00:00Z", 22.0, 21.0, 23.0, 7.0),
             ("GEN", "2023-06-15 12:00:00Z", 20.0, 19.0, 21.0, 5.0),
         ]
-        cursor.executemany(
-            f"""
-            INSERT INTO {db.TABLE_HOURLY_MEASUREMENTS.name} 
-            (station_abbr, reference_timestamp, tre200h0, tre200hn, tre200hx, rre150h0)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """,
-            historical_data,
-        )
-        cls.conn.commit()
+        records = [
+            dict(
+                station_abbr=station_abbr,
+                reference_timestamp=reference_timestamp,
+                tre200h0=tre200h0,
+                tre200hn=tre200hn,
+                tre200hx=tre200hx,
+                rre150h0=rre150h0,
+            )
+            for (
+                station_abbr,
+                reference_timestamp,
+                tre200h0,
+                tre200hn,
+                tre200hx,
+                rre150h0,
+            ) in historical_data
+        ]
+        with cls.engine.begin() as conn:
+            conn.execute(
+                sa.insert(db.TABLE_HOURLY_MEASUREMENTS.sa_table),
+                records,
+            )
 
     def test_read_hourly_recent_time_range(self):
         from_date = datetime.datetime(2023, 1, 1, 0, 0, 0, 0, datetime.UTC)
@@ -424,26 +413,27 @@ class TestDbHourly(TestDb):
 
 
 class TestCreateDb(unittest.TestCase):
-    def setUp(self):
-        self.conn = sqlite3.connect(":memory:")
-        self.conn.row_factory = sqlite3.Row
 
-    def tearDown(self):
-        self.conn.close()
-
-    def test_create_daily(self):
-        db.prepare_sql_table_from_spec(
+    def test_create_insert_daily(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        db.insert_csv_data(
             _testdata_dir(),
-            self.conn,
+            engine,
             db.TABLE_DAILY_MEASUREMENTS,
             ["ogd-smn_vis_d_recent.csv"],
         )
-        columns = [db.TEMP_DAILY_MAX, db.PRECIP_DAILY_MM, db.ATM_PRESSURE_DAILY_MEAN]
-        df = db.read_daily_measurements(
-            self.conn,
-            "VIS",
-            columns=columns,
-        )
+        with engine.connect() as conn:
+            columns = [
+                db.TEMP_DAILY_MAX,
+                db.PRECIP_DAILY_MM,
+                db.ATM_PRESSURE_DAILY_MEAN,
+            ]
+            df = db.read_daily_measurements(
+                conn,
+                "VIS",
+                columns=columns,
+            )
         self.assertEqual(len(df), 202)
         self.assertTrue(
             (df[columns].sum() > 0).all(),
@@ -451,20 +441,23 @@ class TestCreateDb(unittest.TestCase):
         )
 
     def test_create_hourly(self):
-        db.prepare_sql_table_from_spec(
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        db.insert_csv_data(
             _testdata_dir(),
-            self.conn,
+            engine,
             db.TABLE_HOURLY_MEASUREMENTS,
             ["ogd-smn_vis_h_recent.csv"],
         )
         columns = [db.TEMP_HOURLY_MAX, db.PRECIP_HOURLY_MM, db.GUST_PEAK_HOURLY_MAX]
-        df = db.read_hourly_measurements(
-            self.conn,
-            "VIS",
-            from_date=datetime.datetime(2020, 1, 1),
-            to_date=datetime.datetime(2026, 1, 1),
-            columns=columns,
-        )
+        with engine.connect() as conn:
+            df = db.read_hourly_measurements(
+                conn,
+                "VIS",
+                from_date=datetime.datetime(2020, 1, 1),
+                to_date=datetime.datetime(2026, 1, 1),
+                columns=columns,
+            )
         self.assertEqual(len(df), 500)
         self.assertTrue(
             (df[columns].sum() > 0).all(),
@@ -474,46 +467,43 @@ class TestCreateDb(unittest.TestCase):
 
 class TestDbRefPeriod1991_2020(unittest.TestCase):
     def setUp(self):
-        self.conn = sqlite3.connect(":memory:")
-        self.conn.row_factory = sqlite3.Row
+        self.engine = sa.create_engine("sqlite:///:memory:")
 
-    def tearDown(self):
-        self.conn.close()
+        # Create all tables for tests
+        db.metadata.create_all(self.engine)
 
-    def test_create_empty(self):
-        db.prepare_sql_table_from_spec(
-            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
-        )
-        db.recreate_station_var_summary_stats(self.conn)
+    def test_recreate_empty(self):
+        db.recreate_station_var_summary_stats(self.engine)
 
     def test_create_select(self):
-        db.prepare_sql_table_from_spec(
-            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
-        )
         # Insert daily data.
-        self.conn.executemany(
-            f"""
-            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
-                station_abbr,
-                reference_timestamp,
-                tre200dn,
-                rre150d0
-            )
-            VALUES (?, ?, ?, ?)
-            """,
+        def p(stn, dt, t, p):
+            return {
+                "station_abbr": stn,
+                "reference_timestamp": dt,
+                db.TEMP_DAILY_MIN: t,
+                db.PRECIP_DAILY_MM: p,
+            }
+
+        conn = self.engine.connect()
+        conn.execute(
+            sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table),
             [
-                ("BER", "1991-01-01", -3, 0.5),
-                ("BER", "1991-01-02", -4, 1.5),
-                ("BER", "2001-06-03", 22, None),
-                ("XXX", "2001-06-03", 30, 12),
+                p("BER", "1991-01-01", -3, 0.5),
+                p("BER", "1991-01-02", -4, 1.5),
+                p("BER", "2001-06-03", 22, None),
+                p("XXX", "2001-06-03", 30, 12),
             ],
         )
-        self.conn.commit()
+        conn.commit()
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.engine)
         # Read data
         df = db.read_station_var_summary_stats(
-            self.conn, db.AGG_NAME_REF_1991_2020, station_abbr="BER"
+            conn,
+            db.AGG_NAME_REF_1991_2020,
+            station_abbr="BER",
+            variables=[db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
         )
 
         self.assertEqual(len(df), 1)
@@ -530,11 +520,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 "value_count",
             ],
         )
-        t = df.loc["BER", "tre200dn"]
+        t = df.loc["BER", db.TEMP_DAILY_MIN]
         self.assertAlmostEqual(t["mean_value"], 5.0)
         self.assertEqual(t["min_value_date"], "1991-01-02")
         self.assertEqual(t["max_value_date"], "2001-06-03")
-        p = df.loc["BER", "rre150d0"]
+        p = df.loc["BER", db.PRECIP_DAILY_MM]
         self.assertEqual(p["min_value"], 0.5)
         self.assertEqual(p["max_value_date"], "1991-01-02")
         self.assertEqual(p["value_sum"], 2.0)
@@ -542,23 +532,33 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         self.assertEqual(p["source_granularity"], "daily")
 
     def _insert_var(self, var_col: str, params: list[tuple]) -> str:
-        db.prepare_sql_table_from_spec(
-            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS
-        )
-        sql = f"""
-            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
-                station_abbr,
-                reference_timestamp,
-                {var_col}
-            )
-            VALUES (?, ?, ?)
-            """
-        self.conn.executemany(sql, params)
+        with self.engine.begin() as conn:
+            records = [
+                {
+                    "station_abbr": stn,
+                    "reference_timestamp": dt,
+                    var_col: val,
+                }
+                for (stn, dt, val) in params
+            ]
+            conn.execute(sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table), records)
+
+    def _insert_vars(self, var_cols: list[str], params: list[tuple]) -> str:
+        with self.engine.begin() as conn:
+            records = [
+                {
+                    "station_abbr": stn,
+                    "reference_timestamp": dt,
+                    **dict(zip(var_cols, vals)),
+                }
+                for (stn, dt, *vals) in params
+            ]
+            conn.execute(sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table), records)
 
     def test_derived_summer_days(self):
         # Insert daily data.
         self._insert_var(
-            "tre200dx",
+            db.TEMP_DAILY_MAX,
             [
                 ("BER", "1991-07-01", 24.9),
                 ("BER", "1991-07-02", 25.1),
@@ -567,11 +567,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 ("BER", "2001-06-05", 27),
             ],
         )
-        self.conn.commit()
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.engine)
         # Read data
-        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+        with self.engine.begin() as conn:
+            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
 
         self.assertEqual(len(df), 1)
 
@@ -597,11 +597,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 ("BER", "1992-02-03", -0.5),
             ],
         )
-        self.conn.commit()
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.engine)
         # Read data
-        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+        with self.engine.begin() as conn:
+            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
         fd = df.loc["BER", db.DX_FROST_DAYS_ANNUAL_COUNT]
@@ -618,11 +618,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 ("LUG", "1992-07-02", 18),
             ],
         )
-        self.conn.commit()
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.engine)
         # Read data
-        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+        with self.engine.begin() as conn:
+            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
         fd = df.loc["LUG", db.DX_TROPICAL_NIGHTS_ANNUAL_COUNT]
@@ -648,11 +648,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 ("BER", "1997-06-01", 30),
             ],
         )
-        self.conn.commit()
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.engine)
         # Read data
-        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+        with self.engine.begin() as conn:
+            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
         fd = df.loc["BER", db.DX_SUNNY_DAYS_ANNUAL_COUNT]
@@ -681,11 +681,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 ("GES", "1991-06-02", None),
             ],
         )
-        self.conn.commit()
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.engine)
         # Read data
-        df = db.read_station_var_summary_stats(self.conn, db.AGG_NAME_REF_1991_2020)
+        with self.engine.begin() as conn:
+            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
 
         # BER
         self.assertTrue("BER" in df.index)
@@ -698,55 +698,36 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         self.assertTrue("GET" not in df.index)
 
     def test_create_select_agg_not_exist(self):
-        db.prepare_sql_table_from_spec(
-            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
-        )
-        self.conn.executemany(
-            f"""
-            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
-                station_abbr, reference_timestamp, tre200dn, rre150d0
+        self._insert_var(db.TEMP_DAILY_MIN, [("BER", "1991-01-01", -3)])
+        db.recreate_station_var_summary_stats(self.engine)
+        with self.engine.begin() as conn:
+            df = db.read_station_var_summary_stats(
+                conn, "AGG_DOES_NOT_EXIST", station_abbr="BER"
             )
-            VALUES (?, ?, ?, ?)
-            """,
-            [("BER", "1991-01-01", -3, 20)],
-        )
-        db.recreate_station_var_summary_stats(self.conn)
-        df = db.read_station_var_summary_stats(
-            self.conn, "AGG_DOES_NOT_EXIST", station_abbr="BER"
-        )
         self.assertTrue(df.empty)
 
     def test_create_select_nan(self):
-        db.prepare_sql_table_from_spec(
-            _testdata_dir(), self.conn, db.TABLE_DAILY_MEASUREMENTS, []
-        )
-        # Insert daily data. rre150d0 is always empty.
-        self.conn.executemany(
-            f"""
-            INSERT INTO {db.TABLE_DAILY_MEASUREMENTS.name} (
-                station_abbr,
-                reference_timestamp,
-                tre200dn,
-                rre150d0
-            )
-            VALUES (?, ?, ?, ?)
-            """,
+        # Insert daily data. PRECIP_DAILY_MM is always empty.
+        self._insert_vars(
+            [db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
             [
-                ("BER", "1991-01-01", -3, None),
-                ("BER", "1991-01-02", -4, None),
-                ("BER", "2001-06-03", 22, None),
+                ("BER", "1991-01-01", 10, None),
+                ("BER", "1991-01-02", 10, None),
+                ("BER", "2001-06-03", 17, None),
             ],
         )
-        self.conn.commit()
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.conn)
+        db.recreate_station_var_summary_stats(self.engine)
         # Read data
-        df = db.read_station_var_summary_stats(
-            self.conn, db.AGG_NAME_REF_1991_2020, station_abbr="BER"
-        )
+        with self.engine.begin() as conn:
+            df = db.read_station_var_summary_stats(
+                conn, db.AGG_NAME_REF_1991_2020, station_abbr="BER"
+            )
 
+        # Should return data only for TEMP_DAILY_MIN.
         self.assertEqual(len(df), 1)
 
-        # Should not have data for rre150d0:
-        with self.assertRaises(KeyError):
-            df.loc["BER", "rre150d0"]
+        # Defined vars should only be TEMP_DAILY_MIN or those derived from it.
+        vars = df.loc["BER"].index.get_level_values(0).unique().to_list()
+        self.assertIn(db.TEMP_DAILY_MIN, vars)
+        self.assertNotIn(db.PRECIP_DAILY_MM, vars)

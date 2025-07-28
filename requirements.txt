@@ -8,3 +8,4 @@ uvicorn[standard]
 pytest
 pytest-cov
 pydantic
+sqlalchemy

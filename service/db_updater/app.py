@@ -4,13 +4,11 @@ import datetime
 import logging
 import os
 import re
-import sqlite3
+import sqlalchemy as sa
 import time
-from typing import Iterable
 import pandas as pd
 from pydantic import BaseModel
 import requests
-import sys
 from urllib.parse import urlparse
 from service.charts import db
 from service.charts import logging_config as _  # configure logging
@@ -25,20 +23,13 @@ UPDATE_STATUS_TABLE_NAME = "update_status"
 logger = logging.getLogger("db_updater")
 
 
-class UpdateStatus(BaseModel):
-    href: str
-    table_updated_time: datetime.datetime
-    resource_updated_time: datetime.datetime | None = None
-    etag: str | None = None
-
-
 class CsvResource(BaseModel):
     href: str
     frequency: str = ""  # "historical", "recent", "now"
     interval: str = ""  # "d", "h", "" for metadata
     is_meta: bool = False
     updated: datetime.datetime | None = None
-    status: UpdateStatus | None = None
+    status: db.UpdateStatus | None = None
 
 
 def fetch_paginated(url, timeout=10):
@@ -97,8 +88,15 @@ def download_csv(url, output_dir, etag: str | None = None) -> str | None:
     return etag
 
 
-def fetch_data_csv_resources() -> list[CsvResource]:
+def fetch_data_csv_resources(filter_regex: str | None = None) -> list[CsvResource]:
     """Fetch URLs of CSV data resources ("items")."""
+
+    filter_re = re.compile(filter_regex) if filter_regex else None
+
+    def _filter(href: str) -> bool:
+        if filter_re is None:
+            return True
+        return bool(filter_re.search(href))
 
     # Fetch assets from /items
     assets = []
@@ -119,7 +117,7 @@ def fetch_data_csv_resources() -> list[CsvResource]:
             r".*_(d|h)_(historical|historical_2020-2029|recent|now__DISABLED__).csv$",
             href,
         )
-        if not mo:
+        if not mo or not _filter(href):
             continue
 
         updated = (
@@ -170,157 +168,53 @@ def fetch_metadata_csv_resources() -> list[CsvResource]:
     return resources
 
 
-def infer_sqlite_type(dtype: pd.api.types.CategoricalDtype) -> str:
-    if pd.api.types.is_integer_dtype(dtype):
-        return "INTEGER"
-    elif pd.api.types.is_float_dtype(dtype):
-        return "REAL"
-    else:
-        return "TEXT"
-
-
-def prepare_metadata_table(
-    conn: sqlite3.Connection,
-    csv_file: str,
-    table_name: str,
-) -> None:
-    """Creates (if not exists) metadata table `table_name`.
-
-    All columns and their types are inferred from the CSV file.
-    """
-    logger.info(f"Importing {csv_file} into sqlite3 database...")
-    df = pd.read_csv(
-        csv_file,
-        sep=";",
-        encoding="cp1252",
-    )
-    # Create table with proper PK
-    cols_def = ",\n".join(
-        f"{col} {infer_sqlite_type(dtype)}" for col, dtype in df.dtypes.items()
-    )
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            {cols_def}
-        )
-    """
-    )
-    conn.commit()
-
-    # Insert row by row, ignoring duplicates
-    placeholders = ",".join(["?"] * len(df.columns))
-    insert_sql = f"INSERT OR IGNORE INTO {table_name} VALUES ({placeholders})"
-
-    conn.executemany(insert_sql, df.itertuples(index=False, name=None))
-    conn.commit()
-
-
-def create_update_status(conn: sqlite3.Connection) -> None:
-    """Creates the "update_status" table if it does not exist."""
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {UPDATE_STATUS_TABLE_NAME} (
-            href TEXT PRIMARY KEY,
-            table_updated_time TEXT NOT NULL,
-            resource_updated_time TEXT,
-            etag TEXT
-        );
-    """
-    )
-    conn.commit()
-
-
-def update_update_status(
-    conn: sqlite3.Connection, statuses: Iterable[UpdateStatus]
-) -> None:
-    """Inserts or updates the statuses in the update status table."""
-    tuples = []
-    for s in statuses:
-        table_updated_time = (
-            s.table_updated_time.isoformat() if s.table_updated_time else None
-        )
-        resource_updated_time = (
-            s.resource_updated_time.isoformat() if s.resource_updated_time else None
-        )
-        tuples.append((s.href, table_updated_time, resource_updated_time, s.etag))
-
-    insert_sql = f"""
-        INSERT OR REPLACE INTO {UPDATE_STATUS_TABLE_NAME}
-            (href, table_updated_time, resource_updated_time, etag)
-        VALUES (?, ?, ?, ?)
-    """
-    conn.executemany(insert_sql, tuples)
-    conn.commit()
-
-
-def read_update_status(conn: sqlite3.Connection) -> list[UpdateStatus]:
-    """Reads all rows from the update status table."""
-    c = conn.execute(
-        f"""
-        SELECT href, resource_updated_time, table_updated_time, etag
-        FROM {UPDATE_STATUS_TABLE_NAME}
-    """
-    )
-    statuses = []
-
-    def d(s: str | None) -> datetime.date | None:
-        return datetime.datetime.fromisoformat(s) if s else None
-
-    for row in c.fetchall():
-        statuses.append(
-            UpdateStatus(
-                href=row["href"],
-                resource_updated_time=d(row["resource_updated_time"]),
-                table_updated_time=d(row["table_updated_time"]),
-                etag=row["etag"],
-            )
-        )
-    logger.debug("Fetched %d update statuses from DB", len(statuses))
-    return statuses
-
-
-def import_into_db(conn: sqlite3.Connection, weather_dir: str, csvs: list[CsvResource]):
+def import_into_db(engine: sa.Engine, weather_dir: str, csvs: list[CsvResource]):
     """Imports all SwissMetNet (smn) CSV files into the sqlite3 database.
 
     Assumes that all files have already been downloaded to `weather_dir`.
     """
 
-    def fname(url):
+    def _fname(url):
         return os.path.basename(urlparse(url).path)
 
-    daily_files = [fname(c.href) for c in csvs if c.interval == "d"]
-    hourly_files = [fname(c.href) for c in csvs if c.interval == "h"]
-    meta_files = [fname(c.href) for c in csvs if c.is_meta]
+    daily = [c.status for c in csvs if c.interval == "d"]
+    hourly = [c.status for c in csvs if c.interval == "h"]
+    meta = [c.status for c in csvs if c.is_meta]
 
-    if daily_files:
-        db.prepare_sql_table_from_spec(
+    if daily:
+        db.insert_csv_data(
             weather_dir,
-            conn,
+            engine,
             table_spec=db.TABLE_DAILY_MEASUREMENTS,
-            csv_filenames=daily_files,
+            csv_filenames=[_fname(s.href) for s in daily],
         )
-    if hourly_files:
-        db.prepare_sql_table_from_spec(
+        db.save_update_status(engine, daily)
+
+    if hourly:
+        db.insert_csv_data(
             weather_dir,
-            conn,
+            engine,
             table_spec=db.TABLE_HOURLY_MEASUREMENTS,
-            csv_filenames=hourly_files,
+            csv_filenames=[_fname(s.href) for s in hourly],
         )
-    if meta_files:
+        db.save_update_status(engine, hourly)
+    if meta:
         table_map = {
-            "ogd-smn_meta_parameters.csv": db.TABLE_NAME_META_PARAMETERS,
-            "ogd-smn_meta_stations.csv": db.TABLE_NAME_META_STATIONS,
+            "ogd-smn_meta_parameters.csv": db.sa_table_meta_parameters,
+            "ogd-smn_meta_stations.csv": db.sa_table_meta_stations,
         }
-        for meta_file in meta_files:
-            table_name = table_map.get(meta_file)
-            if not table_name:
-                logger.warning("Ignoring unknown metadata CSV file %s", meta_file)
+        for s in meta:
+            csv_file = _fname(s.href)
+            table = table_map.get(csv_file)
+            if table is None:
+                logger.warning("Ignoring unknown metadata CSV file %s", csv_file)
                 continue
-            prepare_metadata_table(
-                conn,
-                csv_file=os.path.join(weather_dir, meta_file),
-                table_name=table_name,
+            db.insert_csv_metadata(
+                engine,
+                table=table,
+                csv_file=os.path.join(weather_dir, csv_file),
             )
+        db.save_update_status(engine, meta)
 
 
 def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvResource]:
@@ -382,21 +276,25 @@ def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvReso
         results = list(executor.map(_download, update_csvs))
         etags = {c.href: etag for (c, etag) in results}
 
-    # Update status fields.
+    # Update status fields. Create a new UpdateStatus ONLY if none
+    # existed before. The existing ones must retain their DB ID.
     for c in update_csvs:
-        c.status = UpdateStatus(
-            href=c.href,
-            table_updated_time=now,
-            resource_updated_time=c.updated,
-            etag=etags.get(c.href),
-        )
+        if c.status and c.status.id is not None:
+            # Reuse existing UpdateStatus → just update fields
+            c.status.table_updated_time = now
+            c.status.resource_updated_time = c.updated
+            c.status.etag = etags.get(c.href)
+        else:
+            # No existing status or it's a brand-new one → create fresh
+            c.status = db.UpdateStatus(
+                id=None,  # Leave empty to process as an INSERT.
+                href=c.href,
+                table_updated_time=now,
+                resource_updated_time=c.updated,
+                etag=etags.get(c.href),
+            )
 
     return update_csvs
-
-
-def recreate_views(conn: sqlite3.Connection) -> None:
-    db.recreate_station_data_summary(conn)
-    db.recreate_station_var_summary_stats(conn)
 
 
 def main():
@@ -404,9 +302,16 @@ def main():
         description="Update weather DB.", allow_abbrev=False
     )
     parser.add_argument(
-        "weather_dir",
-        nargs="?",  # optional, can come from env
+        "--base_dir",
+        dest="base_dir",
+        metavar="PATH",
         help="Directory for weather data (defaults to $OGD_BASE_DIR).",
+    )
+    parser.add_argument(
+        "--csv_filter",
+        dest="csv_filter",
+        metavar="REGEX",
+        help="Optional regular expression to update only a subset of data.",
     )
     parser.add_argument(
         "--recreate-views",
@@ -416,52 +321,49 @@ def main():
 
     args = parser.parse_args()
 
-    if args.weather_dir:
-        weather_dir = args.weather_dir
+    if args.base_dir:
+        base_dir = args.base_dir
     elif "OGD_BASE_DIR" in os.environ:
-        weather_dir = os.environ["OGD_BASE_DIR"]
+        base_dir = os.environ["OGD_BASE_DIR"]
     else:
         parser.error("weather_dir is required if $OGD_BASE_DIR is not set.")
 
-    db_path = os.path.join(weather_dir, db.DATABASE_FILENAME)
+    db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
     logger.info("Connecting to sqlite DB at %s", db_path)
 
     started_time = time.time()
 
+    sa_engine = sa.create_engine(f"sqlite:///{db_path}", echo=False)
+    # Create tables if needed.
+    db.metadata.create_all(sa_engine)
+
     if args.recreate_views:
         # Only recreate views, then exit.
-        with sqlite3.connect(db_path) as conn:
-            recreate_views(conn)
-            logger.info(
-                "Recreated materialized views in %.1fs.", time.time() - started_time
-            )
-            return
+        db.recreate_views(sa_engine)
+        logger.info(
+            "Recreated materialized views in %.1fs.", time.time() - started_time
+        )
+        return
 
-    with sqlite3.connect(db_path) as conn:
+    data_csvs = fetch_data_csv_resources(args.csv_filter)
+    meta_csvs = fetch_metadata_csv_resources()
+    csvs = meta_csvs + data_csvs
 
-        conn.row_factory = sqlite3.Row
-        create_update_status(conn)
+    statuses = db.read_update_status(sa_engine)
+    logger.debug("Fetched %d update statuses from DB", len(statuses))
 
-        data_csvs = fetch_data_csv_resources()
-        meta_csvs = fetch_metadata_csv_resources()
-        csvs = meta_csvs + data_csvs
+    # Assign statuses to corresponding CsvResource.
+    status_map = {s.href: s for s in statuses}
+    for c in csvs:
+        c.status = status_map.get(c.href)
 
-        statuses = read_update_status(conn)
-        # Assign statuses to corresponding CsvResource.
-        status_map = {s.href: s for s in statuses}
-        for c in csvs:
-            c.status = status_map.get(c.href)
+    updated_csvs = fetch_latest_data(base_dir, csvs)
+    if updated_csvs:
+        import_into_db(sa_engine, base_dir, updated_csvs)
 
-        updated_csvs = fetch_latest_data(weather_dir, csvs)
-        if updated_csvs:
-            import_into_db(conn, weather_dir, updated_csvs)
-
-            # Update status after successful import
-            update_update_status(conn, [c.status for c in updated_csvs])
-
-        # Recreate materialized views
-        logger.info("Recreating materialized views...")
-        recreate_views(conn)
+    # Recreate materialized views
+    logger.info("Recreating materialized views...")
+    db.recreate_views(sa_engine)
 
     logger.info("Done. DB updated in %.1fs.", time.time() - started_time)
 

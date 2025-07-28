@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 import datetime
 import logging
 import os
-import sqlite3
+import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException, status, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -29,18 +29,17 @@ async def lifespan(app: FastAPI):
     db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
     logger.info("Connecting to sqlite DB at %s", db_path)
 
-    conn = sqlite3.connect(db_path, check_same_thread=True)
+    engine = sa.create_engine(f"sqlite:///{db_path}", echo=True)
     logger.info("Connected to sqlite3 at %s", db_path)
-    conn.row_factory = sqlite3.Row
-    app.state.db = conn
+
+    app.state.engine = engine
 
     # If charts module needs to initialize something
     # charts.init_db(conn)
 
     yield
 
-    # Shutdown: close DB connection cleanly
-    conn.close()
+    logger.info("Shutting down")
 
 
 # Always create the app, we're running this thing with uvicorn ONLY.
@@ -97,14 +96,15 @@ async def get_chart(
     # Internal code treats window=None as "no window"
     window_int = int(window) if window and window.isdigit() and window != "1" else None
 
-    df = db.read_daily_measurements(
-        app.state.db,
-        station_abbr,
-        period=period,
-        columns=charts.CHART_TYPE_COLUMNS[chart_type],
-        from_year=from_year_int,
-        to_year=to_year_int,
-    )
+    with app.state.engine.begin() as conn:
+        df = db.read_daily_measurements(
+            conn,
+            station_abbr,
+            period=period,
+            columns=charts.CHART_TYPE_COLUMNS[chart_type],
+            from_year=from_year_int,
+            to_year=to_year_int,
+        )
     return {
         "vega_spec": charts.create_chart(
             chart_type, df, station_abbr, period=period, window=window_int
@@ -128,9 +128,10 @@ async def get_daily_measurements(
         d.year, d.month, d.day, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
     )
     to_date = from_date + datetime.timedelta(days=1)
-    df = db.read_hourly_measurements(
-        app.state.db, station_abbr, from_date=from_date, to_date=to_date
-    )
+    with app.state.engine.begin() as conn:
+        df = db.read_hourly_measurements(
+            conn, station_abbr, from_date=from_date, to_date=to_date
+        )
     return {
         "data": charts.daily_measurements(df, station_abbr),
     }
@@ -150,22 +151,22 @@ async def get_summary(
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
     to_year_int = int(to_year) if to_year and to_year.isdigit() else None
 
-    df = db.read_daily_measurements(
-        app.state.db,
-        station_abbr,
-        period=period,
-        columns=[
-            db.TEMP_DAILY_MIN,
-            db.TEMP_DAILY_MEAN,
-            db.TEMP_DAILY_MAX,
-            db.PRECIP_DAILY_MM,
-        ],
-        from_year=from_year_int,
-        to_year=to_year_int,
-    )
-    stats = charts.station_stats(df, station_abbr, period=period)
-
-    station = db.read_station(app.state.db, station_abbr)
+    with app.state.engine.begin() as conn:
+        df = db.read_daily_measurements(
+            conn,
+            station_abbr,
+            period=period,
+            columns=[
+                db.TEMP_DAILY_MIN,
+                db.TEMP_DAILY_MEAN,
+                db.TEMP_DAILY_MAX,
+                db.PRECIP_DAILY_MM,
+            ],
+            from_year=from_year_int,
+            to_year=to_year_int,
+        )
+        stats = charts.station_stats(df, station_abbr, period=period)
+        station = db.read_station(conn, station_abbr)
 
     # Stations don't change often, use 1 day TTL for caching.
     response.headers["Cache-Control"] = "public, max-age=86400"
@@ -184,13 +185,14 @@ async def get_info(
 ):
     station_abbr = station_abbr.upper()
 
-    station = db.read_station(app.state.db, station_abbr)
+    with app.state.engine.begin() as conn:
+        station = db.read_station(conn, station_abbr)
 
-    vars = db.read_station_var_summary_stats(
-        app.state.db,
-        agg_name=db.AGG_NAME_REF_1991_2020,
-        station_abbr=station_abbr,
-    )
+        vars = db.read_station_var_summary_stats(
+            conn,
+            agg_name=db.AGG_NAME_REF_1991_2020,
+            station_abbr=station_abbr,
+        )
     ref_period_stats = (
         charts.station_period_stats(vars.loc[station_abbr]) if not vars.empty else None
     )
@@ -211,7 +213,8 @@ async def list_stations(cantons: str | None = None, response: Response = None):
     if cantons:
         cantons_list = cantons.split(",")
 
-    stations = db.read_stations(app.state.db, cantons=cantons_list, exclude_empty=True)
+    with app.state.engine.begin() as conn:
+        stations = db.read_stations(conn, cantons=cantons_list, exclude_empty=True)
     # Stations don't change often, use 1 day TTL for caching.
     response.headers["Cache-Control"] = "public, max-age=86400"
     return {

@@ -1,4 +1,4 @@
-# All parameters, generated using
+# All parameters, generated using (by now deleted)
 #
 # df = db.read_parameters(conn)
 # xs = list(s.to_dict() for _, s in df.iterrows())
