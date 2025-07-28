@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-def period_default(period: str | None) -> str:
+def _period_default(period: str | None) -> str:
     if period:
         return period
     return charts.PERIOD_ALL
@@ -96,7 +96,7 @@ async def get_chart(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Invalid chart type: {chart_type}",
         )
-    period = period_default(period)
+    period = _period_default(period)
 
     station_abbr = station_abbr.upper()
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
@@ -153,7 +153,7 @@ async def get_summary(
     to_year: str | None = None,
     response: Response = None,
 ):
-    period = period_default(period)
+    period = _period_default(period)
     station_abbr = station_abbr.upper()
 
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None

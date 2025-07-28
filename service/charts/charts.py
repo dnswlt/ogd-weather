@@ -11,10 +11,14 @@ from . import params
 PERIOD_ALL = "all"
 
 MEASUREMENT_LABELS = {
-    db.TEMP_DAILY_MEAN: "temp_2m_mean",
-    db.TEMP_DAILY_MAX: "temp_2m_max",
-    db.TEMP_DAILY_MIN: "temp_2m_min",
-    db.PRECIP_DAILY_MM: "precip_mm",
+    db.TEMP_DAILY_MEAN: "temp mean",
+    db.TEMP_DAILY_MAX: "temp max",
+    db.TEMP_DAILY_MIN: "temp min",
+    db.PRECIP_DAILY_MM: "precip mm",
+    db.TEMP_HOURLY_MEAN: "temp mean",
+    db.TEMP_HOURLY_MAX: "temp max",
+    db.TEMP_HOURLY_MIN: "temp min",
+    db.PRECIP_HOURLY_MM: "precip mm",
 }
 
 MONTH_NAMES = {
@@ -203,11 +207,11 @@ def create_dynamic_baseline_bars(
     # Compute baseline
     baseline = df["value"].mean()
     df["anomaly"] = df["value"] - baseline
-    df["sign"] = df["anomaly"].apply(lambda x: "Below mean" if x < 0 else "Above mean")
+    df["sign"] = df["anomaly"].apply(lambda x: "below mean" if x < 0 else "above mean")
 
     # Color scale for below/above baseline
     color_scale = alt.Scale(
-        domain=["Below mean", "Above mean"], range=["#2166ac", "#b2182b"]
+        domain=["below mean", "above mean"], range=["#2166ac", "#b2182b"]
     )
 
     # Bars for anomalies
@@ -589,6 +593,7 @@ def daily_measurements(
         columns=[
             models.ColumnInfo(
                 name=c,
+                display_name=MEASUREMENT_LABELS.get(c, c),
                 dtype=str(df[c].dtype),
             )
             for c in measurements.columns
