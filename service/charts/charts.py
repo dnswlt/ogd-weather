@@ -512,96 +512,142 @@ def precipitation_chart(
 def daily_temp_precip_chart(
     df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
 ):
+    """
+    Generates a combined, layered chart of hourly precipitation and temperature.
+
+    This chart displays:
+    - Precipitation as bars spanning the hour they represent.
+    - Temperature as a line chart with points at the half-hour mark.
+    - A shared, interactive legend to filter the series.
+    - Independent Y-axes for precipitation and temperature.
+
+    Args:
+        df: DataFrame with a DatetimeIndex and columns 'station_abbr',
+            TEMP_HOURLY_MEAN, and PRECIP_HOURLY_MM.
+        from_date: The date for which the chart is generated (used for the title).
+        station_abbr: The station abbreviation to filter/validate the data.
+
+    Returns:
+        A dictionary representing the Altair chart specification.
+    """
+    # --- 1. Data Validation and Preparation ---
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
         raise NoDataError(f"No precipitation data for {station_abbr}")
 
-    # Ensure times on x-axis are in local Swiss time.
-    # Drop the tzinfo since Vega/Altair works best with local times.
-    # (I.e., we want to avoid any browser-local time adjustments)
-    # https://altair-viz.github.io/user_guide/times_and_dates.html
-    df = df.copy()
-    df.index = df.index.tz_convert("Europe/Zurich").tz_localize(None)
-    df["hours_x"] = df.index - pd.Timedelta(minutes=60)
-    df["tooltip_time"] = (
-        df["hours_x"].dt.strftime("%H:%M") + " - " + df.index.strftime("%H:%M")
+    # Work with a copy to avoid modifying the original DataFrame
+    df_prep = df.copy().rename(columns=VEGA_LEGEND_LABELS)
+
+    # The key is to create explicit start, end, and midpoint columns for our intervals.
+    # We convert the index to timezone-naive 'Europe/Zurich' time as Vega/Altair
+    # work best with naive datetimes, avoiding browser-local adjustments.
+    df_prep["time_end"] = df_prep.index.tz_convert("Europe/Zurich").tz_localize(None)
+    df_prep["time_start"] = df_prep["time_end"] - pd.Timedelta(hours=1)
+    df_prep["time_midpoint"] = df_prep["time_start"] + pd.Timedelta(minutes=30)
+
+    # Create a dedicated tooltip string for the intervals.
+    df_prep["tooltip_interval"] = (
+        df_prep["time_start"].dt.strftime("%H:%M")
+        + " - "
+        + df_prep["time_end"].dt.strftime("%H:%M")
     )
-    df = df.rename(columns=VEGA_LEGEND_LABELS)
 
-    temp_long = long_format2(
-        df, var_cols=["temp mean"], id_cols=["hours_x", "tooltip_time"]
+    # Melt the dataframe into a long format. This is a robust pattern for
+    # creating charts with a shared legend and color scheme.
+    id_vars = ["time_start", "time_end", "time_midpoint", "tooltip_interval"]
+    value_vars = ["precip mm", "temp mean"]
+    long_df = df_prep.melt(
+        id_vars=id_vars,
+        value_vars=value_vars,
+        var_name="Measurement",
+        value_name="Value",
     )
 
-    precip_long = long_format2(df, ["precip mm"], id_cols=["hours_x", "tooltip_time"])
+    # --- 2. Chart Configuration ---
 
-    highlight = alt.selection_point(fields=["variable"], bind="legend")
+    # Create an interactive legend that allows filtering by clicking on items.
+    highlight = alt.selection_point(fields=["Measurement"], bind="legend")
 
+    # Define a consistent color scheme for the variables.
     color_scale = alt.Scale(
         domain=["precip mm", "temp mean"], range=["steelblue", "firebrick"]
     )
 
-    tooltip = [
-        alt.Tooltip("tooltip_time:N", title="Time"),
-        alt.Tooltip("variable:N", title="Variable"),
-        alt.Tooltip("value:Q", title="Value", format=".1f"),
-    ]
+    # Create a base chart to share data. Properties will be set on the final layered chart.
+    base = alt.Chart(long_df)
 
-    x_axis = alt.X("hours(hours_x):O").axis(title="Hour of Day")
+    # --- 3. Create Chart Layers ---
 
-    ymax = max(5, precip_long["value"].max() + 1)
+    # Layer 1: Precipitation Bars
+    # We filter the long-form data to only include precipitation.
+    precip_ymax = max(5, df_prep["precip mm"].max() + 1)
     precip_bars = (
-        alt.Chart(precip_long)
+        base.transform_filter(alt.datum.Measurement == "precip mm")
         .mark_bar()
         .encode(
-            x=x_axis,
-            y=alt.Y("value:Q").axis(title="Precipitation (mm)").scale(domain=[0, ymax]),
-            color=alt.Color(
-                "variable:N", scale=color_scale, legend=alt.Legend(title="Variable")
+            # Use 'time_start:T' for x and 'time_end:T' for x2 to define the bar's width.
+            x=alt.X(
+                "time_start:T",
+                title="Hour of Day",
+                axis=alt.Axis(format="%H:%M", labelAngle=0),
             ),
-            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
-            tooltip=tooltip,
+            x2=alt.X2("time_end:T"),
+            # Use y for the top of the bar and y2=alt.value(0) to anchor the bottom to the baseline.
+            y=alt.Y("Value:Q", title="Precipitation (mm)").scale(
+                domain=[0, precip_ymax]
+            ),
+            y2=alt.value(0),
+            color=alt.Color("Measurement:N", scale=color_scale),
+            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.2)),
+            tooltip=[
+                alt.Tooltip("tooltip_interval:N", title="Interval"),
+                alt.Tooltip("Value:Q", title="Precipitation", format=".1f"),
+            ],
         )
     )
 
+    # Layer 2: Temperature Line
+    # Filter data to only include temperature.
+    temp_ymin = min(df_prep["temp mean"].min() - 2, 0)
+    temp_ymax = max(temp_ymin + 30, df_prep["temp mean"].max() + 2)
     temp_line = (
-        alt.Chart(temp_long)
+        base.transform_filter(alt.datum.Measurement == "temp mean")
         .mark_line()
         .encode(
-            x=x_axis,
-            y=alt.Y("value:Q").axis(title="Mean Temp (°C)"),
-            color=alt.Color(
-                "variable:N", scale=color_scale, legend=alt.Legend(title="Variable")
+            # The temperature is a point measurement, so we only need 'x'.
+            # We plot it at the midpoint of the hour interval.
+            x=alt.X("time_midpoint:T", title="Hour of Day"),
+            y=alt.Y("Value:Q", title="Temperature (°C)").scale(
+                domain=[temp_ymin, temp_ymax]
             ),
-            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
+            color=alt.Color("Measurement:N", scale=color_scale),
+            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.2)),
         )
     )
 
-    temp_dots = (
-        alt.Chart(temp_long)
-        .mark_circle()
-        .encode(
-            x=x_axis,
-            y=alt.Y("value:Q").axis(title="Mean Temp (°C)"),
-            color=alt.Color(
-                "variable:N", scale=color_scale, legend=alt.Legend(title="Variable")
-            ),
-            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
-            tooltip=tooltip,
-        )
+    # Layer 3: Temperature Dots
+    # Add points to the line for better visibility and tooltip interaction.
+    temp_dots = temp_line.mark_point(filled=True, size=60).encode(
+        tooltip=[
+            alt.Tooltip("tooltip_interval:N", title="Interval"),
+            alt.Tooltip("Value:Q", title="Temperature", format=".1f"),
+        ]
     )
 
-    date_str = from_date.strftime("%d %b %Y")
+    # --- 4. Combine Layers and Finalize Chart ---
+    date_str = from_date.strftime("%a, %d %b %Y")
     chart = (
-        alt.layer(precip_bars, alt.layer(temp_line, temp_dots))
-        .resolve_scale(y="independent")
+        alt.layer(precip_bars, temp_line, temp_dots)
+        .resolve_scale(
+            y="independent"  # Allow precipitation and temp to have separate y-axis scales
+        )
         .add_params(highlight)
         .properties(
             width="container",
             autosize={"type": "fit", "contains": "padding"},
             title=f"Daily temperature and precipitation on {date_str}",
         )
-        .interactive()
     )
 
     return chart.to_dict()
