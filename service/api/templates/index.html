@@ -35,7 +35,7 @@
                 <label for="station" class="col-span-1 font-medium">Station</label>
 
                 <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
-                    {{$selected := .Selected}}
+                    {{$selected := .Query.station}}
                     {{range .Stations}}
                     <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})</option>
                     {{end}}
@@ -119,6 +119,13 @@
         </div>
     </main>
 
+    <div class="text-center text-gray-500 text-xs mt-4">
+        Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
+    </div>
+    <div class="text-center text-gray-500 text-xs mt-2">
+        Disclaimer: No responsibility is taken for the accuracy or use of the data shown.
+    </div>
+
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             const form = document.getElementById('chart-controls');
@@ -134,12 +141,6 @@
         });
     </script>
 
-    <div class="text-center text-gray-500 text-xs mt-4">
-        Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
-    </div>
-    <div class="text-center text-gray-500 text-xs mt-2">
-        Disclaimer: No responsibility is taken for the accuracy or use of the data shown.
-    </div>
 </body>
 
 </html>

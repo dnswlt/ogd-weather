@@ -136,10 +136,10 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 	}
 
 	err = s.template.ExecuteTemplate(&output, templateFile, map[string]any{
-		"Query":    flatQuery,
-		"Periods":  periods,
-		"Stations": stations.Stations,
-		"Selected": flatQuery["station"],
+		"Query":           flatQuery,
+		"Periods":         periods,
+		"Stations":        stations.Stations,
+		"SelectedStation": flatQuery["station"],
 		"Nav": ui.NavBar(r.URL.Path,
 			ui.Nav("/", "Trends"),
 			ui.Nav("/sun_rain", "Sun & Rain"),
@@ -411,6 +411,16 @@ func (s *Server) serveStatus(w http.ResponseWriter) {
 	json.NewEncoder(w).Encode(status)
 }
 
+func withQueryParams(u *url.URL, params map[string]string) *url.URL {
+	newURL := *u
+	query := newURL.Query()
+	for k, v := range params {
+		query.Add(k, v)
+	}
+	newURL.RawQuery = query.Encode()
+	return &newURL
+}
+
 func (s *Server) Serve() error {
 	mux := http.NewServeMux()
 
@@ -419,6 +429,13 @@ func (s *Server) Serve() error {
 		s.serveHTMLPage(w, r, "index.html")
 	})
 	mux.HandleFunc("GET /day", func(w http.ResponseWriter, r *http.Request) {
+		// Redirect to 2daysago if date= query param is missing.
+		if !r.URL.Query().Has("date") {
+			newURL := withQueryParams(r.URL, map[string]string{
+				"date": time.Now().AddDate(0, 0, -2).Format("2006-01-02"),
+			})
+			http.Redirect(w, r, newURL.RequestURI(), http.StatusFound)
+		}
 		s.serveHTMLPage(w, r, "day.html")
 	})
 	mux.HandleFunc("GET /sun_rain", func(w http.ResponseWriter, r *http.Request) {

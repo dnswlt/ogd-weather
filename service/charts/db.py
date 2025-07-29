@@ -929,7 +929,7 @@ def read_hourly_measurements(
     columns: list[str] | None = None,
 ) -> pd.DataFrame:
     if columns is None:
-        columns = [TEMP_HOURLY_MEAN, TEMP_HOURLY_MIN, TEMP_HOURLY_MAX, PRECIP_HOURLY_MM]
+        columns = [TEMP_HOURLY_MIN, TEMP_HOURLY_MEAN, TEMP_HOURLY_MAX, PRECIP_HOURLY_MM]
 
     # Validate column names to prevent SQL injection
     if not all(re.search(r"^[a-z][a-zA-Z0-9_]*$", c) for c in columns):

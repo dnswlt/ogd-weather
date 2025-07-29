@@ -9,9 +9,12 @@ DB_USER="$DB_NAME"
 DB_HOST="localhost"
 DB_PORT="5432"
 DB_PASSWORD=""
+DB_PASSWORD_CONFIRM=""
 
 # Read password securely from stdin
 read -s -p "Enter password for PostgreSQL new user $DB_USER: " DB_PASSWORD
+echo
+read -s -p "Confirm password: " DB_PASSWORD_CONFIRM
 echo
 
 # Validate password
@@ -23,9 +26,14 @@ if [[ "$DB_PASSWORD" == *"'"* ]]; then
     echo "Password must not contain single quotes (')."
     exit 1
 fi
+if [[ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]]; then
+    echo "Passwords do not match."
+    exit 1
+fi
 
 # Create user and database
-psql -U postgres -h "$DB_HOST" -p "$DB_PORT" -v ON_ERROR_STOP=1 <<EOF
+# psql -U postgres -h "$DB_HOST" -p "$DB_PORT" -v ON_ERROR_STOP=1 <<EOF
+sudo -u postgres psql -v ON_ERROR_STOP=1 <<EOF
 DO \$\$
 BEGIN
    IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = '$DB_USER') THEN

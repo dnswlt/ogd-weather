@@ -45,7 +45,8 @@
             <div class="grid grid-cols-3 gap-3 items-center">
                 <label for="date" class="col-span-1 font-medium">Date</label>
                 <div class="col-span-2 grid grid-cols-2 gap-3">
-                    <input type="date" id="date" name="date" placeholder="Pick date" class="border rounded p-2 w-full">
+                    <input type="date" id="date" name="date" placeholder="Pick date" value="{{.Query.date}}"
+                        class="border rounded p-2 w-full">
                 </div>
             </div>
 
@@ -98,6 +99,21 @@
     <div class="text-center text-gray-500 text-xs mt-2">
         Disclaimer: No responsibility is taken for the accuracy or use of the data shown.
     </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const form = document.getElementById('chart-controls');
+
+            form.addEventListener('change', () => {
+                const data = new FormData(form);
+                const params = new URLSearchParams(data);
+                const newUrl = `${window.location.pathname}?${params.toString()}`;
+                window.history.replaceState({}, '', newUrl);
+            });
+            // Ensure htmx snippets get fetched from the backend.
+            htmx.trigger(form, 'change');
+        });
+    </script>
 </body>
 
 </html>

@@ -613,7 +613,7 @@ def daily_temp_precip_chart(
     temp_ymax = max(temp_ymin + 30, df_prep["temp mean"].max() + 2)
     temp_line = (
         base.transform_filter(alt.datum.Measurement == "temp mean")
-        .mark_line()
+        .mark_line(interpolate="cardinal")
         .encode(
             # The temperature is a point measurement, so we only need 'x'.
             # We plot it at the midpoint of the hour interval.
