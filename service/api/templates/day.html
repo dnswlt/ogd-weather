@@ -51,12 +51,23 @@
 
         </form>
 
-        <!-- Summary -->
+        <!-- Charts -->
         <div>
-            <div id="station-summary-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
+            <div class="mb-8">
+                <div id="overview-script-container" hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/daily/{date}/overview" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
+                </div>
+                <div id="overview-chart" class="w-full overflow-hidden"></div>
+            </div>
+        </div>
+
+        <!-- Measurements table -->
+        <div>
+            <div id="measurements-table-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
                 hx-trigger="change from:#station, change from:#date" hx-get="/stations/{station}/daily">
                 <!-- <table> with station weather summary goes here -->
-                <!-- #include "../templates/station_summary.html" -->
             </div>
         </div>
 

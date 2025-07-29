@@ -458,6 +458,14 @@ func (s *Server) Serve() error {
 			}
 			proxy.ServeHTTP(w, r)
 		})
+	mux.HandleFunc("GET /stations/{stationID}/charts/daily/{date}/{chartType}",
+		func(w http.ResponseWriter, r *http.Request) {
+			if acceptsHTML(r.Header.Get("Accept")) {
+				s.serveStationsChartSnippet(w, r)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
 	mux.HandleFunc("GET /stations/{stationID}/summary",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {

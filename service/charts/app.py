@@ -120,6 +120,53 @@ async def get_chart(
     }
 
 
+def _bad_request(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=detail,
+    )
+
+
+def _daily_range(date: str) -> tuple[datetime.datetime, datetime.datetime]:
+    try:
+        d = datetime.date.fromisoformat(date)
+    except ValueError:
+        raise _bad_request("Invalid date: {date}")
+    from_date = datetime.datetime(
+        d.year, d.month, d.day, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
+    )
+    to_date = from_date + datetime.timedelta(days=1)
+    return from_date, to_date
+
+
+@app.get("/stations/{station_abbr}/charts/daily/{date}/{chart_type}")
+async def get_daily_chart(
+    station_abbr: str,
+    date: str,
+    chart_type: str,
+):
+    if chart_type not in ["overview"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Invalid chart type: {chart_type}",
+        )
+
+    from_date, to_date = _daily_range(date)
+    station_abbr = station_abbr.upper()
+
+    with app.state.engine.begin() as conn:
+        df = db.read_hourly_measurements(
+            conn,
+            station_abbr,
+            from_date=from_date,
+            to_date=to_date,
+            columns=[db.TEMP_HOURLY_MEAN, db.PRECIP_HOURLY_MM],
+        )
+    return {
+        "vega_spec": charts.daily_temp_precip_chart(df, from_date, station_abbr),
+    }
+
+
 @app.get("/stations/{station_abbr}/daily")
 async def get_daily_measurements(
     station_abbr: str,
@@ -127,15 +174,8 @@ async def get_daily_measurements(
 ):
     station_abbr = station_abbr.upper()
     # Parse date, if specified, else assume yesterday.
-    d = (
-        datetime.date.fromisoformat(date)
-        if date
-        else datetime.date.today() - datetime.timedelta(days=1)
-    )
-    from_date = datetime.datetime(
-        d.year, d.month, d.day, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
-    )
-    to_date = from_date + datetime.timedelta(days=1)
+    from_date, to_date = _daily_range(date)
+
     with app.state.engine.begin() as conn:
         df = db.read_hourly_measurements(
             conn, station_abbr, from_date=from_date, to_date=to_date

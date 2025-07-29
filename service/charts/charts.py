@@ -1,5 +1,7 @@
 from datetime import date
+import datetime
 from typing import Iterable
+from zoneinfo import ZoneInfo
 import altair as alt
 import numpy as np
 import pandas as pd
@@ -10,7 +12,7 @@ from . import params
 
 PERIOD_ALL = "all"
 
-MEASUREMENT_LABELS = {
+VEGA_LEGEND_LABELS = {
     db.TEMP_DAILY_MEAN: "temp mean",
     db.TEMP_DAILY_MAX: "temp max",
     db.TEMP_DAILY_MIN: "temp min",
@@ -110,9 +112,9 @@ def verify_period(df: pd.DataFrame, period: str):
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Renames all well-known columns from their ODG SwissMetNet (smn) names to human-readable names.
 
-    Example: tre200d0 -> temp_2m_mean. See `MEASUREMENT_LABELS` for the full list.
+    Example: tre200d0 -> "temp mean". See `VEGA_LEGEND_LABELS` for the full list.
     """
-    return df.rename(columns=MEASUREMENT_LABELS)
+    return df.rename(columns=VEGA_LEGEND_LABELS)
 
 
 def annual_agg(df, func):
@@ -122,9 +124,17 @@ def annual_agg(df, func):
     return df_y
 
 
-def long_format(df):
+def long_format(df, id_cols: list[str] | None = None):
     index_name = df.index.name
-    return df.reset_index().melt(id_vars=index_name)
+    return df.reset_index().melt(id_vars=[index_name] + (id_cols or []))
+
+
+def long_format2(df, var_cols: list[str], id_cols: list[str] | None = None):
+    if id_cols is None:
+        id_cols = []
+    index_name = df.index.name
+    df = df[var_cols + id_cols]
+    return df.reset_index().melt(id_vars=[index_name] + id_cols)
 
 
 def rolling_mean(df: pd.DataFrame, window: int = 5):
@@ -499,6 +509,104 @@ def precipitation_chart(
     ).to_dict()
 
 
+def daily_temp_precip_chart(
+    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No precipitation data for {station_abbr}")
+
+    # Ensure times on x-axis are in local Swiss time.
+    # Drop the tzinfo since Vega/Altair works best with local times.
+    # (I.e., we want to avoid any browser-local time adjustments)
+    # https://altair-viz.github.io/user_guide/times_and_dates.html
+    df = df.copy()
+    df.index = df.index.tz_convert("Europe/Zurich").tz_localize(None)
+    df["hours_x"] = df.index - pd.Timedelta(minutes=60)
+    df["tooltip_time"] = (
+        df["hours_x"].dt.strftime("%H:%M") + " - " + df.index.strftime("%H:%M")
+    )
+    df = df.rename(columns=VEGA_LEGEND_LABELS)
+
+    temp_long = long_format2(
+        df, var_cols=["temp mean"], id_cols=["hours_x", "tooltip_time"]
+    )
+
+    precip_long = long_format2(df, ["precip mm"], id_cols=["hours_x", "tooltip_time"])
+
+    highlight = alt.selection_point(fields=["variable"], bind="legend")
+
+    color_scale = alt.Scale(
+        domain=["precip mm", "temp mean"], range=["steelblue", "firebrick"]
+    )
+
+    tooltip = [
+        alt.Tooltip("tooltip_time:N", title="Time"),
+        alt.Tooltip("variable:N", title="Variable"),
+        alt.Tooltip("value:Q", title="Value", format=".1f"),
+    ]
+
+    x_axis = alt.X("hours(hours_x):O").axis(title="Hour of Day")
+
+    ymax = max(5, precip_long["value"].max() + 1)
+    precip_bars = (
+        alt.Chart(precip_long)
+        .mark_bar()
+        .encode(
+            x=x_axis,
+            y=alt.Y("value:Q").axis(title="Precipitation (mm)").scale(domain=[0, ymax]),
+            color=alt.Color(
+                "variable:N", scale=color_scale, legend=alt.Legend(title="Variable")
+            ),
+            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
+            tooltip=tooltip,
+        )
+    )
+
+    temp_line = (
+        alt.Chart(temp_long)
+        .mark_line()
+        .encode(
+            x=x_axis,
+            y=alt.Y("value:Q").axis(title="Mean Temp (°C)"),
+            color=alt.Color(
+                "variable:N", scale=color_scale, legend=alt.Legend(title="Variable")
+            ),
+            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
+        )
+    )
+
+    temp_dots = (
+        alt.Chart(temp_long)
+        .mark_circle()
+        .encode(
+            x=x_axis,
+            y=alt.Y("value:Q").axis(title="Mean Temp (°C)"),
+            color=alt.Color(
+                "variable:N", scale=color_scale, legend=alt.Legend(title="Variable")
+            ),
+            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
+            tooltip=tooltip,
+        )
+    )
+
+    date_str = from_date.strftime("%d %b %Y")
+    chart = (
+        alt.layer(precip_bars, alt.layer(temp_line, temp_dots))
+        .resolve_scale(y="independent")
+        .add_params(highlight)
+        .properties(
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+            title=f"Daily temperature and precipitation on {date_str}",
+        )
+        .interactive()
+    )
+
+    return chart.to_dict()
+
+
 def create_chart(
     chart_type: str,
     df: pd.DataFrame,
@@ -593,7 +701,7 @@ def daily_measurements(
         columns=[
             models.ColumnInfo(
                 name=c,
-                display_name=MEASUREMENT_LABELS.get(c, c),
+                display_name=VEGA_LEGEND_LABELS.get(c, c),
                 dtype=str(df[c].dtype),
             )
             for c in measurements.columns
