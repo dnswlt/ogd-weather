@@ -34,12 +34,15 @@
             <div class="grid grid-cols-3 gap-3 items-center">
                 <label for="station" class="col-span-1 font-medium">Station</label>
 
-                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full" hx-get="/stations"
-                    hx-trigger="load" hx-target="#station" hx-swap="innerHTML">
-                    <!-- #include "../templates/station_options.html" -->
-                    <option value="">Loading...</option>
+                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
+                    {{$selected := .Query.station}}
+                    {{range .Stations}}
+                    <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})
+                    </option>
+                    {{end}}
                 </select>
             </div>
+
 
             <!-- Date picker -->
             <div class="grid grid-cols-3 gap-3 items-center">
@@ -67,32 +70,14 @@
         <!-- Measurements table -->
         <div>
             <div id="measurements-table-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                hx-trigger="change from:#station, change from:#date" hx-get="/stations/{station}/daily">
+                hx-target="this" hx-trigger="change from:#chart-controls"
+                hx-get="/stations/{station}/daily">
                 <!-- <table> with station weather summary goes here -->
             </div>
         </div>
 
     </main>
 
-    <script>
-        // Auto-load once station options arrive
-        document.body.addEventListener('htmx:afterSwap', function (evt) {
-            if (evt.target.id === 'station') {
-                const sel = document.getElementById('station');
-                if (!sel) return;
-
-                // Prefer server-selected; else first non-empty option
-                let opt = sel.querySelector('option[selected]');
-                if (!opt) {
-                    opt = Array.from(sel.options).find(o => o.value.trim() !== '');
-                }
-                if (opt) {
-                    sel.value = opt.value;
-                    sel.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }
-        });
-    </script>
     <div class="text-center text-gray-500 text-xs mt-4">
         Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
     </div>
