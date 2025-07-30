@@ -519,6 +519,10 @@ func (s *Server) Serve() error {
 			}
 			proxy.ServeHTTP(w, r)
 		})
+	mux.HandleFunc("GET /stations/{station_abbr}/data/",
+		func(w http.ResponseWriter, r *http.Request) {
+			proxy.ServeHTTP(w, r)
+		})
 
 	var handler http.Handler = mux
 	if s.opts.DebugMode {

@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import datetime
+from io import StringIO
 import logging
 import os
 import sqlalchemy as sa
@@ -183,6 +184,71 @@ async def get_daily_measurements(
     return {
         "data": charts.daily_measurements(df, station_abbr),
     }
+
+
+def _dt_range(
+    from_date: str, to_date: str, date: str
+) -> tuple[datetime.datetime, datetime.datetime]:
+    if date:
+        return _daily_range(date)
+    if from_date == "" and to_date == "":
+        # No parameter set: assume 2daysago
+        date = (datetime.datetime.now() - datetime.timedelta(days=2)).strftime(
+            "%Y-%m-%d"
+        )
+        return _daily_range(date)
+    try:
+        d1 = datetime.date.fromisoformat(from_date)
+        from_dt = datetime.datetime(
+            d1.year, d1.month, d1.day, 0, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
+        )
+        d2 = datetime.date.fromisoformat(to_date)
+        to_dt = datetime.datetime(
+            d2.year, d2.month, d2.day, 0, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
+        ) + datetime.timedelta(days=1)
+        return (from_dt, to_dt)
+    except Exception:
+        raise _bad_request(f"Invalid from_date or to_date: '{from_date}', '{to_date}'")
+
+
+@app.get("/stations/{station_abbr}/data/{granularity}")
+async def get_data(
+    station_abbr: str,
+    granularity: str,
+    from_date: str = "",
+    to_date: str = "",
+    date: str = "",
+    limit: str = "",
+    csv: bool = False,
+):
+    station_abbr = station_abbr.upper()
+
+    if granularity not in ("hourly"):
+        raise _bad_request(f"Invalid granularity: {granularity}")
+    # if format not in ("text/csv", "csv", "application/json", "json"):
+    #     raise _bad_request(f"Invalid format: {format}")
+
+    from_dt, to_dt = _dt_range(from_date, to_date, date)
+
+    limit_int = int(limit) if limit.isdigit() else 1000
+    if limit_int <= 0 or limit_int > 1000:
+        raise _bad_request(
+            f"Invalid limit (limit={limit}, min=1, max=1000). This endpoint is not meant as a data dump."
+        )
+    with app.state.engine.begin() as conn:
+        df = db.read_hourly_measurements(
+            conn,
+            station_abbr,
+            from_date=from_dt,
+            to_date=to_dt,
+            limit=limit_int,
+        )
+    if csv:
+        buf = StringIO()
+        df.to_csv(buf, sep=",", header=True, index=True, encoding="utf-8")
+        return Response(content=buf.getvalue(), media_type="text/csv; charset=utf-8")
+
+    return df.to_dict(orient="records")
 
 
 @app.get("/stations/{station_abbr}/summary")

@@ -927,6 +927,7 @@ def read_hourly_measurements(
     from_date: datetime.datetime,
     to_date: datetime.datetime,
     columns: list[str] | None = None,
+    limit: int = -1,
 ) -> pd.DataFrame:
     if columns is None:
         columns = [TEMP_HOURLY_MIN, TEMP_HOURLY_MEAN, TEMP_HOURLY_MAX, PRECIP_HOURLY_MM]
@@ -956,6 +957,8 @@ def read_hourly_measurements(
 
     sql += " WHERE " + " AND ".join(filters)
     sql += " ORDER BY reference_timestamp ASC"
+    if limit > 0:
+        sql += f" LIMIT {limit}"
 
     return pd.read_sql_query(
         sa.text(sql),
