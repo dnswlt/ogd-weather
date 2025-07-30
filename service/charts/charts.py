@@ -1,14 +1,12 @@
 from datetime import date
 import datetime
-from typing import Iterable
-from zoneinfo import ZoneInfo
+from typing import Any, Iterable
 import altair as alt
 import numpy as np
 import pandas as pd
 from . import db
 from . import models
 from .errors import NoDataError
-from . import params
 
 PERIOD_ALL = "all"
 
@@ -509,6 +507,82 @@ def precipitation_chart(
     ).to_dict()
 
 
+def _hex_to_rgb(color: str) -> tuple[float, float, float]:
+    """Convert a #rrggbb hex color to (r, g, b) tuple in [0.0, 1.0]."""
+    r = int(color[1:3], 16) / 255.0
+    g = int(color[3:5], 16) / 255.0
+    b = int(color[5:7], 16) / 255.0
+    return (r, g, b)
+
+
+def _rgb_to_hex(rgb: tuple[float, float, float]) -> str:
+    """Convert an (r, g, b) tuple in [0.0, 1.0] to a #rrggbb hex color."""
+    return "#{:02x}{:02x}{:02x}".format(
+        round(rgb[0] * 255),
+        round(rgb[1] * 255),
+        round(rgb[2] * 255),
+    )
+
+
+def _renormalize_stops(
+    stops: list[dict[str, Any]], y0_ref: float, y1_ref: float, y0: float, y1: float
+):
+    """Rescales a Vega gradient by sampling the original color gradient
+    at new positions, effectively changing the mapping from [y0_ref, y1_ref]
+    to [y0, y1].
+
+    Returns:
+        New stops with offsets in [0, 1] and colors matching the values that
+        y0 and y1 would have had in the original gradient.
+    """
+    if y0_ref == y1_ref or y0 == y1:
+        raise ValueError("y inputs must have different values for 0 and 1")
+
+    offsets = [x["offset"] for x in stops]
+    if min(offsets) != 0 or max(offsets) != 1:
+        raise ValueError("stops must exactly cover the interval [0, 1]")
+    if any(a >= b for a, b in zip(offsets, offsets[1:])):
+        raise ValueError("stops must be sorted from 0 to 1")
+
+    # Convert to RGB tuples
+    colors = [_hex_to_rgb(x["color"]) for x in stops]
+
+    # Interpolation function for RGB channels
+    def interpolate_color(off: float) -> tuple[float, float, float]:
+        if off <= 0:
+            return colors[0]
+        if off >= 1:
+            return colors[-1]
+        # stops is typically very short (< 10), so just do a linear scan.
+        for i in range(1, len(stops)):
+            left = stops[i - 1]["offset"]
+            right = stops[i]["offset"]
+            if left <= off <= right:
+                t = (off - left) / (right - left)
+                c0 = colors[i - 1]
+                c1 = colors[i]
+                return tuple(c0[j] + t * (c1[j] - c0[j]) for j in range(3))
+        raise AssertionError("Should never get here")
+
+    # Generate new stops at desired offsets (still [0, 1])
+    new_stops = []
+    for offset in offsets:
+        # Map this new offset back to the actual y value
+        y = y0 + offset * (y1 - y0)
+        # Find the corresponding offset in the original gradient
+        orig_offset = (y - y0_ref) / (y1_ref - y0_ref)
+        # Get interpolated color
+        rgb = interpolate_color(orig_offset)
+        new_stops.append(
+            {
+                "offset": offset,
+                "color": _rgb_to_hex(rgb),
+            }
+        )
+
+    return new_stops
+
+
 def daily_temp_precip_chart(
     df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
 ):
@@ -579,6 +653,69 @@ def daily_temp_precip_chart(
 
     # --- 3. Create Chart Layers ---
 
+    # y-axis lower and upper bounds. Used for both the
+    # gradient "background" area and the temperature plot.
+    # Always show 0, and at least a 30 degree interval.
+    temp_ymin = min(df_prep["temp mean"].min() - 2, 0)
+    temp_ymax = max(temp_ymin + 30, df_prep["temp mean"].max() + 2)
+
+    # Layer 0: Gradient background
+    # Constant data to get an "area" plot extending across the full range.
+    gradient_df = pd.DataFrame(
+        [
+            {
+                "gradient_time": df_prep["time_start"].min(),
+                "gradient_min": temp_ymin,
+                "gradient_max": temp_ymax,
+            },
+            {
+                "gradient_time": df_prep["time_end"].max(),
+                "gradient_min": temp_ymin,
+                "gradient_max": temp_ymax,
+            },
+        ]
+    )
+    # Red-yellow-blue color gradient for the gradient area fill, from
+    # https://vega.github.io/vega/docs/schemes/#redyellowblue
+    gradient_stops = [
+        {"offset": 0, "color": "#a50026"},
+        {"offset": 0.1, "color": "#d4322c"},
+        {"offset": 0.2, "color": "#f16e43"},
+        {"offset": 0.3, "color": "#fcac64"},
+        {"offset": 0.4, "color": "#fedd90"},
+        {"offset": 0.5, "color": "#faf8c1"},
+        {"offset": 0.6, "color": "#dcf1ec"},
+        {"offset": 0.7, "color": "#abd6e8"},
+        {"offset": 0.8, "color": "#75abd0"},
+        {"offset": 0.9, "color": "#4a74b4"},
+        {"offset": 1, "color": "#313695"},
+    ]
+    # Re-normalize s.t. stops 0..1 has colors for temp_ymax..temp_ymin,
+    # assuming the original gradient defines colors for 25..-5 degrees C.
+    gradient_stops = _renormalize_stops(gradient_stops, 25, -5, temp_ymax, temp_ymin)
+    gradient_color = alt.Gradient(
+        # All coordinates are defined in a normalized [0, 1] coordinate space,
+        # relative to the bounding box of the item being colored.
+        x1=1,
+        y1=0,
+        x2=1,
+        y2=1,
+        gradient="linear",
+        stops=gradient_stops,
+    )
+    gradient_area = (
+        alt.Chart(gradient_df)
+        .mark_area(color=gradient_color)
+        .encode(
+            x=alt.X("gradient_time:T"),
+            y=alt.Y("gradient_min:Q", title=None)
+            # Force axis to be on the left, so it matches the location of the temperature axis.
+            .axis(orient="left").scale(domain=[temp_ymin, temp_ymax]),
+            y2=alt.Y2("gradient_max"),
+            opacity=alt.value(0.35),  # 0.35 "looks good" for a background.
+        )
+    )
+
     # Layer 1: Precipitation Bars
     # We filter the long-form data to only include precipitation.
     precip_ymax = max(5, df_prep["precip mm"].max() + 1)
@@ -609,8 +746,6 @@ def daily_temp_precip_chart(
 
     # Layer 2: Temperature Line
     # Filter data to only include temperature.
-    temp_ymin = min(df_prep["temp mean"].min() - 2, 0)
-    temp_ymax = max(temp_ymin + 30, df_prep["temp mean"].max() + 2)
     temp_line = (
         base.transform_filter(alt.datum.Measurement == "temp mean")
         .mark_line(interpolate="cardinal")
@@ -620,7 +755,9 @@ def daily_temp_precip_chart(
             x=alt.X("time_midpoint:T", title="Hour of Day"),
             y=alt.Y("Value:Q", title="Temperature (°C)").scale(
                 domain=[temp_ymin, temp_ymax]
-            ),
+            )
+            # Force axis to be on the left to match the side of the gradient area.
+            .axis(orient="left"),
             color=alt.Color("Measurement:N", scale=color_scale),
             opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.2)),
         )
@@ -638,7 +775,14 @@ def daily_temp_precip_chart(
     # --- 4. Combine Layers and Finalize Chart ---
     date_str = from_date.strftime("%a, %d %b %Y")
     chart = (
-        alt.layer(precip_bars, temp_line, temp_dots)
+        alt.layer(
+            # gradient_area must come first, as the background.
+            # precip_bars must come before temperature, so the temp. line
+            # is not hidden.
+            gradient_area,
+            precip_bars,
+            alt.layer(temp_line, temp_dots),
+        )
         .resolve_scale(
             y="independent"  # Allow precipitation and temp to have separate y-axis scales
         )

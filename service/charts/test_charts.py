@@ -68,3 +68,67 @@ class TestStationPeriodStats(unittest.TestCase):
         self.assertEqual(vmax.source_granularity, "daily")
         self.assertEqual(vmax.value_sum, 15000.0)
         self.assertEqual(vmax.value_count, 1000)
+
+
+class TestNormalizeStops(unittest.TestCase):
+    def test_renormalize_stops_identity(self):
+        stops = [
+            {"offset": 0.0, "color": "#000000"},
+            {"offset": 1.0, "color": "#ffffff"},
+        ]
+        newstops = charts._renormalize_stops(stops, 0, 100, 0, 100)
+        self.assertListEqual([s["color"] for s in newstops], ["#000000", "#ffffff"])
+
+    def test_renormalize_stops_invert(self):
+        stops = [
+            {"offset": 0.0, "color": "#000000"},
+            {"offset": 1.0, "color": "#ffffff"},
+        ]
+        newstops = charts._renormalize_stops(stops, 0, 100, 100, 0)
+        self.assertListEqual([s["color"] for s in newstops], ["#ffffff", "#000000"])
+
+    def test_renormalize_stops_negative(self):
+        stops = [
+            {"offset": 0.0, "color": "#000000"},
+            {"offset": 1.0, "color": "#ffffff"},
+        ]
+        newstops = charts._renormalize_stops(stops, 0, -1, -1, 0)
+        self.assertListEqual([s["color"] for s in newstops], ["#ffffff", "#000000"])
+
+    def test_renormalize_stops_above(self):
+        stops = [
+            {"offset": 0.0, "color": "#000000"},
+            {"offset": 1.0, "color": "#ffffff"},
+        ]
+        newstops = charts._renormalize_stops(stops, 0, 1, 2, 3)
+        self.assertListEqual([s["color"] for s in newstops], ["#ffffff", "#ffffff"])
+
+    def test_renormalize_stops_below(self):
+        stops = [
+            {"offset": 0.0, "color": "#000000"},
+            {"offset": 1.0, "color": "#ffffff"},
+        ]
+        newstops = charts._renormalize_stops(stops, 0, 1, -2, -3)
+        self.assertListEqual([s["color"] for s in newstops], ["#000000", "#000000"])
+
+    def test_renormalize_stops_half(self):
+        stops = [
+            {"offset": 0.0, "color": "#000000"},
+            {"offset": 1.0, "color": "#ffffff"},
+        ]
+        newstops = charts._renormalize_stops(stops, 0, 100, 0, 50)
+        self.assertListEqual([s["color"] for s in newstops], ["#000000", "#808080"])
+
+    def test_renormalize_stops_multi_red(self):
+        stops = [
+            {"offset": 0.0, "color": "#000000"},
+            {"offset": 0.25, "color": "#400000"},
+            {"offset": 0.5, "color": "#800000"},
+            {"offset": 0.75, "color": "#c00000"},
+            {"offset": 1.0, "color": "#ff0000"},
+        ]
+        newstops = charts._renormalize_stops(stops, 0, 1, 0.5, 1.5)
+        self.assertListEqual(
+            [s["color"] for s in newstops],
+            ["#800000", "#c00000", "#ff0000", "#ff0000", "#ff0000"],
+        )
