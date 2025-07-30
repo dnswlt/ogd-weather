@@ -243,12 +243,21 @@ async def get_data(
             to_date=to_dt,
             limit=limit_int,
         )
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+    }
     if csv:
         buf = StringIO()
         df.to_csv(buf, sep=",", header=True, index=True, encoding="utf-8")
-        return Response(content=buf.getvalue(), media_type="text/csv; charset=utf-8")
+        return Response(
+            content=buf.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers=headers,
+        )
 
-    return df.to_dict(orient="records")
+    return Response(
+        content=df.to_dict(orient="records"), media_type="", headers=headers
+    )
 
 
 @app.get("/stations/{station_abbr}/summary")
