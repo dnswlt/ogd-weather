@@ -243,20 +243,22 @@ async def get_data(
             to_date=to_dt,
             limit=limit_int,
         )
-    headers = {
-        "Access-Control-Allow-Origin": "*",
-    }
+
+    # Use Europe/Zurich local time in export. To avoid pandas time formatting
+    # getting in the way, format as string up front explicitly.
+    df.index = df.index.tz_convert("Europe/Zurich").strftime("%Y-%m-%d %H:%M:%S")
+    df = df.reset_index()
     if csv:
         buf = StringIO()
-        df.to_csv(buf, sep=",", header=True, index=True, encoding="utf-8")
+        df.to_csv(buf, sep=",", header=True, index=False, encoding="utf-8")
         return Response(
             content=buf.getvalue(),
             media_type="text/csv; charset=utf-8",
-            headers=headers,
         )
 
     return Response(
-        content=df.to_dict(orient="records"), media_type="", headers=headers
+        content=df.to_json(orient="records", index=False),
+        media_type="application/json",
     )
 
 
