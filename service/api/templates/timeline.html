@@ -5,8 +5,6 @@
     <meta charset="utf-8" />
     <title>Weather Data CH</title>
 
-    <script src="/static/js/helpers.js"></script>
-
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -37,7 +35,8 @@
                 <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
                     {{$selected := .Query.station}}
                     {{range .Stations}}
-                    <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})</option>
+                    <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})
+                    </option>
                     {{end}}
                 </select>
             </div>
@@ -60,7 +59,8 @@
                 <div class="col-span-2 grid grid-cols-2 gap-3">
                     <input type="number" id="from_year" name="from_year" placeholder="From" value="{{.Query.from_year}}"
                         class="border rounded p-2 w-full">
-                    <input type="number" id="to_year" name="to_year" placeholder="To" value="{{.Query.to_year}}" class="border rounded p-2 w-full">
+                    <input type="number" id="to_year" name="to_year" placeholder="To" value="{{.Query.to_year}}"
+                        class="border rounded p-2 w-full">
                 </div>
             </div>
 
@@ -69,11 +69,13 @@
                 <label class="col-span-1 font-medium">Smoothing</label>
                 <div class="col-span-2 flex items-center space-x-4">
                     <label class="inline-flex items-center border rounded p-2 w-full">
-                        <input type="radio" name="window" value="1" class="form-radio" {{if ne .Query.window "1"}}checked{{end}}>
+                        <input type="radio" name="window" value="1" class="form-radio" {{if eq .Query.window "1"
+                            }}checked{{end}}>
                         <span class="ml-2">Annual</span>
                     </label>
                     <label class="inline-flex items-center border rounded p-2 w-full">
-                        <input type="radio" name="window" value="5" class="form-radio" {{if eq .Query.window "5"}}checked{{end}}>
+                        <input type="radio" name="window" value="5" class="form-radio" {{if eq .Query.window "5"
+                            }}checked{{end}}>
                         <span class="ml-2">5-year rolling avg.</span>
                     </label>
                 </div>
@@ -119,25 +121,17 @@
         </div>
     </main>
 
-    <div class="text-center text-gray-500 text-xs mt-4">
-        Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
-    </div>
-    <div class="text-center text-gray-500 text-xs mt-2">
-        Disclaimer: No responsibility is taken for the accuracy or use of the data shown.
-    </div>
+    {{template "disclaimer.html" .}}
 
-    <script>
+    <script type="module">
+        import { rememberAndRestoreQueryParams } from '/static/js/helpers.js';
+
         document.addEventListener("DOMContentLoaded", () => {
             const form = document.getElementById('chart-controls');
-
-            form.addEventListener('change', () => {
-                const data = new FormData(form);
-                const params = new URLSearchParams(data);
-                const newUrl = `${window.location.pathname}?${params.toString()}`;
-                window.history.replaceState({}, '', newUrl);
-            });
-            // Ensure htmx snippets get fetched from the backend.
-            htmx.trigger(form, 'change');
+            if (form) {
+                rememberAndRestoreQueryParams(form);
+                htmx.trigger(form, 'change');
+            }
         });
     </script>
 

@@ -5,8 +5,6 @@
     <meta charset="utf-8" />
     <title>Weather Data CH</title>
 
-    <script src="/static/js/helpers.js"></script>
-
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -70,35 +68,27 @@
         <!-- Measurements table -->
         <div>
             <div id="measurements-table-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                hx-target="this" hx-trigger="change from:#chart-controls"
-                hx-get="/stations/{station}/daily">
+                hx-target="this" hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/daily">
                 <!-- <table> with station weather summary goes here -->
             </div>
         </div>
 
     </main>
 
-    <div class="text-center text-gray-500 text-xs mt-4">
-        Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss
-    </div>
-    <div class="text-center text-gray-500 text-xs mt-2">
-        Disclaimer: No responsibility is taken for the accuracy or use of the data shown.
-    </div>
+    {{template "disclaimer.html" .}}
 
-    <script>
+    <script type="module">
+        import { rememberAndRestoreQueryParams } from '/static/js/helpers.js';
+
         document.addEventListener("DOMContentLoaded", () => {
             const form = document.getElementById('chart-controls');
-
-            form.addEventListener('change', () => {
-                const data = new FormData(form);
-                const params = new URLSearchParams(data);
-                const newUrl = `${window.location.pathname}?${params.toString()}`;
-                window.history.replaceState({}, '', newUrl);
-            });
-            // Ensure htmx snippets get fetched from the backend.
-            htmx.trigger(form, 'change');
+            if (form) {
+                rememberAndRestoreQueryParams(form);
+                htmx.trigger(form, 'change');
+            }
         });
     </script>
+
 </body>
 
 </html>

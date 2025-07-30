@@ -77,7 +77,9 @@
 </table>
 
 <!-- OOB swap to update the year inputs -->
-<script>
+<script type="module">
+    import { safeUpdateYearInputs } from '/static/js/helpers.js';
+
     safeUpdateYearInputs(
         {{.Stats.FirstDate.Year }},
         {{.Stats.LastDate.Year }},

@@ -585,7 +585,7 @@ def _renormalize_stops(
 
 def daily_temp_precip_chart(
     df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
-):
+) -> dict[str, Any]:
     """
     Generates a combined, layered chart of hourly precipitation and temperature.
 

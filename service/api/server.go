@@ -135,17 +135,19 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 		return
 	}
 
+	nav := ui.NewNavBar(
+		ui.NavItem("/ui/timeline", "Trends").Params("station", "from_year", "to_year", "period", "window"),
+		ui.NavItem("/ui/sun_rain", "Sun & Rain").Params("station", "from_year", "to_year", "period"),
+		ui.NavItem("/ui/day", "Daily").Params("station", "date"),
+		ui.NavItem("/ui/map", "Map").Params("station"),
+	).SetActive(r.URL.Path).SetParams(q)
+
 	err = s.template.ExecuteTemplate(&output, templateFile, map[string]any{
 		"Query":           flatQuery,
 		"Periods":         periods,
 		"Stations":        stations.Stations,
 		"SelectedStation": flatQuery["station"],
-		"Nav": ui.NavBar(r.URL.Path,
-			ui.Nav("/", "Trends"),
-			ui.Nav("/sun_rain", "Sun & Rain"),
-			ui.Nav("/day", "Daily"),
-			ui.Nav("/map", "Map"),
-		),
+		"NavBar":          nav,
 	})
 	if err != nil {
 		log.Printf("Failed to render template %q: %v", templateFile, err)
@@ -426,9 +428,12 @@ func (s *Server) Serve() error {
 
 	// Root page
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "index.html")
+		http.Redirect(w, r, "/ui/timeline", http.StatusTemporaryRedirect)
 	})
-	mux.HandleFunc("GET /day", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /ui/timeline", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "timeline.html")
+	})
+	mux.HandleFunc("GET /ui/day", func(w http.ResponseWriter, r *http.Request) {
 		// Redirect to 2daysago if date= query param is missing.
 		if !r.URL.Query().Has("date") {
 			newURL := withQueryParams(r.URL, map[string]string{
@@ -438,10 +443,10 @@ func (s *Server) Serve() error {
 		}
 		s.serveHTMLPage(w, r, "day.html")
 	})
-	mux.HandleFunc("GET /sun_rain", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /ui/sun_rain", func(w http.ResponseWriter, r *http.Request) {
 		s.serveHTMLPage(w, r, "sun_rain.html")
 	})
-	mux.HandleFunc("GET /map", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /ui/map", func(w http.ResponseWriter, r *http.Request) {
 		s.serveHTMLPage(w, r, "map.html")
 	})
 	mux.Handle("DELETE /admin/cache/responses", s.withAuth(func(w http.ResponseWriter, r *http.Request) {
