@@ -1,0 +1,729 @@
+{
+    "vega_spec": {
+        "config": {
+            "view": {
+                "continuousWidth": 300,
+                "continuousHeight": 300
+            }
+        },
+        "layer": [
+            {
+                "data": {
+                    "name": "data-26b637d849952334be3cfab9e8eea9b7"
+                },
+                "mark": {
+                    "type": "area",
+                    "color": {
+                        "x1": 1,
+                        "y1": 0,
+                        "x2": 1,
+                        "y2": 1,
+                        "gradient": "linear",
+                        "stops": [
+                            {
+                                "offset": 0,
+                                "color": "#a50026"
+                            },
+                            {
+                                "offset": 0.1,
+                                "color": "#a50026"
+                            },
+                            {
+                                "offset": 0.2,
+                                "color": "#b51128"
+                            },
+                            {
+                                "offset": 0.3,
+                                "color": "#de4634"
+                            },
+                            {
+                                "offset": 0.4,
+                                "color": "#f5834e"
+                            },
+                            {
+                                "offset": 0.5,
+                                "color": "#fdbc73"
+                            },
+                            {
+                                "offset": 0.6,
+                                "color": "#fde6a0"
+                            },
+                            {
+                                "offset": 0.7,
+                                "color": "#f0f6cf"
+                            },
+                            {
+                                "offset": 0.8,
+                                "color": "#cce8eb"
+                            },
+                            {
+                                "offset": 0.9,
+                                "color": "#99c8e0"
+                            },
+                            {
+                                "offset": 1,
+                                "color": "#6799c7"
+                            }
+                        ]
+                    }
+                },
+                "encoding": {
+                    "opacity": {
+                        "value": 0.35
+                    },
+                    "x": {
+                        "field": "gradient_time",
+                        "type": "temporal"
+                    },
+                    "y": {
+                        "axis": {
+                            "orient": "left"
+                        },
+                        "field": "gradient_min",
+                        "scale": {
+                            "domain": [
+                                0,
+                                30
+                            ]
+                        },
+                        "title": null,
+                        "type": "quantitative"
+                    },
+                    "y2": {
+                        "field": "gradient_max"
+                    }
+                },
+                "name": "view_1012"
+            },
+            {
+                "data": {
+                    "name": "data-eb712307dfef0ba7c38caba56db9f42d"
+                },
+                "mark": {
+                    "type": "bar"
+                },
+                "encoding": {
+                    "color": {
+                        "field": "Measurement",
+                        "scale": {
+                            "domain": [
+                                "precip mm",
+                                "temp mean"
+                            ],
+                            "range": [
+                                "steelblue",
+                                "firebrick"
+                            ]
+                        },
+                        "type": "nominal"
+                    },
+                    "opacity": {
+                        "condition": {
+                            "param": "param_1780",
+                            "value": 1.0
+                        },
+                        "value": 0.2
+                    },
+                    "tooltip": [
+                        {
+                            "field": "tooltip_interval",
+                            "title": "Interval",
+                            "type": "nominal"
+                        },
+                        {
+                            "field": "Value",
+                            "format": ".1f",
+                            "title": "Precipitation",
+                            "type": "quantitative"
+                        }
+                    ],
+                    "x": {
+                        "axis": {
+                            "format": "%H:%M",
+                            "labelAngle": 0
+                        },
+                        "field": "time_start",
+                        "title": "Hour of Day",
+                        "type": "temporal"
+                    },
+                    "x2": {
+                        "field": "time_end"
+                    },
+                    "y": {
+                        "field": "Value",
+                        "scale": {
+                            "domain": [
+                                0,
+                                9.8
+                            ]
+                        },
+                        "title": "Precipitation (mm)",
+                        "type": "quantitative"
+                    },
+                    "y2": {
+                        "value": 0
+                    }
+                },
+                "transform": [
+                    {
+                        "filter": "(datum.Measurement === 'precip mm')"
+                    }
+                ]
+            },
+            {
+                "layer": [
+                    {
+                        "mark": {
+                            "type": "line",
+                            "interpolate": "cardinal"
+                        },
+                        "encoding": {
+                            "color": {
+                                "field": "Measurement",
+                                "scale": {
+                                    "domain": [
+                                        "precip mm",
+                                        "temp mean"
+                                    ],
+                                    "range": [
+                                        "steelblue",
+                                        "firebrick"
+                                    ]
+                                },
+                                "type": "nominal"
+                            },
+                            "opacity": {
+                                "condition": {
+                                    "param": "param_1780",
+                                    "value": 1.0
+                                },
+                                "value": 0.2
+                            },
+                            "x": {
+                                "field": "time_midpoint",
+                                "title": "Hour of Day",
+                                "type": "temporal"
+                            },
+                            "y": {
+                                "axis": {
+                                    "orient": "left"
+                                },
+                                "field": "Value",
+                                "scale": {
+                                    "domain": [
+                                        0,
+                                        30
+                                    ]
+                                },
+                                "title": "Temperature (°C)",
+                                "type": "quantitative"
+                            }
+                        },
+                        "transform": [
+                            {
+                                "filter": "(datum.Measurement === 'temp mean')"
+                            }
+                        ]
+                    },
+                    {
+                        "mark": {
+                            "type": "point",
+                            "filled": true,
+                            "size": 60
+                        },
+                        "encoding": {
+                            "color": {
+                                "field": "Measurement",
+                                "scale": {
+                                    "domain": [
+                                        "precip mm",
+                                        "temp mean"
+                                    ],
+                                    "range": [
+                                        "steelblue",
+                                        "firebrick"
+                                    ]
+                                },
+                                "type": "nominal"
+                            },
+                            "opacity": {
+                                "condition": {
+                                    "param": "param_1780",
+                                    "value": 1.0
+                                },
+                                "value": 0.2
+                            },
+                            "tooltip": [
+                                {
+                                    "field": "tooltip_interval",
+                                    "title": "Interval",
+                                    "type": "nominal"
+                                },
+                                {
+                                    "field": "Value",
+                                    "format": ".1f",
+                                    "title": "Temperature",
+                                    "type": "quantitative"
+                                }
+                            ],
+                            "x": {
+                                "field": "time_midpoint",
+                                "title": "Hour of Day",
+                                "type": "temporal"
+                            },
+                            "y": {
+                                "axis": {
+                                    "orient": "left"
+                                },
+                                "field": "Value",
+                                "scale": {
+                                    "domain": [
+                                        0,
+                                        30
+                                    ]
+                                },
+                                "title": "Temperature (°C)",
+                                "type": "quantitative"
+                            }
+                        },
+                        "transform": [
+                            {
+                                "filter": "(datum.Measurement === 'temp mean')"
+                            }
+                        ]
+                    }
+                ],
+                "data": {
+                    "name": "data-eb712307dfef0ba7c38caba56db9f42d"
+                }
+            }
+        ],
+        "autosize": {
+            "type": "fit",
+            "contains": "padding"
+        },
+        "params": [
+            {
+                "name": "param_1780",
+                "select": {
+                    "type": "point",
+                    "fields": [
+                        "Measurement"
+                    ]
+                },
+                "bind": "legend",
+                "views": [
+                    "view_1012"
+                ]
+            }
+        ],
+        "resolve": {
+            "scale": {
+                "y": "independent"
+            }
+        },
+        "title": "Daily temperature and precipitation on Sat, 06 Jul 2024",
+        "width": "container",
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.20.1.json",
+        "datasets": {
+            "data-26b637d849952334be3cfab9e8eea9b7": [
+                {
+                    "gradient_time": "2024-07-06T00:00:00",
+                    "gradient_min": 0,
+                    "gradient_max": 30
+                },
+                {
+                    "gradient_time": "2024-07-07T00:00:00",
+                    "gradient_min": 0,
+                    "gradient_max": 30
+                }
+            ],
+            "data-eb712307dfef0ba7c38caba56db9f42d": [
+                {
+                    "time_start": "2024-07-06T00:00:00",
+                    "time_end": "2024-07-06T01:00:00",
+                    "time_midpoint": "2024-07-06T00:30:00",
+                    "tooltip_interval": "00:00 - 01:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T01:00:00",
+                    "time_end": "2024-07-06T02:00:00",
+                    "time_midpoint": "2024-07-06T01:30:00",
+                    "tooltip_interval": "01:00 - 02:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T02:00:00",
+                    "time_end": "2024-07-06T03:00:00",
+                    "time_midpoint": "2024-07-06T02:30:00",
+                    "tooltip_interval": "02:00 - 03:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T03:00:00",
+                    "time_end": "2024-07-06T04:00:00",
+                    "time_midpoint": "2024-07-06T03:30:00",
+                    "tooltip_interval": "03:00 - 04:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T04:00:00",
+                    "time_end": "2024-07-06T05:00:00",
+                    "time_midpoint": "2024-07-06T04:30:00",
+                    "tooltip_interval": "04:00 - 05:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T05:00:00",
+                    "time_end": "2024-07-06T06:00:00",
+                    "time_midpoint": "2024-07-06T05:30:00",
+                    "tooltip_interval": "05:00 - 06:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T06:00:00",
+                    "time_end": "2024-07-06T07:00:00",
+                    "time_midpoint": "2024-07-06T06:30:00",
+                    "tooltip_interval": "06:00 - 07:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T07:00:00",
+                    "time_end": "2024-07-06T08:00:00",
+                    "time_midpoint": "2024-07-06T07:30:00",
+                    "tooltip_interval": "07:00 - 08:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T08:00:00",
+                    "time_end": "2024-07-06T09:00:00",
+                    "time_midpoint": "2024-07-06T08:30:00",
+                    "tooltip_interval": "08:00 - 09:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T09:00:00",
+                    "time_end": "2024-07-06T10:00:00",
+                    "time_midpoint": "2024-07-06T09:30:00",
+                    "tooltip_interval": "09:00 - 10:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T10:00:00",
+                    "time_end": "2024-07-06T11:00:00",
+                    "time_midpoint": "2024-07-06T10:30:00",
+                    "tooltip_interval": "10:00 - 11:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T11:00:00",
+                    "time_end": "2024-07-06T12:00:00",
+                    "time_midpoint": "2024-07-06T11:30:00",
+                    "tooltip_interval": "11:00 - 12:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T12:00:00",
+                    "time_end": "2024-07-06T13:00:00",
+                    "time_midpoint": "2024-07-06T12:30:00",
+                    "tooltip_interval": "12:00 - 13:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T13:00:00",
+                    "time_end": "2024-07-06T14:00:00",
+                    "time_midpoint": "2024-07-06T13:30:00",
+                    "tooltip_interval": "13:00 - 14:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.9
+                },
+                {
+                    "time_start": "2024-07-06T14:00:00",
+                    "time_end": "2024-07-06T15:00:00",
+                    "time_midpoint": "2024-07-06T14:30:00",
+                    "tooltip_interval": "14:00 - 15:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.8
+                },
+                {
+                    "time_start": "2024-07-06T15:00:00",
+                    "time_end": "2024-07-06T16:00:00",
+                    "time_midpoint": "2024-07-06T15:30:00",
+                    "tooltip_interval": "15:00 - 16:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T16:00:00",
+                    "time_end": "2024-07-06T17:00:00",
+                    "time_midpoint": "2024-07-06T16:30:00",
+                    "tooltip_interval": "16:00 - 17:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T17:00:00",
+                    "time_end": "2024-07-06T18:00:00",
+                    "time_midpoint": "2024-07-06T17:30:00",
+                    "tooltip_interval": "17:00 - 18:00",
+                    "Measurement": "precip mm",
+                    "Value": 4.6
+                },
+                {
+                    "time_start": "2024-07-06T18:00:00",
+                    "time_end": "2024-07-06T19:00:00",
+                    "time_midpoint": "2024-07-06T18:30:00",
+                    "tooltip_interval": "18:00 - 19:00",
+                    "Measurement": "precip mm",
+                    "Value": 8.8
+                },
+                {
+                    "time_start": "2024-07-06T19:00:00",
+                    "time_end": "2024-07-06T20:00:00",
+                    "time_midpoint": "2024-07-06T19:30:00",
+                    "tooltip_interval": "19:00 - 20:00",
+                    "Measurement": "precip mm",
+                    "Value": 4.1
+                },
+                {
+                    "time_start": "2024-07-06T20:00:00",
+                    "time_end": "2024-07-06T21:00:00",
+                    "time_midpoint": "2024-07-06T20:30:00",
+                    "tooltip_interval": "20:00 - 21:00",
+                    "Measurement": "precip mm",
+                    "Value": 4.6
+                },
+                {
+                    "time_start": "2024-07-06T21:00:00",
+                    "time_end": "2024-07-06T22:00:00",
+                    "time_midpoint": "2024-07-06T21:30:00",
+                    "tooltip_interval": "21:00 - 22:00",
+                    "Measurement": "precip mm",
+                    "Value": 2.6
+                },
+                {
+                    "time_start": "2024-07-06T22:00:00",
+                    "time_end": "2024-07-06T23:00:00",
+                    "time_midpoint": "2024-07-06T22:30:00",
+                    "tooltip_interval": "22:00 - 23:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.7
+                },
+                {
+                    "time_start": "2024-07-06T23:00:00",
+                    "time_end": "2024-07-07T00:00:00",
+                    "time_midpoint": "2024-07-06T23:30:00",
+                    "tooltip_interval": "23:00 - 00:00",
+                    "Measurement": "precip mm",
+                    "Value": 0.0
+                },
+                {
+                    "time_start": "2024-07-06T00:00:00",
+                    "time_end": "2024-07-06T01:00:00",
+                    "time_midpoint": "2024-07-06T00:30:00",
+                    "tooltip_interval": "00:00 - 01:00",
+                    "Measurement": "temp mean",
+                    "Value": 16.3
+                },
+                {
+                    "time_start": "2024-07-06T01:00:00",
+                    "time_end": "2024-07-06T02:00:00",
+                    "time_midpoint": "2024-07-06T01:30:00",
+                    "tooltip_interval": "01:00 - 02:00",
+                    "Measurement": "temp mean",
+                    "Value": 15.9
+                },
+                {
+                    "time_start": "2024-07-06T02:00:00",
+                    "time_end": "2024-07-06T03:00:00",
+                    "time_midpoint": "2024-07-06T02:30:00",
+                    "tooltip_interval": "02:00 - 03:00",
+                    "Measurement": "temp mean",
+                    "Value": 15.7
+                },
+                {
+                    "time_start": "2024-07-06T03:00:00",
+                    "time_end": "2024-07-06T04:00:00",
+                    "time_midpoint": "2024-07-06T03:30:00",
+                    "tooltip_interval": "03:00 - 04:00",
+                    "Measurement": "temp mean",
+                    "Value": 15.0
+                },
+                {
+                    "time_start": "2024-07-06T04:00:00",
+                    "time_end": "2024-07-06T05:00:00",
+                    "time_midpoint": "2024-07-06T04:30:00",
+                    "tooltip_interval": "04:00 - 05:00",
+                    "Measurement": "temp mean",
+                    "Value": 14.8
+                },
+                {
+                    "time_start": "2024-07-06T05:00:00",
+                    "time_end": "2024-07-06T06:00:00",
+                    "time_midpoint": "2024-07-06T05:30:00",
+                    "tooltip_interval": "05:00 - 06:00",
+                    "Measurement": "temp mean",
+                    "Value": 14.3
+                },
+                {
+                    "time_start": "2024-07-06T06:00:00",
+                    "time_end": "2024-07-06T07:00:00",
+                    "time_midpoint": "2024-07-06T06:30:00",
+                    "tooltip_interval": "06:00 - 07:00",
+                    "Measurement": "temp mean",
+                    "Value": 14.6
+                },
+                {
+                    "time_start": "2024-07-06T07:00:00",
+                    "time_end": "2024-07-06T08:00:00",
+                    "time_midpoint": "2024-07-06T07:30:00",
+                    "tooltip_interval": "07:00 - 08:00",
+                    "Measurement": "temp mean",
+                    "Value": 16.8
+                },
+                {
+                    "time_start": "2024-07-06T08:00:00",
+                    "time_end": "2024-07-06T09:00:00",
+                    "time_midpoint": "2024-07-06T08:30:00",
+                    "tooltip_interval": "08:00 - 09:00",
+                    "Measurement": "temp mean",
+                    "Value": 19.1
+                },
+                {
+                    "time_start": "2024-07-06T09:00:00",
+                    "time_end": "2024-07-06T10:00:00",
+                    "time_midpoint": "2024-07-06T09:30:00",
+                    "tooltip_interval": "09:00 - 10:00",
+                    "Measurement": "temp mean",
+                    "Value": 20.6
+                },
+                {
+                    "time_start": "2024-07-06T10:00:00",
+                    "time_end": "2024-07-06T11:00:00",
+                    "time_midpoint": "2024-07-06T10:30:00",
+                    "tooltip_interval": "10:00 - 11:00",
+                    "Measurement": "temp mean",
+                    "Value": 21.0
+                },
+                {
+                    "time_start": "2024-07-06T11:00:00",
+                    "time_end": "2024-07-06T12:00:00",
+                    "time_midpoint": "2024-07-06T11:30:00",
+                    "tooltip_interval": "11:00 - 12:00",
+                    "Measurement": "temp mean",
+                    "Value": 21.4
+                },
+                {
+                    "time_start": "2024-07-06T12:00:00",
+                    "time_end": "2024-07-06T13:00:00",
+                    "time_midpoint": "2024-07-06T12:30:00",
+                    "tooltip_interval": "12:00 - 13:00",
+                    "Measurement": "temp mean",
+                    "Value": 19.9
+                },
+                {
+                    "time_start": "2024-07-06T13:00:00",
+                    "time_end": "2024-07-06T14:00:00",
+                    "time_midpoint": "2024-07-06T13:30:00",
+                    "tooltip_interval": "13:00 - 14:00",
+                    "Measurement": "temp mean",
+                    "Value": 18.3
+                },
+                {
+                    "time_start": "2024-07-06T14:00:00",
+                    "time_end": "2024-07-06T15:00:00",
+                    "time_midpoint": "2024-07-06T14:30:00",
+                    "tooltip_interval": "14:00 - 15:00",
+                    "Measurement": "temp mean",
+                    "Value": 18.0
+                },
+                {
+                    "time_start": "2024-07-06T15:00:00",
+                    "time_end": "2024-07-06T16:00:00",
+                    "time_midpoint": "2024-07-06T15:30:00",
+                    "tooltip_interval": "15:00 - 16:00",
+                    "Measurement": "temp mean",
+                    "Value": 19.3
+                },
+                {
+                    "time_start": "2024-07-06T16:00:00",
+                    "time_end": "2024-07-06T17:00:00",
+                    "time_midpoint": "2024-07-06T16:30:00",
+                    "tooltip_interval": "16:00 - 17:00",
+                    "Measurement": "temp mean",
+                    "Value": 21.3
+                },
+                {
+                    "time_start": "2024-07-06T17:00:00",
+                    "time_end": "2024-07-06T18:00:00",
+                    "time_midpoint": "2024-07-06T17:30:00",
+                    "tooltip_interval": "17:00 - 18:00",
+                    "Measurement": "temp mean",
+                    "Value": 19.2
+                },
+                {
+                    "time_start": "2024-07-06T18:00:00",
+                    "time_end": "2024-07-06T19:00:00",
+                    "time_midpoint": "2024-07-06T18:30:00",
+                    "tooltip_interval": "18:00 - 19:00",
+                    "Measurement": "temp mean",
+                    "Value": 16.2
+                },
+                {
+                    "time_start": "2024-07-06T19:00:00",
+                    "time_end": "2024-07-06T20:00:00",
+                    "time_midpoint": "2024-07-06T19:30:00",
+                    "tooltip_interval": "19:00 - 20:00",
+                    "Measurement": "temp mean",
+                    "Value": 16.0
+                },
+                {
+                    "time_start": "2024-07-06T20:00:00",
+                    "time_end": "2024-07-06T21:00:00",
+                    "time_midpoint": "2024-07-06T20:30:00",
+                    "tooltip_interval": "20:00 - 21:00",
+                    "Measurement": "temp mean",
+                    "Value": 15.2
+                },
+                {
+                    "time_start": "2024-07-06T21:00:00",
+                    "time_end": "2024-07-06T22:00:00",
+                    "time_midpoint": "2024-07-06T21:30:00",
+                    "tooltip_interval": "21:00 - 22:00",
+                    "Measurement": "temp mean",
+                    "Value": 14.8
+                },
+                {
+                    "time_start": "2024-07-06T22:00:00",
+                    "time_end": "2024-07-06T23:00:00",
+                    "time_midpoint": "2024-07-06T22:30:00",
+                    "tooltip_interval": "22:00 - 23:00",
+                    "Measurement": "temp mean",
+                    "Value": 14.8
+                },
+                {
+                    "time_start": "2024-07-06T23:00:00",
+                    "time_end": "2024-07-07T00:00:00",
+                    "time_midpoint": "2024-07-06T23:30:00",
+                    "tooltip_interval": "23:00 - 00:00",
+                    "Measurement": "temp mean",
+                    "Value": 14.8
+                }
+            ]
+        }
+    }
+}
