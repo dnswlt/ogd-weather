@@ -122,17 +122,9 @@ def annual_agg(df, func):
     return df_y
 
 
-def long_format(df, id_cols: list[str] | None = None):
+def long_format(df: pd.DataFrame, id_cols: list[str] | None = None) -> pd.DataFrame:
     index_name = df.index.name
     return df.reset_index().melt(id_vars=[index_name] + (id_cols or []))
-
-
-def long_format2(df, var_cols: list[str], id_cols: list[str] | None = None):
-    if id_cols is None:
-        id_cols = []
-    index_name = df.index.name
-    df = df[var_cols + id_cols]
-    return df.reset_index().melt(id_vars=[index_name] + id_cols)
 
 
 def rolling_mean(df: pd.DataFrame, window: int = 5):
@@ -260,116 +252,87 @@ def create_dynamic_baseline_bars(
     )
 
 
-def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
+def day_count_chart_data(predicate: pd.Series) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Prepares the day count and trendline data for "# days" charts."""
+    if predicate.empty:
+        raise NoDataError(f"No data for day count chart")
+
+    data = pd.DataFrame({"# days": predicate.astype(int)})
+
+    data_m = annual_agg(data, "sum")
+    data_long = long_format(data_m).dropna()
+
+    _, trend = polyfit_columns(data_m, deg=1)
+    trend_long = long_format(trend).dropna()
+
+    return data_long, trend_long
+
+
+def day_count_chart(
+    predicate: pd.Series,
+    period: str = PERIOD_ALL,
+    title: str = "Untitled chart",
+):
+    """Creates a chart for "# days" of some boolean predicate."""
+    data_long, trend_long = day_count_chart_data(predicate)
+    return create_chart_trendline(
+        data_long,
+        trend_long,
+        typ="bar",
+        title=f"{title} in {period_to_title(period)}, by year".strip(),
+        y_label="# days",
+    ).to_dict()
+
+
+def _verify_day_count_data(
+    df: pd.DataFrame, station_abbr: str, period: str, column: str
+):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
         raise NoDataError(f"No raindays data for {station_abbr}")
     verify_period(df, period)
-    verify_columns(df, CHART_TYPE_COLUMNS["raindays"])
+    verify_columns(df, [column])
 
-    raindays = df[[db.PRECIP_DAILY_MM]]
-    raindays = raindays[raindays[db.PRECIP_DAILY_MM] >= 0.1]
-    raindays = raindays.rename(columns={db.PRECIP_DAILY_MM: "# days"})
 
-    raindays_m = annual_agg(raindays, "count")
-
-    raindays_long = long_format(raindays_m).dropna()
-
-    _, trend = polyfit_columns(raindays_m, deg=1)
-    trend_long = long_format(trend).dropna()
-
-    title = f"Number of rain days (≥ 0.1 mm precip.) in {period_to_title(period)}, by year".strip()
-    return create_chart_trendline(
-        raindays_long,
-        trend_long,
-        typ="bar",
-        title=title,
-        y_label="# days",
-    ).to_dict()
+def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
+    """Creates a "# rain days" chart for the given station and period."""
+    _verify_day_count_data(df, station_abbr, period, db.PRECIP_DAILY_MM)
+    return day_count_chart(
+        predicate=df[db.PRECIP_DAILY_MM] >= 0.1,
+        period=period,
+        title="Number of rain days (≥ 0.1 mm precip.)",
+    )
 
 
 def sunny_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No sunshine data for {station_abbr}")
-    verify_period(df, period)
-    verify_columns(df, CHART_TYPE_COLUMNS["sunny_days"])
-
-    data = pd.DataFrame(
-        {"# days": (df[db.SUNSHINE_DAILY_MINUTES] >= 6 * 60).astype(int)}
+    """Creates a "# sunny days" chart for the given station and period."""
+    _verify_day_count_data(df, station_abbr, period, db.SUNSHINE_DAILY_MINUTES)
+    return day_count_chart(
+        predicate=df[db.SUNSHINE_DAILY_MINUTES] >= 6 * 60,
+        period=period,
+        title="Number of sunny days (≥ 6 h of sunshine)",
     )
-
-    data_m = annual_agg(data, "sum")
-
-    data_long = long_format(data_m).dropna()
-
-    _, trend = polyfit_columns(data_m, deg=1)
-    trend_long = long_format(trend).dropna()
-
-    title = f"Number of sunny days (≥ 6 h of sunshine) in {period_to_title(period)}, by year".strip()
-    return create_chart_trendline(
-        data_long,
-        trend_long,
-        typ="bar",
-        title=title,
-        y_label="# days",
-    ).to_dict()
 
 
 def frost_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No frost data for {station_abbr}")
-    verify_period(df, period)
-    verify_columns(df, CHART_TYPE_COLUMNS["frost_days"])
-
-    data = pd.DataFrame({"# days": (df[db.TEMP_DAILY_MIN] < 0).astype(int)})
-
-    data_m = annual_agg(data, "sum")
-
-    data_long = long_format(data_m).dropna()
-
-    _, trend = polyfit_columns(data_m, deg=1)
-    trend_long = long_format(trend).dropna()
-
-    title = f"Number of frost days (min. < 0 °C) in {period_to_title(period)}, by year".strip()
-    return create_chart_trendline(
-        data_long,
-        trend_long,
-        typ="bar",
-        title=title,
-        y_label="# days",
-    ).to_dict()
+    """Creates a "# frost days" chart for the given station and period."""
+    _verify_day_count_data(df, station_abbr, period, db.TEMP_DAILY_MIN)
+    return day_count_chart(
+        predicate=df[db.TEMP_DAILY_MIN] < 0,
+        period=period,
+        title="Number of frost days (min. < 0 °C)",
+    )
 
 
 def summer_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No hot days data for {station_abbr}")
-    verify_period(df, period)
-    verify_columns(df, CHART_TYPE_COLUMNS["summer_days"])
-
-    data = pd.DataFrame({"# days": (df[db.TEMP_DAILY_MAX] >= 25).astype(int)})
-
-    data_m = annual_agg(data, "sum")
-
-    data_long = long_format(data_m).dropna()
-
-    _, trend = polyfit_columns(data_m, deg=1)
-    trend_long = long_format(trend).dropna()
-
-    title = f"Number of summer days (max. ≥ 25 °C) in {period_to_title(period)}, by year".strip()
-    return create_chart_trendline(
-        data_long,
-        trend_long,
-        typ="bar",
-        title=title,
-        y_label="# days",
-    ).to_dict()
+    """Creates a "# summer days" chart for the given station and period."""
+    _verify_day_count_data(df, station_abbr, period, db.TEMP_DAILY_MAX)
+    return day_count_chart(
+        predicate=df[db.TEMP_DAILY_MAX] >= 25,
+        period=period,
+        title="Number of summer days (max. ≥ 25 °C)",
+    )
 
 
 def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
