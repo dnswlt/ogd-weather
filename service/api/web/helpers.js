@@ -1,7 +1,7 @@
 // Helper functions
 
 // safeUpdateYearInputs updates the form <input> fields from_year and to_year
-export function safeUpdateYearInputs(firstYear, lastYear, minYear, maxYear) {
+function safeUpdateYearInputs(firstYear, lastYear, minYear, maxYear) {
     const fy = document.getElementById('from_year');
     const ty = document.getElementById('to_year');
     if (!fy || !ty) return;
@@ -13,6 +13,25 @@ export function safeUpdateYearInputs(firstYear, lastYear, minYear, maxYear) {
     fy.max = maxYear;
     ty.max = maxYear;
 };
+
+export function htmxSwapStationSummaryContainer(container) {
+    // htmx swap of the station summary => Update from/to year inputs.
+    const ss = container.querySelector("#station-summary");
+    if (!ss) {
+        console.log(`container ${container.id} was htmx swapped without station-summary.`);
+        return;
+    }
+    const first = parseInt(ss.dataset.firstYear, 10);
+    const last = parseInt(ss.dataset.lastYear, 10);
+    const min = parseInt(ss.dataset.minYear, 10);
+    const max = parseInt(ss.dataset.maxYear, 10);
+
+    // Update form input fields if we have new data.
+    const valuesAreValid = [first, last, min, max].every(v => !isNaN(v));
+    if (valuesAreValid) {
+        safeUpdateYearInputs(first, last, min, max);
+    }
+}
 
 export function rememberAndRestoreQueryParams(form) {
     const path = window.location.pathname;

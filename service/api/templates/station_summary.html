@@ -1,5 +1,7 @@
 {{with .Response.Summary}}
-<table id="station-summary" class="w-full table-auto border-collapse text-sm">
+<table id="station-summary" class="w-full table-auto border-collapse text-sm"
+    data-first-year="{{.Stats.FirstDate.Year }}" data-last-year="{{.Stats.LastDate.Year }}"
+    data-min-year='{{ datefmt "Y" .Station.MinDate }}' data-max-year='{{ datefmt "Y" .Station.MaxDate }}'>
     <tbody>
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
@@ -75,17 +77,5 @@
         {{end}}
     </tbody>
 </table>
-
-<!-- OOB swap to update the year inputs -->
-<script type="module">
-    import { safeUpdateYearInputs } from '/static/js/helpers.js';
-
-    safeUpdateYearInputs(
-        {{.Stats.FirstDate.Year }},
-        {{.Stats.LastDate.Year }},
-        {{ datefmt "Y" .Station.MinDate }},
-        {{ datefmt "Y" .Station.MaxDate }}
-    );
-</script>
 
 {{end}}

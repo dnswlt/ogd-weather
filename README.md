@@ -58,6 +58,31 @@ cd service/api
 go run ./cmd/server
 ```
 
+The frontend lives in service/api/web/ and uses Vite for bundling.
+
+#### First-time setup
+
+```bash
+cd service/api/web
+npm install
+```
+
+#### Build once
+
+After making changes, recreate the UI artifacts (`bundle.js`, `main.css`, etc.):
+
+```bash
+npm run build
+```
+
+#### Watch for changes (dev)
+
+```bash
+npm run dev
+```
+
+This builds static assets into service/api/static/dist/, which the Go server serves at /static/dist/.
+
 ## Docker
 
 You can run both services in Docker using `docker compose`.  
