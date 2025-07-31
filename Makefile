@@ -40,6 +40,9 @@ restart: ## Restart api + charts containers without rebuild
 update-db: ## Run db-updater batch job WITHOUT rebuilding
 	$(COMPOSE) run --rm db-updater
 
+recreate-views:
+	$(COMPOSE) run --rm db-updater --recreate-views
+
 logs: ## Follow logs for api + charts
 	$(COMPOSE) logs -f api charts
 
