@@ -115,6 +115,13 @@ func statusCodeFromError(err error) int {
 	return http.StatusInternalServerError
 }
 
+func (s *Server) backendError(w http.ResponseWriter, err error, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s: %v", msg, err)
+	statusCode := statusCodeFromError(err)
+	http.Error(w, fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)), statusCode)
+}
+
 func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateFile string) {
 	var output bytes.Buffer
 	// Pass on query parameters to the template.
@@ -130,8 +137,7 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 	u.Path = path.Join(u.Path, "/stations")
 	stations, err := fetchBackendData[types.StationsResponse](r.Context(), s, u.String())
 	if err != nil {
-		log.Printf("Failed to fetch stations from backend: %v", err)
-		http.Error(w, "Backend error", statusCodeFromError(err))
+		s.backendError(w, err, "Failed to fetch stations from backend")
 		return
 	}
 
@@ -348,8 +354,7 @@ func serveChartServiceURL[Response any](
 	backendURL := s.chartServiceURL(r.URL).String()
 	response, err := fetchBackendData[Response](r.Context(), s, backendURL)
 	if err != nil {
-		log.Printf("Error fetching backend data: %v", err)
-		http.Error(w, "Backend error", statusCodeFromError(err))
+		s.backendError(w, err, "Failed to fetch data (%T) from backend", response)
 		return
 	}
 
