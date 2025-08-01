@@ -158,6 +158,15 @@ def create_chart_trendline(
 ) -> alt.LayerChart:
     highlight = alt.selection_point(fields=["variable"], bind="legend")
 
+    # Turn year:int into year:nsdatetime.
+    # This allows us to use :T and timeUnit="year" for the x axis.
+    values_long = values_long.assign(
+        year=pd.to_datetime(values_long["year"], format="%Y"),
+    )
+    trend_long = trend_long.assign(
+        year=pd.to_datetime(trend_long["year"], format="%Y"),
+    )
+
     # Actual data
     values = alt.Chart(values_long)
     if typ == "line":
@@ -168,11 +177,15 @@ def create_chart_trendline(
         raise ValueError(f"Unsupported chart type {typ}")
 
     values = values.encode(
-        x=alt.X("year:Q", axis=alt.Axis(format="d", title=None)),
+        x=alt.X("year:T", timeUnit="year"),
         y=alt.Y("value:Q", title=y_label),
         color=alt.Color("variable:N", legend=alt.Legend(title="Variable")),
         opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
-        tooltip=["year:Q", "variable:N", "value:Q"],
+        tooltip=[
+            alt.Tooltip("year:T", title="Year", format="%Y"),
+            "variable:N",
+            "value:Q",
+        ],
     )
 
     # Trendlines
@@ -182,7 +195,7 @@ def create_chart_trendline(
             alt.Chart(trend_long)
             .mark_line(strokeDash=[4, 4])
             .encode(
-                x="year:Q",
+                x=alt.X("year:T", timeUnit="year"),
                 y="value:Q",
                 color="variable:N",
                 opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
@@ -204,7 +217,9 @@ def create_chart_trendline(
 def create_dynamic_baseline_bars(
     values_long: pd.DataFrame, title="Untitled chart"
 ) -> alt.LayerChart:
-    df = values_long.copy()
+    df = values_long.copy(deep=False)
+
+    df["year"] = pd.to_datetime(df["year"], format="%Y")
 
     # Compute baseline
     baseline = df["value"].mean()
@@ -221,13 +236,13 @@ def create_dynamic_baseline_bars(
         alt.Chart(df)
         .mark_bar()
         .encode(
-            x=alt.X("year:Q", axis=alt.Axis(format="d", title=None)),
+            x=alt.X("year:T", timeUnit="year"),
             y=alt.Y("anomaly:Q", title=f"Deviation from mean ({baseline:.2f} °C)"),
             color=alt.Color(
                 "sign:N", scale=color_scale, legend=alt.Legend(title="Vs. baseline")
             ),
             tooltip=[
-                alt.Tooltip("year:Q", title="Year"),
+                alt.Tooltip("year:T", title="Year", format="%Y"),
                 alt.Tooltip("value:Q", title="Temp (°C)"),
                 alt.Tooltip("anomaly:Q", title="Δ vs mean"),
             ],
@@ -241,7 +256,8 @@ def create_dynamic_baseline_bars(
         .encode(y="y:Q")
     )
 
-    chart_title = f"{title} (Baseline = {baseline:.2f} °C over {df['year'].min()}–{df['year'].max()})"
+    year_range = f"{values_long['year'].min()} - {values_long['year'].max()}"
+    chart_title = f"{title} (Baseline = {baseline:.2f} °C over {year_range})"
 
     return (
         (bars + zero_line)
