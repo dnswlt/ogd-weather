@@ -43,13 +43,6 @@ SEASON_NAMES = {
     "winter": "Winter (Dec-Feb)",
 }
 
-SEASONS = {
-    "spring": [3, 4, 5],
-    "summer": [6, 7, 8],
-    "autumn": [9, 10, 11],
-    "winter": [12, 1, 2],
-}
-
 # Measurement colums to load, by chart type.
 CHART_TYPE_COLUMNS = {
     "temperature": [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX],
@@ -60,6 +53,7 @@ CHART_TYPE_COLUMNS = {
     "sunny_days": [db.SUNSHINE_DAILY_MINUTES],
     "summer_days": [db.TEMP_DAILY_MAX],
     "frost_days": [db.TEMP_DAILY_MIN],
+    "rainiest_day": [db.PRECIP_DAILY_MM],
 }
 
 
@@ -80,6 +74,14 @@ def verify_columns(df: pd.DataFrame, columns: Iterable[str]):
         )
 
 
+_SEASONS = {
+    "spring": [3, 4, 5],
+    "summer": [6, 7, 8],
+    "autumn": [9, 10, 11],
+    "winter": [12, 1, 2],
+}
+
+
 def verify_period(df: pd.DataFrame, period: str):
     """Verifies that all dates in the DataFrame match the given period."""
     if df.empty:
@@ -93,8 +95,8 @@ def verify_period(df: pd.DataFrame, period: str):
             raise ValueError(
                 f"Data contains months other than the expected month {expected_month} for period '{period}'"
             )
-    elif period in SEASONS:
-        expected_months = set(SEASONS[period])
+    elif period in _SEASONS:
+        expected_months = set(_SEASONS[period])
         if not set(months_in_df).issubset(expected_months):
             raise ValueError(
                 f"Data contains months outside the expected season {period} ({expected_months})"
@@ -368,32 +370,34 @@ def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
     ).to_dict()
 
 
-def temperature_deviation_chart(
-    df: pd.DataFrame,
-    station_abbr: str,
-    period: str = PERIOD_ALL,
-    window: int | None = None,
-):
+def rainiest_day_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
-        raise NoDataError(f"No temperature data for {station_abbr}")
+        raise NoDataError(f"No precipitation data for {station_abbr}")
     verify_period(df, period)
+    verify_columns(df, CHART_TYPE_COLUMNS["rainiest_day"])
 
-    data = rename_columns(df[CHART_TYPE_COLUMNS["temperature_deviation"]])
+    data = pd.DataFrame(
+        {
+            "precip (mm)": df[db.PRECIP_DAILY_MM],
+        }
+    )
 
-    data_m = annual_agg(data, "mean")
-    if window and window > 1:
-        data_m = rolling_mean(data_m, window=window)
+    data_m = annual_agg(data, "max")
 
     data_long = long_format(data_m).dropna()
 
-    if data_long.empty:
-        raise NoDataError(f"No aggregate temperature data for {station_abbr}")
+    _, trend = polyfit_columns(data_m, deg=1)
+    trend_long = long_format(trend).dropna()
 
-    return create_dynamic_baseline_bars(
+    title = f"Max daily amount of rain in {period_to_title(period)}, by year".strip()
+    return create_chart_trendline(
         data_long,
-        f"Temperature deviation from mean in {period_to_title(period)}",
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="mm",
     ).to_dict()
 
 
@@ -467,6 +471,35 @@ def precipitation_chart(
         typ="bar",
         title=title,
         y_label="mm",
+    ).to_dict()
+
+
+def temperature_deviation_chart(
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
+):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No temperature data for {station_abbr}")
+    verify_period(df, period)
+
+    data = rename_columns(df[CHART_TYPE_COLUMNS["temperature_deviation"]])
+
+    data_m = annual_agg(data, "mean")
+    if window and window > 1:
+        data_m = rolling_mean(data_m, window=window)
+
+    data_long = long_format(data_m).dropna()
+
+    if data_long.empty:
+        raise NoDataError(f"No aggregate temperature data for {station_abbr}")
+
+    return create_dynamic_baseline_bars(
+        data_long,
+        f"Temperature deviation from mean in {period_to_title(period)}",
     ).to_dict()
 
 
@@ -789,6 +822,8 @@ def create_chart(
         return summer_days_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "frost_days":
         return frost_days_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "rainiest_day":
+        return rainiest_day_chart(df, station_abbr=station_abbr, period=period)
     else:
         raise ValueError(f"Invalid chart type: {chart_type}")
 
