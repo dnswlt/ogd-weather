@@ -62,7 +62,7 @@ export function rememberAndRestoreQueryParams(form) {
 
 
 // Updates #navbar-links a[href] according to their declared data-params.
-function updateNavbarLinks(currentParams) {
+export function updateNavbarLinks(currentParams) {
     for (const a of document.querySelectorAll("#navbar-links a")) {
         const linkUrl = new URL(a.href, window.location.origin);
         const linkPath = linkUrl.pathname;

@@ -18,7 +18,7 @@
     <script src="https://unpkg.com/htmx-ext-path-params@2.0.0/path-params.js"></script>
 </head>
 
-<body class="min-h-screen bg-gray-50 p-4">
+<body class="min-h-screen bg-gray-50 p-4" data-page="map">
     <!-- Navbar -->
     {{template "nav.html" .}}
 
@@ -53,34 +53,7 @@
 
     </main>
 
-    <script type="module">
-        document.addEventListener("DOMContentLoaded", () => {
-            const DEFAULT_COLOR = "#DA291C";
-            const HIGHLIGHT_COLOR = "#38bdf8";
-
-            // Every marker is a <g> now
-            const markers = document.querySelectorAll('g[id^="station-marker-"]');
-
-            markers.forEach(marker => {
-                marker.addEventListener("click", () => {
-                    const abbr = marker.id.replace("station-marker-", "");
-
-                    // Reset all shapes
-                    document.querySelectorAll(".marker-shape")
-                        .forEach(shape => shape.setAttribute("fill", DEFAULT_COLOR));
-
-                    // Highlight the shape inside this marker
-                    const shape = marker.querySelector(".marker-shape");
-                    if (shape) shape.setAttribute("fill", HIGHLIGHT_COLOR);
-
-                    htmx.ajax('GET', `/stations/${abbr}/info`, {
-                        target: "#station-info-container",
-                        swap: 'innerHTML'
-                    });
-                });
-            });
-        });
-    </script>
+    <script type="module" src="/static/dist/main.js"></script>
 
 </body>
 
