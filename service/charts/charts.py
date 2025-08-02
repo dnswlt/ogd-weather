@@ -67,22 +67,14 @@ def period_to_title(period: str) -> str:
     return "Unknown Period"
 
 
-def verify_columns(df: pd.DataFrame, columns: Iterable[str]):
+def _verify_columns(df: pd.DataFrame, columns: Iterable[str]):
     if not set(columns) <= set(df.columns):
         raise ValueError(
             f"DataFrame does not contain expected columns (want: {columns}, got: {df.columns})"
         )
 
 
-_SEASONS = {
-    "spring": [3, 4, 5],
-    "summer": [6, 7, 8],
-    "autumn": [9, 10, 11],
-    "winter": [12, 1, 2],
-}
-
-
-def verify_period(df: pd.DataFrame, period: str):
+def _verify_period(df: pd.DataFrame, period: str):
     """Verifies that all dates in the DataFrame match the given period."""
     if df.empty:
         return
@@ -109,6 +101,36 @@ def verify_period(df: pd.DataFrame, period: str):
         raise ValueError(f"Unknown period: {period}")
 
 
+def _verify_day_count_data(
+    df: pd.DataFrame, station_abbr: str, period: str, column: str
+):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No data for {station_abbr}")
+    _verify_period(df, period)
+    _verify_columns(df, [column])
+
+
+def _verify_timeline_data(
+    df: pd.DataFrame, columns: list[str], station_abbr: str, period: str
+):
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No data for {station_abbr}")
+    _verify_period(df, period)
+    _verify_columns(df, columns)
+
+
+_SEASONS = {
+    "spring": [3, 4, 5],
+    "summer": [6, 7, 8],
+    "autumn": [9, 10, 11],
+    "winter": [12, 1, 2],
+}
+
+
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Renames all well-known columns from their ODG SwissMetNet (smn) names to human-readable names.
 
@@ -126,7 +148,11 @@ def annual_agg(df, func):
 
 def long_format(df: pd.DataFrame, id_cols: list[str] | None = None) -> pd.DataFrame:
     index_name = df.index.name
-    return df.reset_index().melt(id_vars=[index_name] + (id_cols or []))
+    return df.reset_index().melt(
+        id_vars=[index_name] + (id_cols or []),
+        var_name="measurement",
+        value_name="value",
+    )
 
 
 def rolling_mean(df: pd.DataFrame, window: int = 5):
@@ -174,14 +200,14 @@ def _year_to_dt(df: pd.DataFrame) -> pd.DataFrame:
     return df.assign(year=pd.to_datetime(df["year"], format="%Y"))
 
 
-def create_chart_trendline(
+def timeline_years_chart(
     values_long: pd.DataFrame,
     trend_long: pd.DataFrame | None = None,
     typ: str = "line",
     y_label: str = "value",
     title: str = "Untitled chart",
 ) -> alt.LayerChart:
-    highlight = alt.selection_point(fields=["variable"], bind="legend")
+    highlight = alt.selection_point(fields=["measurement"], bind="legend")
 
     values_long = _year_to_dt(values_long)
     # Actual data
@@ -196,11 +222,11 @@ def create_chart_trendline(
     values = values.encode(
         x=alt.X("year:T", timeUnit="year"),
         y=alt.Y("value:Q", title=y_label),
-        color=alt.Color("variable:N", legend=alt.Legend(title="Variable")),
+        color=alt.Color("measurement:N", legend=alt.Legend(title="Measurement")),
         opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
         tooltip=[
             alt.Tooltip("year:T", title="Year", format="%Y"),
-            "variable:N",
+            "measurement:N",
             "value:Q",
         ],
     )
@@ -215,7 +241,7 @@ def create_chart_trendline(
             .encode(
                 x=alt.X("year:T", timeUnit="year"),
                 y="value:Q",
-                color="variable:N",
+                color="measurement:N",
                 opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
             )
         )
@@ -232,7 +258,7 @@ def create_chart_trendline(
     )
 
 
-def create_dynamic_baseline_bars(
+def dynamic_baseline_bars_chart(
     values_long: pd.DataFrame, title="Untitled chart"
 ) -> alt.LayerChart:
     df = values_long.copy(deep=False)
@@ -288,7 +314,9 @@ def create_dynamic_baseline_bars(
     )
 
 
-def day_count_chart_data(predicate: pd.Series) -> tuple[pd.DataFrame, pd.DataFrame]:
+def day_count_chart_data(
+    predicate: pd.Series,
+) -> tuple[pd.DataFrame, pd.DataFrame | None]:
     """Prepares the day count and trendline data for "# days" charts.
 
     Returns data and trendline in long format. The trendline can be None if
@@ -318,24 +346,13 @@ def day_count_chart(
 ):
     """Creates a chart for "# days" of some boolean predicate."""
     data_long, trend_long = day_count_chart_data(predicate)
-    return create_chart_trendline(
+    return timeline_years_chart(
         data_long,
         trend_long,
         typ="bar",
         title=f"{title} in {period_to_title(period)}, by year".strip(),
         y_label="# days",
     ).to_dict()
-
-
-def _verify_day_count_data(
-    df: pd.DataFrame, station_abbr: str, period: str, column: str
-):
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No raindays data for {station_abbr}")
-    verify_period(df, period)
-    verify_columns(df, [column])
 
 
 def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
@@ -378,31 +395,47 @@ def summer_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_
     )
 
 
+def timeline_years_chart_data(
+    df: pd.DataFrame, agg_func, window: int = 1
+) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    """Prepares long data for a timeline chart with a trendline.
+
+    Both returned data frames use a "year":int index.
+
+    Args:
+        - df: The (possibly multi-column) input data. Must have a datetime index.
+        - agg_func: the aggregation function to use, e.g. "sum", or np.sum.
+    Returns:
+        - The long-format data aggregated from df.
+        - The long-format trendline.
+    """
+
+    data = annual_agg(df, agg_func)
+    if window > 1:
+        # Rolling window for smoothing the data.
+        data = rolling_mean(data, window)
+    data_long = long_format(data).dropna()
+
+    try:
+        _, trend = polyfit_columns(data, deg=1)
+        trend_long = long_format(trend).dropna()
+    except ValueError:
+        trend_long = None
+
+    return data_long, trend_long
+
+
 def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No sunshine data for {station_abbr}")
-    verify_period(df, period)
-    verify_columns(df, CHART_TYPE_COLUMNS["sunshine"])
+    _verify_timeline_data(df, [db.SUNSHINE_DAILY_MINUTES], station_abbr, period)
 
-    data = pd.DataFrame(
-        {
-            "sunshine (h)": df[db.SUNSHINE_DAILY_MINUTES] / 60.0,
-        }
-    )
-
-    data_m = annual_agg(data, "mean")
-
-    data_long = long_format(data_m).dropna()
-
-    _, trend = polyfit_columns(data_m, deg=1)
-    trend_long = long_format(trend).dropna()
+    sunshine = df[db.SUNSHINE_DAILY_MINUTES] / 60.0
+    data = pd.DataFrame({"sunshine (h)": sunshine})
+    data_long, trend_long = timeline_years_chart_data(data, "mean")
 
     title = (
         f"Mean daily hours of sunshine in {period_to_title(period)}, by year".strip()
     )
-    return create_chart_trendline(
+    return timeline_years_chart(
         data_long,
         trend_long,
         typ="bar",
@@ -412,28 +445,13 @@ def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 
 
 def rainiest_day_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No precipitation data for {station_abbr}")
-    verify_period(df, period)
-    verify_columns(df, CHART_TYPE_COLUMNS["rainiest_day"])
+    _verify_timeline_data(df, [db.PRECIP_DAILY_MM], station_abbr, period)
 
-    data = pd.DataFrame(
-        {
-            "precip (mm)": df[db.PRECIP_DAILY_MM],
-        }
-    )
-
-    data_m = annual_agg(data, "max")
-
-    data_long = long_format(data_m).dropna()
-
-    _, trend = polyfit_columns(data_m, deg=1)
-    trend_long = long_format(trend).dropna()
+    data = pd.DataFrame({"precip (mm)": df[db.PRECIP_DAILY_MM]})
+    data_long, trend_long = timeline_years_chart_data(data, "mean")
 
     title = f"Max daily amount of rain in {period_to_title(period)}, by year".strip()
-    return create_chart_trendline(
+    return timeline_years_chart(
         data_long,
         trend_long,
         typ="bar",
@@ -446,33 +464,28 @@ def temperature_chart(
     df: pd.DataFrame,
     station_abbr: str,
     period: str = PERIOD_ALL,
-    window: int | None = None,
+    window: int = 1,
 ) -> alt.LayerChart:
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No temperature data for {station_abbr}")
-    verify_period(df, period)
+    columns = [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]
+    _verify_timeline_data(df, columns, station_abbr, period)
 
-    data = rename_columns(df[CHART_TYPE_COLUMNS["temperature"]])
-
-    data_m = annual_agg(data, "mean")
-    if window and window > 1:
-        data_m = rolling_mean(data_m, window=window)
-
-    data_long = long_format(data_m).dropna()
+    data = pd.DataFrame(
+        {
+            "temp (min)": df[db.TEMP_DAILY_MIN],
+            "temp (mean)": df[db.TEMP_DAILY_MEAN],
+            "temp (max)": df[db.TEMP_DAILY_MAX],
+        }
+    )
+    data_long, trend_long = timeline_years_chart_data(data, "mean", window)
 
     if data_long.empty:
         raise NoDataError(f"No aggregated temperature data for {station_abbr}")
-
-    _, trend = polyfit_columns(data_m, deg=1)
-    trend_long = long_format(trend).dropna()
 
     window_info = f"({window}y rolling avg.)" if window else ""
     title = (
         f"Avg. temperatures in {period_to_title(period)}, by year {window_info}".strip()
     )
-    return create_chart_trendline(
+    return timeline_years_chart(
         data_long,
         trend_long,
         typ="line",
@@ -487,26 +500,14 @@ def precipitation_chart(
     period: str = PERIOD_ALL,
     window: int | None = None,
 ):
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No precipitation data for {station_abbr}")
-    verify_period(df, period)
+    _verify_timeline_data(df, [db.PRECIP_DAILY_MM], station_abbr, period)
 
-    data = rename_columns(df[CHART_TYPE_COLUMNS["precipitation"]])
-
-    data_m = annual_agg(data, "sum")
-    if window and window > 1:
-        data_m = rolling_mean(data_m, window=window)
-
-    data_long = long_format(data_m).dropna()
-
-    _, trend = polyfit_columns(data_m, deg=1)
-    trend_long = long_format(trend).dropna()
+    data = pd.DataFrame({"precip (mm)": df[db.PRECIP_DAILY_MM]})
+    data_long, trend_long = timeline_years_chart_data(data, "sum", window)
 
     window_info = f"({window}y rolling avg.)" if window else ""
     title = f"Total precipitation in {period_to_title(period)}, by year {window_info}".strip()
-    return create_chart_trendline(
+    return timeline_years_chart(
         data_long,
         trend_long,
         typ="bar",
@@ -525,7 +526,7 @@ def temperature_deviation_chart(
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
         raise NoDataError(f"No temperature data for {station_abbr}")
-    verify_period(df, period)
+    _verify_period(df, period)
 
     data = rename_columns(df[CHART_TYPE_COLUMNS["temperature_deviation"]])
 
@@ -538,7 +539,7 @@ def temperature_deviation_chart(
     if data_long.empty:
         raise NoDataError(f"No aggregate temperature data for {station_abbr}")
 
-    return create_dynamic_baseline_bars(
+    return dynamic_baseline_bars_chart(
         data_long,
         f"Temperature deviation from mean in {period_to_title(period)}",
     ).to_dict()
@@ -671,14 +672,14 @@ def daily_temp_precip_chart(
     long_df = df_prep.melt(
         id_vars=id_vars,
         value_vars=value_vars,
-        var_name="Measurement",
-        value_name="Value",
+        var_name="measurement",
+        value_name="value",
     )
 
     # --- 2. Chart Configuration ---
 
     # Create an interactive legend that allows filtering by clicking on items.
-    highlight = alt.selection_point(fields=["Measurement"], bind="legend")
+    highlight = alt.selection_point(fields=["measurement"], bind="legend")
 
     # Define a consistent color scheme for the variables.
     color_scale = alt.Scale(
@@ -757,7 +758,7 @@ def daily_temp_precip_chart(
     # We filter the long-form data to only include precipitation.
     precip_ymax = max(5, df_prep["precip mm"].max() + 1)
     precip_bars = (
-        base.transform_filter(alt.datum.Measurement == "precip mm")
+        base.transform_filter(alt.datum.measurement == "precip mm")
         .mark_bar()
         .encode(
             # Use 'time_start:T' for x and 'time_end:T' for x2 to define the bar's width.
@@ -768,15 +769,19 @@ def daily_temp_precip_chart(
             ),
             x2=alt.X2("time_end:T"),
             # Use y for the top of the bar and y2=alt.value(0) to anchor the bottom to the baseline.
-            y=alt.Y("Value:Q", title="Precipitation (mm)").scale(
+            y=alt.Y("value:Q", title="Precipitation (mm)").scale(
                 domain=[0, precip_ymax]
             ),
             y2=alt.value(0),
-            color=alt.Color("Measurement:N", scale=color_scale),
+            color=alt.Color(
+                "measurement:N",
+                scale=color_scale,
+                legend=alt.Legend(title="Measurement"),
+            ),
             opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.2)),
             tooltip=[
                 alt.Tooltip("tooltip_interval:N", title="Interval"),
-                alt.Tooltip("Value:Q", title="Precipitation", format=".1f"),
+                alt.Tooltip("value:Q", title="Precipitation", format=".1f"),
             ],
         )
     )
@@ -784,18 +789,22 @@ def daily_temp_precip_chart(
     # Layer 2: Temperature Line
     # Filter data to only include temperature.
     temp_line = (
-        base.transform_filter(alt.datum.Measurement == "temp mean")
+        base.transform_filter(alt.datum.measurement == "temp mean")
         .mark_line(interpolate="cardinal")
         .encode(
             # The temperature is a point measurement, so we only need 'x'.
             # We plot it at the midpoint of the hour interval.
             x=alt.X("time_midpoint:T", title="Hour of Day"),
-            y=alt.Y("Value:Q", title="Temperature (°C)").scale(
+            y=alt.Y("value:Q", title="Temperature (°C)").scale(
                 domain=[temp_ymin, temp_ymax]
             )
             # Force axis to be on the left to match the side of the gradient area.
             .axis(orient="left"),
-            color=alt.Color("Measurement:N", scale=color_scale),
+            color=alt.Color(
+                "measurement:N",
+                scale=color_scale,
+                legend=alt.Legend(title="Measurement"),
+            ),
             opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.2)),
         )
     )
@@ -805,7 +814,7 @@ def daily_temp_precip_chart(
     temp_dots = temp_line.mark_point(filled=True, size=60).encode(
         tooltip=[
             alt.Tooltip("tooltip_interval:N", title="Interval"),
-            alt.Tooltip("Value:Q", title="Temperature", format=".1f"),
+            alt.Tooltip("value:Q", title="Temperature", format=".1f"),
         ]
     )
 
@@ -841,6 +850,10 @@ def create_chart(
     period: str = PERIOD_ALL,
     window: int | None = None,
 ):
+    if window is None:
+        # Simplify treatment of window inside the module
+        window = 1
+
     if chart_type == "temperature":
         return temperature_chart(
             df, station_abbr=station_abbr, period=period, window=window
@@ -876,7 +889,7 @@ def station_stats(
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
         raise NoDataError(f"No stats data for {station_abbr}")
-    verify_period(df, period)
+    _verify_period(df, period)
 
     df = df[
         [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX, db.PRECIP_DAILY_MM]
