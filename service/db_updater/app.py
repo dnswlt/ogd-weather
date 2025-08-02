@@ -1,8 +1,9 @@
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import datetime
 import logging
 import os
+import queue
 import re
 import sqlalchemy as sa
 import time
@@ -18,6 +19,8 @@ OGD_SNM_URL = (
 )
 
 UPDATE_STATUS_TABLE_NAME = "update_status"
+
+_NOOP_SENTINEL = object()
 
 logger = logging.getLogger("db_updater")
 
@@ -173,54 +176,51 @@ def fetch_metadata_csv_resources() -> list[CsvResource]:
     return resources
 
 
-def import_into_db(engine: sa.Engine, weather_dir: str, csvs: list[CsvResource]):
-    """Imports all SwissMetNet (smn) CSV files into the database.
+def import_into_db(engine: sa.Engine, weather_dir: str, resource: CsvResource):
+    """Imports a SwissMetNet (smn) CSV file into the database.
 
-    Assumes that all files have already been downloaded to `weather_dir`.
+    Assumes that the file has already been downloaded to `weather_dir`.
     """
 
-    daily = [c.status for c in csvs if c.interval == "d"]
-    hourly = [c.status for c in csvs if c.interval == "h"]
-    meta = [c.status for c in csvs if c.is_meta]
-
-    if daily:
+    if resource.interval == "d":
         db.insert_csv_data(
             weather_dir,
             engine,
             table_spec=db.TABLE_DAILY_MEASUREMENTS,
-            updates=daily,
+            updates=[resource.status],
         )
-
-    if hourly:
+    elif resource.interval == "h":
         db.insert_csv_data(
             weather_dir,
             engine,
             table_spec=db.TABLE_HOURLY_MEASUREMENTS,
-            updates=hourly,
+            updates=[resource.status],
         )
-
     # TODO: add monthly
-
-    if meta:
+    elif resource.is_meta:
         table_map = {
             "ogd-smn_meta_parameters.csv": db.sa_table_meta_parameters,
             "ogd-smn_meta_stations.csv": db.sa_table_meta_stations,
         }
-        for s in meta:
-            csv_file = s.filename()
-            table = table_map.get(csv_file)
-            if table is None:
-                logger.warning("Ignoring unknown metadata CSV file %s", csv_file)
-                continue
-            db.insert_csv_metadata(
-                engine,
-                table=table,
-                csv_file=os.path.join(weather_dir, csv_file),
-            )
-        db.save_update_statuses(engine, meta)
+        csv_file = resource.status.filename()
+        table = table_map.get(csv_file)
+        if table is None:
+            logger.warning("Ignoring unknown metadata CSV file %s", csv_file)
+            return
+        db.insert_csv_metadata(
+            weather_dir,
+            engine,
+            table=table,
+            update=resource.status,
+        )
 
 
-def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvResource]:
+def fetch_latest_data(
+    weather_dir: str,
+    csvs: list[CsvResource],
+    executor: ThreadPoolExecutor,
+    import_queue: queue.SimpleQueue,
+) -> list[CsvResource]:
     now = datetime.datetime.now()
 
     def should_refresh(c: CsvResource) -> bool:
@@ -266,28 +266,21 @@ def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvReso
     logger.info("Downloading %d CSV files...", len(update_csvs))
 
     # Download CSV data files concurrently.
-    def _download(c: CsvResource) -> str | None:
+    def _download_and_queue(c: CsvResource) -> str | None:
         try:
             etag = download_csv(
                 c.href, weather_dir, etag=c.status.etag if c.status else None
             )
-            return (c, etag)
         except Exception as e:
             logger.error("Failed to download %s: %s", c.href, str(e))
-            return (None, None)
+            import_queue.put(_NOOP_SENTINEL)  # Inform consumer that we're done.
+            return
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        results = list(executor.map(_download, update_csvs))
-        etags = {c.href: etag for (c, etag) in results if c is not None}
-
-    # Update status fields. Create a new UpdateStatus ONLY if none
-    # existed before. The existing ones must retain their DB ID.
-    for c in update_csvs:
         if c.status and c.status.id is not None:
             # Reuse existing UpdateStatus → just update fields
             c.status.table_updated_time = now
             c.status.resource_updated_time = c.updated
-            c.status.etag = etags.get(c.href)
+            c.status.etag = etag
         else:
             # No existing status or it's a brand-new one → create fresh
             c.status = db.UpdateStatus(
@@ -295,10 +288,16 @@ def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvReso
                 href=c.href,
                 table_updated_time=now,
                 resource_updated_time=c.updated,
-                etag=etags.get(c.href),
+                etag=etag,
             )
+        import_queue.put(c)
 
-    return update_csvs
+    futures = []
+    for u in update_csvs:
+        fut = executor.submit(_download_and_queue, u)
+        futures.append(fut)
+
+    return futures
 
 
 def main():
@@ -388,9 +387,24 @@ def main():
     for c in csvs:
         c.status = status_map.get(c.href)
 
-    updated_csvs = fetch_latest_data(base_dir, csvs)
-    if updated_csvs:
-        import_into_db(engine, base_dir, updated_csvs)
+    # Now download CSVs concurrently and feed them to the importer thread
+    # via a queue:
+
+    import_queue = queue.SimpleQueue()
+    with ThreadPoolExecutor(max_workers=8) as executor:
+
+        futures = fetch_latest_data(base_dir, csvs, executor, import_queue)
+        # Receive UpdateStatus items to import into the DB:
+        for _ in range(len(futures)):
+            work_item = import_queue.get()
+            if work_item is _NOOP_SENTINEL:
+                continue  # Skip failed CSV imports
+            resource: CsvResource = work_item
+            import_into_db(engine, base_dir, resource)
+
+        # Consume futures (they're all done)
+        for fut in as_completed(futures):
+            fut.result()  # Raise exception if any occurred (indicates programming error)
 
     # Recreate materialized views
     logger.info("Recreating materialized views...")

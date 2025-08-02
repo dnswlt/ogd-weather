@@ -112,7 +112,7 @@ class ServerOptions(BaseModel):
 
 
 class DBTableStats(BaseModel):
-    schema: str
+    schema_name: str  # Should be just "schema", but BaseModel already uses that field.
     table: str
     total_size: str  # usage in human-readable format
     total_bytes: int  # usage in bytes

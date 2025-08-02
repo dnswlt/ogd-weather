@@ -364,7 +364,11 @@ def normalize_timestamp(series: pd.Series) -> pd.Series:
 
 
 def insert_csv_metadata(
-    engine: sa.Engine, table: sa.Table, csv_file: str, drop_existing: bool = True
+    base_dir: str,
+    engine: sa.Engine,
+    table: sa.Table,
+    update: UpdateStatus,
+    drop_existing: bool = True,
 ) -> None:
     """Loads CSV and insert rows into an existing metadata table.
 
@@ -377,7 +381,8 @@ def insert_csv_metadata(
     table_columns = [col.name for col in table.columns]
 
     # Load CSV
-    df = pd.read_csv(csv_file, sep=";", encoding="cp1252")
+    csv_file = update.filename()
+    df = pd.read_csv(os.path.join(base_dir, csv_file), sep=";", encoding="cp1252")
 
     # Validate all columns present
     missing = [c for c in table_columns if c not in df.columns]
@@ -392,16 +397,17 @@ def insert_csv_metadata(
             conn.execute(sa.delete(table))
         records = df.replace({np.nan: None}).to_dict(orient="records")
         conn.execute(sa.insert(table), records)
+        # Update status
+        save_update_status(conn, update)
 
 
 def insert_csv_data(
     base_dir: str,
     engine: sa.Engine,
     table_spec: DataTableSpec,
-    csv_filenames: list[str] | None = None,
-    updates: list[UpdateStatus] | None = None,
+    update: UpdateStatus,
 ) -> None:
-    """Inserts data from CSV files.
+    """Inserts data from a CSV file specified in `update`.
 
     Column names in the DB tables are identical to column names in the CSV (e.g.,
     station_abbr, reference_timestamp, tre200d0).
@@ -409,106 +415,96 @@ def insert_csv_data(
     Dates are stored as TEXT in ISO format "YYYY-MM-DD HH:MM:SSZ" and use UTC time.
 
     The time part is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
+
+    The UpdateStatus DB table is updated as well.
     """
 
-    if not csv_filenames and not updates:
-        return  # Nothing to do
-
-    if updates:
-        files = [os.path.join(base_dir, s.filename()) for s in updates]
-    else:
-        files = [os.path.join(base_dir, f) for f in csv_filenames]
+    filename = os.path.join(base_dir, update.filename())
 
     csv_dtype = {}
     for c in table_spec.measurements:
         csv_dtype[c] = float
 
     columns = table_spec.primary_key + table_spec.measurements
-    for i, fname in enumerate(files):
-        logger.info(f"Importing {fname} into database...")
-        df = pd.read_csv(
-            fname,
-            sep=";",
-            encoding="cp1252",
-            date_format=table_spec.date_format,
-            parse_dates=list(table_spec.date_format.keys()),
-            dtype=csv_dtype,
-            usecols=columns,
-        )
-        df = df[columns]  # Reorder columns to match the order in table_spec.
-        # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
-        for col in table_spec.date_format.keys():
-            df[col] = normalize_timestamp(df[col])
+    logger.info(f"Importing {filename} into database...")
+    df = pd.read_csv(
+        filename,
+        sep=";",
+        encoding="cp1252",
+        date_format=table_spec.date_format,
+        parse_dates=list(table_spec.date_format.keys()),
+        dtype=csv_dtype,
+        usecols=columns,
+    )
+    df = df[columns]  # Reorder columns to match the order in table_spec.
+    # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
+    for col in table_spec.date_format.keys():
+        df[col] = normalize_timestamp(df[col])
 
-        # Insert rows, ignoring duplicates
-        with engine.begin() as conn:
-            if engine.name == "DISABLED__postgresql":
-                # DISABLED: does not run faster than the standard path.
-                # Fast path for PostgreSQL:
-                insert_stmt = postgresql.insert(table_spec.sa_table)
-                insert_stmt = insert_stmt.on_conflict_do_update(
-                    index_elements=table_spec.sa_table.primary_key,
-                    set_={
-                        c: insert_stmt.excluded[c]
-                        for c in df.columns
-                        if c not in table_spec.primary_key
-                    },
-                )
-                # insert_stmt = insert_stmt.on_conflict_do_nothing()
+    # Insert rows, ignoring duplicates
+    with engine.begin() as conn:
+        if engine.name == "DISABLED__postgresql":
+            # DISABLED: does not run faster than the standard path.
+            # Fast path for PostgreSQL:
+            insert_stmt = postgresql.insert(table_spec.sa_table)
+            insert_stmt = insert_stmt.on_conflict_do_update(
+                index_elements=table_spec.sa_table.primary_key,
+                set_={
+                    c: insert_stmt.excluded[c]
+                    for c in df.columns
+                    if c not in table_spec.primary_key
+                },
+            )
+            # insert_stmt = insert_stmt.on_conflict_do_nothing()
 
-                records = df.replace({np.nan: None}).to_dict(orient="records")
-                conn.execute(insert_stmt, records)
-                logger.info(
-                    f"Inserted {len(records)} rows into {table_spec.name} (PostgreSQL fast path)"
+            records = df.replace({np.nan: None}).to_dict(orient="records")
+            conn.execute(insert_stmt, records)
+            logger.info(
+                f"Inserted {len(records)} rows into {table_spec.name} (PostgreSQL fast path)"
+            )
+        else:
+            # Standard path (works in sqlite and postgres): use staging table.
+            # Create staging table for bulk update
+            staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
+            conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+            conn.execute(
+                sa.text(
+                    f"""
+                CREATE TEMP TABLE {staging_name} AS
+                SELECT * FROM {table_spec.name} WHERE 0=1;
+                """
                 )
-            else:
-                # Standard path (works in sqlite and postgres): use staging table.
-                # Create staging table for bulk update
-                staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
-                conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
-                conn.execute(
-                    sa.text(
-                        f"""
-                    CREATE TEMP TABLE {staging_name} AS
-                    SELECT * FROM {table_spec.name} WHERE 0=1;
-                    """
-                    )
+            )
+            # Bulk insert into staging table
+            staging_table = sa.Table(staging_name, sa.MetaData(), autoload_with=conn)
+            insert_stmt = sa.insert(staging_table)
+            # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
+            records = df.replace({np.nan: None}).to_dict(orient="records")
+            conn.execute(insert_stmt, records)
+            logger.info(f"Inserted {len(records)} rows into staging table")
+            # Merge into data table
+            where_conditions = " AND ".join(
+                [f"DataTable.{pk} = StagingTable.{pk}" for pk in table_spec.primary_key]
+            )
+            # Construct the final query
+            insert_sql = f"""
+                INSERT INTO {table_spec.name}
+                SELECT StagingTable.*
+                FROM {staging_table.name} AS StagingTable
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM {table_spec.name} AS DataTable
+                    WHERE {where_conditions}
                 )
-                # Bulk insert into staging table
-                staging_table = sa.Table(
-                    staging_name, sa.MetaData(), autoload_with=conn
-                )
-                insert_stmt = sa.insert(staging_table)
-                # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
-                records = df.replace({np.nan: None}).to_dict(orient="records")
-                conn.execute(insert_stmt, records)
-                logger.info(f"Inserted {len(records)} rows into staging table")
-                # Merge into data table
-                where_conditions = " AND ".join(
-                    [
-                        f"DataTable.{pk} = StagingTable.{pk}"
-                        for pk in table_spec.primary_key
-                    ]
-                )
-                # Construct the final query
-                insert_sql = f"""
-                    INSERT INTO {table_spec.name}
-                    SELECT StagingTable.*
-                    FROM {staging_table.name} AS StagingTable
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM {table_spec.name} AS DataTable
-                        WHERE {where_conditions}
-                    )
-                    """
+                """
 
-                c = conn.execute(sa.text(insert_sql))
-                conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+            c = conn.execute(sa.text(insert_sql))
+            conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
 
-            logger.info(f"Merged rows into {table_spec.name}")
-            # Update UpdateStatus in same transaction
-            if updates:
-                save_update_status(conn, updates[i])
+        logger.info(f"Merged rows into {table_spec.name}")
+
+        # Update UpdateStatus in same transaction
+        save_update_status(conn, update)
 
 
 def save_update_status(conn: sa.Connection, s: UpdateStatus) -> None:
@@ -542,13 +538,6 @@ def save_update_status(conn: sa.Connection, s: UpdateStatus) -> None:
                 etag=s.etag,
             )
         )
-
-
-def save_update_statuses(engine: sa.Engine, statuses: Iterable[UpdateStatus]) -> None:
-    """Inserts or updates the statuses in the update status table."""
-    with engine.begin() as conn:
-        for s in statuses:
-            save_update_status(conn, s)
 
 
 def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
@@ -1143,7 +1132,7 @@ def table_stats(engine: sa.Engine, user: str) -> list[models.DBTableStats]:
         result = conn.execute(sql).mappings().all()
         return [
             models.DBTableStats(
-                schema=r["schema"],
+                schema_name=r["schema"],
                 table=r["table"],
                 total_size=r["total_size"],
                 total_bytes=r["total_bytes"],

@@ -417,11 +417,17 @@ class TestCreateDb(unittest.TestCase):
     def test_create_insert_daily(self):
         engine = sa.create_engine("sqlite:///:memory:")
         db.metadata.create_all(engine)
+        now = datetime.datetime.now()
         db.insert_csv_data(
             _testdata_dir(),
             engine,
             db.TABLE_DAILY_MEASUREMENTS,
-            ["ogd-smn_vis_d_recent.csv"],
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_vis_d_recent.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
         )
         with engine.connect() as conn:
             columns = [
@@ -443,11 +449,17 @@ class TestCreateDb(unittest.TestCase):
     def test_create_hourly(self):
         engine = sa.create_engine("sqlite:///:memory:")
         db.metadata.create_all(engine)
+        now = datetime.datetime.now()
         db.insert_csv_data(
             _testdata_dir(),
             engine,
             db.TABLE_HOURLY_MEASUREMENTS,
-            ["ogd-smn_vis_h_recent.csv"],
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_vis_h_recent.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
         )
         columns = [db.TEMP_HOURLY_MAX, db.PRECIP_HOURLY_MM, db.GUST_PEAK_HOURLY_MAX]
         with engine.connect() as conn:
@@ -463,6 +475,30 @@ class TestCreateDb(unittest.TestCase):
             (df[columns].sum() > 0).all(),
             "All measurement columns should have some nonzero values.",
         )
+
+    def test_create_metadata_stations(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        db.insert_csv_metadata(
+            _testdata_dir(),
+            engine,
+            db.sa_table_meta_stations,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_meta_stations.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+        # No query methods for metadata, so not much to check in the metadata table itself.
+        updates = db.read_update_status(engine)
+        self.assertEqual(len(updates), 1)
+        u = updates[0]
+        self.assertEqual(u.href, "file:///ogd-smn_meta_stations.csv")
+        self.assertEqual(len(u.id), 36)  # Should have a uuid4
+        self.assertEqual(u.resource_updated_time, now)
+        self.assertEqual(u.table_updated_time, now)
 
 
 class TestDbRefPeriod1991_2020(unittest.TestCase):
