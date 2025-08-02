@@ -1,45 +1,13 @@
 from datetime import date
+import datetime
 import numpy as np
 import pandas as pd
-from pandas.testing import assert_frame_equal, assert_series_equal
 import unittest
 
-from . import db
+
 from . import charts
-
-
-import unittest
-import pandas as pd
-from pandas.testing import assert_series_equal, assert_frame_equal
-
-
-class PandasTestCase(unittest.TestCase):
-    def assertSeriesValuesEqual(self, series, expected_values):
-        """Check only the values of a Series (ignore index, dtype, name)."""
-        self.assertEqual(series.tolist(), expected_values)
-
-    def assertSeriesEqual(self, actual, expected, **kwargs):
-        """Wrapper around assert_series_equal with relaxed defaults.
-
-        If expected is a list, it will be converted to an unnamed pd.Series.
-        """
-        kwargs.setdefault("check_dtype", False)
-        kwargs.setdefault("check_names", False)
-        kwargs.setdefault("check_index_type", False)
-
-        if isinstance(expected, list):
-            expected = pd.Series(expected)
-        assert_series_equal(actual, expected, **kwargs)
-
-    def assertFrameEqual(self, actual, expected, **kwargs):
-        """Wrapper around assert_frame_equal with relaxed defaults."""
-        kwargs.setdefault("check_dtype", False)
-        kwargs.setdefault("check_column_type", False)
-        kwargs.setdefault("check_index_type", False)
-        assert_frame_equal(actual, expected, **kwargs)
-
-    def assertColumnNames(self, df, expected_names):
-        self.assertEqual(df.columns.to_list(), expected_names)
+from . import db
+from .testhelpers import PandasTestCase
 
 
 class TestStationNumDays(PandasTestCase):
@@ -54,9 +22,9 @@ class TestStationNumDays(PandasTestCase):
         data, trend = charts.day_count_chart_data(pred)
 
         # Want data for two years
-        self.assertSeriesEqual(data["year"], [2022, 2023])
+        self.assertSeriesValuesEqual(data["year"], [2022, 2023])
         # First year has 100 days that don't satisfy the predicate.
-        self.assertSeriesEqual(data["value"], [265, 365])
+        self.assertSeriesValuesEqual(data["value"], [265, 365])
         # Structural assertions.
         self.assertTrue(set(data["variable"].unique()) == set(["# days"]))
         self.assertColumnNames(data, ["year", "variable", "value"])
@@ -101,8 +69,100 @@ class TestStationNumDays(PandasTestCase):
         pred = ser > 0
         data, _ = charts.day_count_chart_data(pred)
         # Want 0 data for two years
-        self.assertSeriesEqual(data["year"], [2022, 2023])
-        self.assertSeriesEqual(data["value"], [0, 0])
+        self.assertSeriesValuesEqual(data["year"], [2022, 2023])
+        self.assertSeriesValuesEqual(data["value"], [0, 0])
+
+
+class TestPolyfitColumns(PandasTestCase):
+
+    def test_polyfit_colums_exact(self):
+        # polyfit_columns with deg=1 should fit an actual line accurately.
+        x = np.linspace(0, 10, 11)
+        df = pd.DataFrame(
+            dict(
+                y1=3 * x + 2,
+                y2=-1 * x,
+            ),
+            index=x,
+        )
+        coeffs, trend = charts.polyfit_columns(df, deg=1)
+        # Should recover the original line parameters.
+        self.assertFrameEqual(
+            coeffs,
+            pd.DataFrame([[2.0, 0], [3.0, -1.0]], columns=["y1", "y2"]),
+            check_exact=False,
+        )
+        # Trend line should be equal to actual line.
+        self.assertFrameEqual(
+            trend,
+            pd.DataFrame(
+                {
+                    "y1": 3 * x + 2,
+                    "y2": -x,
+                }
+            ),
+            check_exact=False,
+        )
+
+    def test_polyfit_colums_single_value(self):
+        # Fitting a curve to just a single point is... hard.
+        df = pd.DataFrame(
+            dict(
+                y1=[1],
+            ),
+            index=[0],
+        )
+        with self.assertRaises(ValueError):
+            charts.polyfit_columns(df, deg=1)
+
+
+class TestStationStats(PandasTestCase):
+
+    def test_station_stats_temp_increase(self):
+        df = pd.DataFrame(
+            [
+                ["2025-01-01", "BER", -2, -1, 0, 0],
+                ["2025-01-02", "BER", -2, -1, 0, 0],
+                ["2026-01-01", "BER", -10, 1, 3, 2.5],
+            ],
+            columns=[
+                "reference_timestamp",
+                "station_abbr",
+                db.TEMP_DAILY_MIN,
+                db.TEMP_DAILY_MEAN,
+                db.TEMP_DAILY_MAX,
+                db.PRECIP_DAILY_MM,
+            ],
+        )
+        df = df.set_index("reference_timestamp")
+        df.index = pd.to_datetime(df.index)
+        s = charts.station_stats(df, "BER", period="1")
+        self.assertEqual(s.first_date, datetime.date(2025, 1, 1))
+        self.assertEqual(s.last_date, datetime.date(2026, 1, 1))
+        # Cannot calculate temp increase from a single year of data:
+        self.assertAlmostEqual(s.annual_temp_increase, 2.0)
+        self.assertEqual(s.period, "January")
+
+    def test_station_stats_single_year(self):
+        df = pd.DataFrame(
+            [
+                ["2025-01-01", "BER", -2, -1, 0, 0],
+                ["2025-01-02", "BER", -2, -1, 0, 0],
+            ],
+            columns=[
+                "reference_timestamp",
+                "station_abbr",
+                db.TEMP_DAILY_MIN,
+                db.TEMP_DAILY_MEAN,
+                db.TEMP_DAILY_MAX,
+                db.PRECIP_DAILY_MM,
+            ],
+        )
+        df = df.set_index("reference_timestamp")
+        df.index = pd.to_datetime(df.index)
+        s = charts.station_stats(df, "BER", period="1")
+        # Cannot calculate temp increase from a single year of data:
+        self.assertIsNone(s.annual_temp_increase)
 
 
 class TestStationPeriodStats(unittest.TestCase):

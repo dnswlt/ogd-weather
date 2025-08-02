@@ -134,19 +134,44 @@ def rolling_mean(df: pd.DataFrame, window: int = 5):
     return df.rolling(window=window, min_periods=window).mean()
 
 
-def polyfit_columns(df: pd.DataFrame, deg: int = 1) -> tuple[np.ndarray, pd.DataFrame]:
-    """Fits a curve (using np.polyfit with degree deg) to each column of df."""
+def polyfit_columns(
+    df: pd.DataFrame, deg: int = 1
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fits a Polynomial (degree deg) to each column of df using numpy.polynomial.
+
+    Returns:
+        - A DataFrame of coefficients (per column, highest degree last)
+        - A DataFrame of trend values (same shape as df)
+    """
     trend = {}
     coeffs = {}
+
     for col in df.columns:
         vals = df[col].dropna()
         x = vals.index.values
         y = vals.values
-        p = np.polyfit(x, y, deg=deg)
-        y_fit = np.polyval(p, x)
+
+        # Fit polynomial to column
+        if len(x) < deg + 1:
+            raise ValueError(
+                f"Cannot fit degree-{deg} polynomial to only {len(x)} point(s) in column '{col}'"
+            )
+        p = np.polynomial.Polynomial.fit(x, y, deg=deg).convert()
+        y_fit = p(x)
+
         trend[col] = pd.Series(y_fit, index=vals.index)
-        coeffs[col] = p
-    return pd.DataFrame(coeffs), pd.concat(trend, axis=1)
+        coeffs[col] = p.coef
+
+    coeffs_df = pd.DataFrame(coeffs)  # shape: (deg+1, num_columns)
+    return coeffs_df, pd.concat(trend, axis=1)
+
+
+def _year_to_dt(df: pd.DataFrame) -> pd.DataFrame:
+    """Plotting helper: turns the year:int column into year:nsdatetime.
+
+    This allows us to use :T and timeUnit="year" for the x axis.
+    """
+    return df.assign(year=pd.to_datetime(df["year"], format="%Y"))
 
 
 def create_chart_trendline(
@@ -158,15 +183,7 @@ def create_chart_trendline(
 ) -> alt.LayerChart:
     highlight = alt.selection_point(fields=["variable"], bind="legend")
 
-    # Turn year:int into year:nsdatetime.
-    # This allows us to use :T and timeUnit="year" for the x axis.
-    values_long = values_long.assign(
-        year=pd.to_datetime(values_long["year"], format="%Y"),
-    )
-    trend_long = trend_long.assign(
-        year=pd.to_datetime(trend_long["year"], format="%Y"),
-    )
-
+    values_long = _year_to_dt(values_long)
     # Actual data
     values = alt.Chart(values_long)
     if typ == "line":
@@ -191,6 +208,7 @@ def create_chart_trendline(
     # Trendlines
     trend = None
     if trend_long is not None:
+        trend_long = _year_to_dt(trend_long)
         trend = (
             alt.Chart(trend_long)
             .mark_line(strokeDash=[4, 4])
@@ -271,7 +289,11 @@ def create_dynamic_baseline_bars(
 
 
 def day_count_chart_data(predicate: pd.Series) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Prepares the day count and trendline data for "# days" charts."""
+    """Prepares the day count and trendline data for "# days" charts.
+
+    Returns data and trendline in long format. The trendline can be None if
+    no line can be fitted to the data.
+    """
     if predicate.empty:
         raise NoDataError(f"No data for day count chart")
 
@@ -280,8 +302,11 @@ def day_count_chart_data(predicate: pd.Series) -> tuple[pd.DataFrame, pd.DataFra
     data_m = annual_agg(data, "sum")
     data_long = long_format(data_m).dropna()
 
-    _, trend = polyfit_columns(data_m, deg=1)
-    trend_long = long_format(trend).dropna()
+    try:
+        _, trend = polyfit_columns(data_m)
+        trend_long = long_format(trend).dropna()
+    except ValueError:
+        trend_long = None
 
     return data_long, trend_long
 
@@ -868,10 +893,12 @@ def station_stats(
     driest_year = precip.idxmin() if not precip.empty else None
     wettest_year = precip.idxmax() if not precip.empty else None
 
-    annual_temp_increase = None
     if not temp_dm.empty:
-        coeffs, _ = polyfit_columns(df_m[[db.TEMP_DAILY_MEAN]], deg=1)
-        annual_temp_increase = coeffs[db.TEMP_DAILY_MEAN].iloc[0]
+        try:
+            coeffs, _ = polyfit_columns(df_m[[db.TEMP_DAILY_MEAN]], deg=1)
+            annual_temp_increase = coeffs[db.TEMP_DAILY_MEAN].iloc[1]
+        except ValueError:
+            annual_temp_increase = None  # Could not fit a curve
 
     return models.StationStats(
         first_date=first_date,
