@@ -48,7 +48,7 @@ def _sanitize_pg_url(conn_str: str) -> str:
 async def lifespan(app: FastAPI):
     # Startup: open SQLite connection once
     base_dir = os.environ.get("OGD_BASE_DIR", ".")
-    postgres_url = os.environ.get("OGD_POSTGRES_URL")
+    postgres_url = os.environ.get("OGD_POSTGRES_URL", "")
 
     if postgres_url:
         logger.info("Connecting to postgres DB at %s", postgres_url)
