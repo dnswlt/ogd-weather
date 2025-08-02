@@ -187,14 +187,14 @@ def import_into_db(engine: sa.Engine, weather_dir: str, resource: CsvResource):
             weather_dir,
             engine,
             table_spec=db.TABLE_DAILY_MEASUREMENTS,
-            updates=[resource.status],
+            update=resource.status,
         )
     elif resource.interval == "h":
         db.insert_csv_data(
             weather_dir,
             engine,
             table_spec=db.TABLE_HOURLY_MEASUREMENTS,
-            updates=[resource.status],
+            updates=resource.status,
         )
     # TODO: add monthly
     elif resource.is_meta:
