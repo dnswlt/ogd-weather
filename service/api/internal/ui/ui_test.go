@@ -166,3 +166,28 @@ func TestDateFmt(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatBytesIEC(t *testing.T) {
+	tests := []struct {
+		input    int64
+		expected string
+	}{
+		{0, "0 B"},
+		{512, "512 B"},
+		{1023, "1023 B"},
+		{1024, "1.00 KiB"},
+		{1536, "1.50 KiB"},
+		{1048576, "1.00 MiB"},
+		{3145728, "3.00 MiB"},
+		{1073741824, "1.00 GiB"},
+		{1234567890, "1.15 GiB"},
+		{1099511627776, "1.00 TiB"},
+	}
+
+	for _, tt := range tests {
+		got := FormatBytesIEC(tt.input)
+		if got != tt.expected {
+			t.Errorf("formatBytesIEC(%d) = %q; want %q", tt.input, got, tt.expected)
+		}
+	}
+}

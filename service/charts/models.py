@@ -103,3 +103,23 @@ class StationMeasurementsData(BaseModel):
     station_abbr: str
     rows: list[MeasurementsRow]
     columns: list[ColumnInfo]
+
+
+class ServerOptions(BaseModel):
+    base_dir: str
+    sanitized_postgres_url: str = ""
+    start_time: datetime.datetime
+
+
+class DBTableStats(BaseModel):
+    schema: str
+    table: str
+    total_size: str  # usage in human-readable format
+    total_bytes: int  # usage in bytes
+
+
+class ServerStatus(BaseModel):
+    current_time_utc: datetime.datetime
+    db_engine: str
+    options: ServerOptions
+    db_table_stats: list[DBTableStats] | None = None  # only for postgres

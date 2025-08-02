@@ -263,3 +263,17 @@ func (ns NavBar) SetParams(q url.Values) NavBar {
 	}
 	return ns
 }
+
+func FormatBytesIEC(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for n >= unit*div && exp < 6 {
+		div *= unit
+		exp++
+	}
+	value := float64(n) / float64(div)
+	return fmt.Sprintf("%.2f %ciB", value, "KMGTPE"[exp])
+}

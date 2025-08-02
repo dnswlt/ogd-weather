@@ -2,14 +2,18 @@ import datetime
 import logging
 import os
 from typing import Any, Collection, Iterable
+from urllib.parse import urlparse
 import uuid
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 import re
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from . import models
+from . import sql_queries
+
 from .models import LocalizedString
 from .errors import StationNotFoundError
 
@@ -28,6 +32,10 @@ class UpdateStatus(BaseModel):
     table_updated_time: datetime.datetime
     resource_updated_time: datetime.datetime | None = None
     etag: str | None = None
+
+    def filename(self):
+        """Returns the filename part of href."""
+        return os.path.basename(urlparse(self.href).path)
 
 
 class DataTableSpec:
@@ -82,30 +90,42 @@ TEMP_HOURLY_MAX = "tre200hx"
 TEMP_DAILY_MEAN = "tre200d0"
 TEMP_DAILY_MIN = "tre200dn"
 TEMP_DAILY_MAX = "tre200dx"
+TEMP_MONTHLY_MEAN = "tre200m0"
+TEMP_MONTHLY_MIN = "tre200mn"
+TEMP_MONTHLY_MAX = "tre200mx"
 
 # Precipitation
 PRECIP_HOURLY_MM = "rre150h0"
 PRECIP_DAILY_MM = "rre150d0"
+PRECIP_MONTHLY_MM = "rre150m0"
 
 # Wind
-WIND_SPEED_DAILY_MEAN = "fkl010d0"
 WIND_SPEED_HOURLY_MEAN = "fkl010h0"
-WIND_DIRECTION_DAILY_MEAN = "dkl010d0"
+WIND_SPEED_DAILY_MEAN = "fkl010d0"
+WIND_SPEED_MONTHLY_MEAN = "fkl010m0"
+
 WIND_DIRECTION_HOURLY_MEAN = "dkl010h0"
-GUST_PEAK_DAILY_MAX = "fkl010d1"
+WIND_DIRECTION_DAILY_MEAN = "dkl010d0"
+WIND_DIRECTION_MONTHLY_MEAN = "dkl010m0"
+
 GUST_PEAK_HOURLY_MAX = "fkl010h1"
+GUST_PEAK_DAILY_MAX = "fkl010d1"
+GUST_PEAK_MONTHLY_MAX = "fkl010m1"
 
 # Atmospheric pressure
 ATM_PRESSURE_DAILY_MEAN = "prestad0"
 ATM_PRESSURE_HOURLY_MEAN = "prestah0"
+ATM_PRESSURE_MONTHLY_MEAN = "prestam0"
 
 # Humidity
-REL_HUMITIDY_DAILY_MEAN = "ure200d0"
 REL_HUMITIDY_HOURLY_MEAN = "ure200h0"
+REL_HUMITIDY_DAILY_MEAN = "ure200d0"
+REL_HUMITIDY_MONTHLY_MEAN = "ure200m0"
 
 # Sunshine
-SUNSHINE_DAILY_MINUTES = "sre000d0"
 SUNSHINE_HOURLY_MINUTES = "sre000h0"
+SUNSHINE_DAILY_MINUTES = "sre000d0"
+SUNSHINE_MONTHLY_MINUTES = "sre000m0"
 
 
 # Map SwissMetNet parameter names to readable names to use at the API level
@@ -159,6 +179,29 @@ TABLE_HOURLY_MEASUREMENTS = DataTableSpec(
 
 TABLE_DAILY_MEASUREMENTS = DataTableSpec(
     name="ogd_smn_daily",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        TEMP_DAILY_MEAN,
+        TEMP_DAILY_MIN,
+        TEMP_DAILY_MAX,
+        PRECIP_DAILY_MM,
+        GUST_PEAK_DAILY_MAX,
+        ATM_PRESSURE_DAILY_MEAN,
+        REL_HUMITIDY_DAILY_MEAN,
+        SUNSHINE_DAILY_MINUTES,
+        WIND_SPEED_DAILY_MEAN,
+        WIND_DIRECTION_DAILY_MEAN,
+    ],
+)
+
+TABLE_MONTHLY_MEASUREMENTS = DataTableSpec(
+    name="ogd_smn_monthly",
     primary_key=[
         "station_abbr",
         "reference_timestamp",
@@ -356,6 +399,7 @@ def insert_csv_data(
     engine: sa.Engine,
     table_spec: DataTableSpec,
     csv_filenames: list[str] | None = None,
+    updates: list[UpdateStatus] | None = None,
 ) -> None:
     """Inserts data from CSV files.
 
@@ -367,14 +411,20 @@ def insert_csv_data(
     The time part is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
     """
 
-    files = [os.path.join(base_dir, f) for f in csv_filenames or []]
+    if not csv_filenames and not updates:
+        return  # Nothing to do
+
+    if updates:
+        files = [os.path.join(base_dir, s.filename()) for s in updates]
+    else:
+        files = [os.path.join(base_dir, f) for f in csv_filenames]
 
     csv_dtype = {}
     for c in table_spec.measurements:
         csv_dtype[c] = float
 
     columns = table_spec.primary_key + table_spec.measurements
-    for fname in files:
+    for i, fname in enumerate(files):
         logger.info(f"Importing {fname} into database...")
         df = pd.read_csv(
             fname,
@@ -392,78 +442,113 @@ def insert_csv_data(
 
         # Insert rows, ignoring duplicates
         with engine.begin() as conn:
-            # Create staging table for bulk update
-            staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
-            conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
-            conn.execute(
-                sa.text(
-                    f"""
-                CREATE TEMP TABLE {staging_name} AS
-                SELECT * FROM {table_spec.name} WHERE 0=1;
-                """
+            if engine.name == "DISABLED__postgresql":
+                # DISABLED: does not run faster than the standard path.
+                # Fast path for PostgreSQL:
+                insert_stmt = postgresql.insert(table_spec.sa_table)
+                insert_stmt = insert_stmt.on_conflict_do_update(
+                    index_elements=table_spec.sa_table.primary_key,
+                    set_={
+                        c: insert_stmt.excluded[c]
+                        for c in df.columns
+                        if c not in table_spec.primary_key
+                    },
                 )
-            )
-            # Bulk insert into staging table
-            staging_table = sa.Table(staging_name, sa.MetaData(), autoload_with=conn)
-            insert_stmt = sa.insert(staging_table)
-            # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
-            records = df.replace({np.nan: None}).to_dict(orient="records")
-            conn.execute(insert_stmt, records)
-            logger.info(f"Inserted {len(records)} rows into staging table")
-            # Merge into data table
-            where_conditions = " AND ".join(
-                [f"DataTable.{pk} = StagingTable.{pk}" for pk in table_spec.primary_key]
-            )
-            # Construct the final query
-            insert_sql = f"""
-                INSERT INTO {table_spec.name}
-                SELECT StagingTable.*
-                FROM {staging_table.name} AS StagingTable
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM {table_spec.name} AS DataTable
-                    WHERE {where_conditions}
+                # insert_stmt = insert_stmt.on_conflict_do_nothing()
+
+                records = df.replace({np.nan: None}).to_dict(orient="records")
+                conn.execute(insert_stmt, records)
+                logger.info(
+                    f"Inserted {len(records)} rows into {table_spec.name} (PostgreSQL fast path)"
                 )
-                """
+            else:
+                # Standard path (works in sqlite and postgres): use staging table.
+                # Create staging table for bulk update
+                staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
+                conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+                conn.execute(
+                    sa.text(
+                        f"""
+                    CREATE TEMP TABLE {staging_name} AS
+                    SELECT * FROM {table_spec.name} WHERE 0=1;
+                    """
+                    )
+                )
+                # Bulk insert into staging table
+                staging_table = sa.Table(
+                    staging_name, sa.MetaData(), autoload_with=conn
+                )
+                insert_stmt = sa.insert(staging_table)
+                # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
+                records = df.replace({np.nan: None}).to_dict(orient="records")
+                conn.execute(insert_stmt, records)
+                logger.info(f"Inserted {len(records)} rows into staging table")
+                # Merge into data table
+                where_conditions = " AND ".join(
+                    [
+                        f"DataTable.{pk} = StagingTable.{pk}"
+                        for pk in table_spec.primary_key
+                    ]
+                )
+                # Construct the final query
+                insert_sql = f"""
+                    INSERT INTO {table_spec.name}
+                    SELECT StagingTable.*
+                    FROM {staging_table.name} AS StagingTable
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM {table_spec.name} AS DataTable
+                        WHERE {where_conditions}
+                    )
+                    """
 
-            conn.execute(sa.text(insert_sql))
-            conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+                c = conn.execute(sa.text(insert_sql))
+                conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+
+            logger.info(f"Merged rows into {table_spec.name}")
+            # Update UpdateStatus in same transaction
+            if updates:
+                save_update_status(conn, updates[i])
 
 
-def save_update_status(engine: sa.Engine, statuses: Iterable[UpdateStatus]) -> None:
+def save_update_status(conn: sa.Connection, s: UpdateStatus) -> None:
+    if s.id is None:
+        # INSERT new row
+        conn.execute(
+            sa.insert(sa_table_update_status).values(
+                id=str(uuid.uuid4()),
+                href=s.href,
+                table_updated_time=s.table_updated_time.isoformat(),
+                resource_updated_time=(
+                    s.resource_updated_time.isoformat()
+                    if s.resource_updated_time
+                    else None
+                ),
+                etag=s.etag,
+            )
+        )
+    else:
+        # UPDATE existing row
+        conn.execute(
+            sa.update(sa_table_update_status)
+            .where(sa_table_update_status.c.id == s.id)
+            .values(
+                table_updated_time=s.table_updated_time.isoformat(),
+                resource_updated_time=(
+                    s.resource_updated_time.isoformat()
+                    if s.resource_updated_time
+                    else None
+                ),
+                etag=s.etag,
+            )
+        )
+
+
+def save_update_statuses(engine: sa.Engine, statuses: Iterable[UpdateStatus]) -> None:
     """Inserts or updates the statuses in the update status table."""
     with engine.begin() as conn:
         for s in statuses:
-            if s.id is None:
-                # INSERT new row
-                conn.execute(
-                    sa.insert(sa_table_update_status).values(
-                        id=str(uuid.uuid4()),
-                        href=s.href,
-                        table_updated_time=s.table_updated_time.isoformat(),
-                        resource_updated_time=(
-                            s.resource_updated_time.isoformat()
-                            if s.resource_updated_time
-                            else None
-                        ),
-                        etag=s.etag,
-                    )
-                )
-            else:
-                # UPDATE existing row
-                conn.execute(
-                    sa.update(sa_table_update_status)
-                    .where(sa_table_update_status.c.id == s.id)
-                    .values(
-                        table_updated_time=s.table_updated_time.isoformat(),
-                        resource_updated_time=(
-                            s.resource_updated_time.isoformat()
-                            if s.resource_updated_time
-                            else None
-                        ),
-                        etag=s.etag,
-                    )
-                )
+            save_update_status(conn, s)
 
 
 def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
@@ -1050,3 +1135,18 @@ def read_station_var_summary_stats(
         return pd.DataFrame(index=pd.Index([], name="station_abbr"), dtype=str)
 
     return df_long.set_index(["station_abbr", "variable"]).unstack().swaplevel(axis=1)
+
+
+def table_stats(engine: sa.Engine, user: str) -> list[models.DBTableStats]:
+    with engine.begin() as conn:
+        sql = sql_queries.psql_total_bytes(user)
+        result = conn.execute(sql).mappings().all()
+        return [
+            models.DBTableStats(
+                schema=r["schema"],
+                table=r["table"],
+                total_size=r["total_size"],
+                total_bytes=r["total_bytes"],
+            )
+            for r in result
+        ]

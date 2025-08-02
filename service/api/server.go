@@ -271,6 +271,12 @@ func (s *Server) chartServiceURL(originalURL *url.URL) *url.URL {
 	return &u
 }
 
+func (s *Server) newChartServiceURL(path string) *url.URL {
+	u := *s.chartServiceBaseURL
+	u.Path = path
+	return &u
+}
+
 // canonicalURL returns a canonical form of the given rawURL.
 // This is useful when URLs are used as cache keys.
 func canonicalURL(rawURL string) (string, error) {
@@ -383,34 +389,39 @@ func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (s *Server) serveStatus(w http.ResponseWriter) {
-	type ServerStatus struct {
-		StartTime           time.Time
-		UptimeSeconds       float64
-		CacheUsage          int
-		CacheCapacity       int
-		ChartServiceBaseURL string
-		Options             ServerOptions
-		GoVersion           string
-		Hostname            string
-		NumCPU              int
-		BuildInfo           string
-		HasBearerToken      bool
-	}
+func (s *Server) serveStatus(w http.ResponseWriter, r *http.Request) {
 
+	var backendStatus map[string]any
+	q := r.URL.Query()
+	if q.Get("format") == "full" {
+		u := s.newChartServiceURL("/status")
+		status, err := fetchBackendData[map[string]any](r.Context(), s, u.String())
+		if err != nil {
+			log.Printf("Error fetching /status from backend: %v", err)
+
+		}
+		backendStatus = *status
+	}
 	hostname, _ := os.Hostname()
-	status := ServerStatus{
+
+	status := types.ServerStatus{
 		StartTime:           s.startTime,
 		UptimeSeconds:       s.uptime().Seconds(),
 		CacheUsage:          s.cache.Usage(),
 		CacheCapacity:       s.cache.Capacity(),
 		ChartServiceBaseURL: s.chartServiceBaseURL.String(),
-		Options:             s.opts,
-		GoVersion:           runtime.Version(),
-		Hostname:            hostname,
-		NumCPU:              runtime.NumCPU(),
-		BuildInfo:           version.FullVersion(),
-		HasBearerToken:      s.bearerToken != "",
+		Options: types.ServerOptions{
+			Addr:                 s.opts.Addr,
+			ChartServiceEndpoint: s.opts.ChartServiceEndpoint,
+			DebugMode:            s.opts.DebugMode,
+			CacheSize:            ui.FormatBytesIEC(int64(s.opts.CacheSize)),
+		},
+		GoVersion:      runtime.Version(),
+		Hostname:       hostname,
+		NumCPU:         runtime.NumCPU(),
+		BuildInfo:      version.FullVersion(),
+		HasBearerToken: s.bearerToken != "",
+		BackendStatus:  backendStatus,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -472,7 +483,7 @@ func (s *Server) Serve() error {
 	})
 	// Status page. Always a treasure in Cloud deployments.
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		s.serveStatus(w)
+		s.serveStatus(w, r)
 	})
 
 	// Reverse proxy

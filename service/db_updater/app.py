@@ -6,7 +6,6 @@ import os
 import re
 import sqlalchemy as sa
 import time
-import pandas as pd
 from pydantic import BaseModel
 import requests
 from urllib.parse import urlparse
@@ -114,11 +113,17 @@ def fetch_data_csv_resources(filter_regex: str | None = None) -> list[CsvResourc
         # we don't reconcile with recent data yet, and we're currently
         # focusing on historical data anyway.
         mo = re.search(
-            r".*_(d|h)_(historical|historical_2020-2029|recent|now__DISABLED__).csv$",
+            r".*_(?P<interval>d|h)_(historical|historical_(?P<years>\d+-\d+)|recent|now__DISABLED__).csv$",
             href,
         )
         if not mo or not _filter(href):
             continue
+        if years := mo.group("years"):
+            # Only download hourly historical data from 1990 onwards.
+            # (Keep data volume at bay, and many stations don't have older data anyway)
+            y_start, _ = map(int, years.split("-"))
+            if y_start < 1990 and mo.group("interval") == "h":
+                continue
 
         updated = (
             datetime.datetime.fromisoformat(asset["updated"])
@@ -174,9 +179,6 @@ def import_into_db(engine: sa.Engine, weather_dir: str, csvs: list[CsvResource])
     Assumes that all files have already been downloaded to `weather_dir`.
     """
 
-    def _fname(url):
-        return os.path.basename(urlparse(url).path)
-
     daily = [c.status for c in csvs if c.interval == "d"]
     hourly = [c.status for c in csvs if c.interval == "h"]
     meta = [c.status for c in csvs if c.is_meta]
@@ -186,25 +188,26 @@ def import_into_db(engine: sa.Engine, weather_dir: str, csvs: list[CsvResource])
             weather_dir,
             engine,
             table_spec=db.TABLE_DAILY_MEASUREMENTS,
-            csv_filenames=[_fname(s.href) for s in daily],
+            updates=daily,
         )
-        db.save_update_status(engine, daily)
 
     if hourly:
         db.insert_csv_data(
             weather_dir,
             engine,
             table_spec=db.TABLE_HOURLY_MEASUREMENTS,
-            csv_filenames=[_fname(s.href) for s in hourly],
+            updates=hourly,
         )
-        db.save_update_status(engine, hourly)
+
+    # TODO: add monthly
+
     if meta:
         table_map = {
             "ogd-smn_meta_parameters.csv": db.sa_table_meta_parameters,
             "ogd-smn_meta_stations.csv": db.sa_table_meta_stations,
         }
         for s in meta:
-            csv_file = _fname(s.href)
+            csv_file = s.filename()
             table = table_map.get(csv_file)
             if table is None:
                 logger.warning("Ignoring unknown metadata CSV file %s", csv_file)
@@ -214,7 +217,7 @@ def import_into_db(engine: sa.Engine, weather_dir: str, csvs: list[CsvResource])
                 table=table,
                 csv_file=os.path.join(weather_dir, csv_file),
             )
-        db.save_update_status(engine, meta)
+        db.save_update_statuses(engine, meta)
 
 
 def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvResource]:
@@ -271,10 +274,11 @@ def fetch_latest_data(weather_dir: str, csvs: list[CsvResource]) -> list[CsvReso
             return (c, etag)
         except Exception as e:
             logger.error("Failed to download %s: %s", c.href, str(e))
+            return (None, None)
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(_download, update_csvs))
-        etags = {c.href: etag for (c, etag) in results}
+        etags = {c.href: etag for (c, etag) in results if c is not None}
 
     # Update status fields. Create a new UpdateStatus ONLY if none
     # existed before. The existing ones must retain their DB ID.
@@ -355,6 +359,7 @@ def main():
         logger.info("Connecting to sqlite DB at %s", db_path)
         engine = sa.create_engine(f"sqlite:///{db_path}", echo=False)
 
+    logger.info("Using DB engine '%s'", engine.name)
     # Drop old data if requested.
     if args.force_recreate:
         logger.info("Dropping existing data from all tables.")

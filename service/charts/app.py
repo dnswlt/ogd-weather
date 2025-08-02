@@ -3,6 +3,7 @@ import datetime
 from io import StringIO
 import logging
 import os
+from urllib.parse import urlparse, urlunparse
 import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException, status, Response
 from fastapi.responses import JSONResponse
@@ -15,12 +16,32 @@ from . import logging_config as _  # configure logging
 from .errors import NoDataError, StationNotFoundError
 
 
-class ChartRequest(BaseModel):
-    city: str
-    chart_type: str
-
-
 logger = logging.getLogger("app")
+
+
+def _pg_user(conn_str: str) -> str:
+    """Returns the user of the given postgres connection URL."""
+    return urlparse(conn_str).username
+
+
+def _sanitize_pg_url(conn_str: str) -> str:
+    """Returns a connection URL for postgres with the password removed (if present)."""
+    if not conn_str:
+        return conn_str
+
+    parsed = urlparse(conn_str)
+    if parsed.username is None:
+        return conn_str  # no user info, nothing to redact
+
+    # Rebuild netloc without password
+    netloc = parsed.hostname or ""
+    if parsed.username:
+        netloc = parsed.username + "@" + netloc
+    if parsed.port:
+        netloc += f":{parsed.port}"
+
+    sanitized = parsed._replace(netloc=netloc)
+    return urlunparse(sanitized)
 
 
 @asynccontextmanager
@@ -43,6 +64,11 @@ async def lifespan(app: FastAPI):
 
     app.state.engine = engine
 
+    app.state.server_options = models.ServerOptions(
+        base_dir=base_dir,
+        sanitized_postgres_url=_sanitize_pg_url(postgres_url),
+        start_time=datetime.datetime.now(tz=datetime.timezone.utc),
+    )
     # If charts module needs to initialize something
     # charts.init_db(conn)
 
@@ -81,6 +107,22 @@ async def no_data_error_handler(request, exc: NoDataError):
 def health():
     """Health check endpoint for cloud deployments."""
     return {"status": "ok"}
+
+
+@app.get("/status")
+def server_status():
+    """Returns status informatin for the running server."""
+    status = models.ServerStatus(
+        current_time_utc=datetime.datetime.now(tz=datetime.timezone.utc),
+        db_engine=app.state.engine.name,
+        options=app.state.server_options,
+    )
+
+    if app.state.engine.name == "postgresql":
+        user = _pg_user(app.state.server_options.sanitized_postgres_url)
+        status.db_table_stats = db.table_stats(app.state.engine, user=user)
+
+    return status
 
 
 @app.get("/stations/{station_abbr}/charts/{chart_type}")

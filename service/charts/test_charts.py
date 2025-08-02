@@ -26,9 +26,9 @@ class TestStationNumDays(PandasTestCase):
         # First year has 100 days that don't satisfy the predicate.
         self.assertSeriesValuesEqual(data["value"], [265, 365])
         # Structural assertions.
-        self.assertTrue(set(data["variable"].unique()) == set(["# days"]))
-        self.assertColumnNames(data, ["year", "variable", "value"])
-        self.assertColumnNames(trend, ["year", "variable", "value"])
+        self.assertTrue(set(data["measurement"].unique()) == set(["# days"]))
+        self.assertColumnNames(data, ["year", "measurement", "value"])
+        self.assertColumnNames(trend, ["year", "measurement", "value"])
 
         # Values lie on a straight line, trend should be approx. equal.
         self.assertEqual(len(trend), 2)

@@ -43,6 +43,33 @@ type NullDate struct {
 	HasValue bool
 }
 
+// A copy of the real server options, suitable to be exposed on
+// the /status page.
+type ServerOptions struct {
+	Addr                 string `json:"addr"`
+	ChartServiceEndpoint string `json:"chartServiceEndpoint"`
+	BaseDir              string `json:"baseDir"`
+	DebugMode            bool   `json:"debugMode"`
+	LogRequests          bool   `json:"logRequests"`
+	CacheSize            string `json:"cacheSize"`
+}
+
+type ServerStatus struct {
+	StartTime           time.Time     `json:"startTime"`
+	UptimeSeconds       float64       `json:"uptimeSeconds"`
+	CacheUsage          int           `json:"cacheUsage"`
+	CacheCapacity       int           `json:"cacheCapacity"`
+	ChartServiceBaseURL string        `json:"chartServiceBaseURL"`
+	Options             ServerOptions `json:"options"`
+	GoVersion           string        `json:"goVersion"`
+	Hostname            string        `json:"hostname"`
+	NumCPU              int           `json:"numCPU"`
+	BuildInfo           string        `json:"buildInfo"`
+	HasBearerToken      bool          `json:"hasBearerToken"`
+	// For forwarding the status information from the Python backend.
+	BackendStatus map[string]any `json:"backendStatus"`
+}
+
 type Station struct {
 	Abbr                 string          `json:"abbr"`
 	Name                 string          `json:"name"`
