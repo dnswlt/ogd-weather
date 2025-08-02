@@ -248,13 +248,12 @@ def timeline_years_chart(
 
     layer_chart = values + trend if trend else alt.layer(values)
     return (
-        layer_chart.add_params(highlight)
-        .properties(
+        layer_chart.add_params(highlight).properties(
             width="container",
             autosize={"type": "fit", "contains": "padding"},
             title=title,
         )
-        .interactive()
+        # .interactive()
     )
 
 
@@ -304,13 +303,12 @@ def dynamic_baseline_bars_chart(
     chart_title = f"{title} (Baseline = {baseline:.2f} °C over {year_range})"
 
     return (
-        (bars + zero_line)
-        .properties(
+        (bars + zero_line).properties(
             width="container",
             autosize={"type": "fit", "contains": "padding"},
             title=chart_title,
         )
-        .interactive()
+        # .interactive()
     )
 
 
