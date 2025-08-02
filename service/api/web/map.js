@@ -14,6 +14,9 @@ export function initMapPage() {
         const DEFAULT_COLOR = "#DA291C";
         const HIGHLIGHT_COLOR = "#38BDF8";
 
+        // prev/next buttons for the date picker
+        
+
         // Every marker is a <g>
         const markers = document.querySelectorAll('g[id^="station-marker-"]');
 
