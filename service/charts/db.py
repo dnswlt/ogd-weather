@@ -70,9 +70,9 @@ class DataTableSpec:
             for col_name in self.primary_key
         ]
 
-        # Measurement columns are always REAL → Float in SQLAlchemy
+        # Measurement columns are always REAL: Use 32-bit accuracy is more than enough.
         measurement_columns = [
-            sa.Column(col_name, sa.Float) for col_name in self.measurements
+            sa.Column(col_name, sa.REAL) for col_name in self.measurements
         ]
 
         return sa.Table(self.name, metadata, *(pk_columns + measurement_columns))
@@ -129,6 +129,8 @@ SUNSHINE_MONTHLY_MINUTES = "sre000m0"
 
 SUNSHINE_DAILY_PCT_OF_MAX = "sremaxdv"
 
+# Snow
+SNOW_DEPTH_DAILY_CM = "htoautd0"
 
 # Map SwissMetNet parameter names to readable names to use at the API level
 # (e.g. when returning summary stats for variables).
@@ -145,6 +147,7 @@ VARIABLE_API_NAMES = {
     REL_HUMITIDY_DAILY_MEAN: "rel_humidity_daily_mean",
     SUNSHINE_DAILY_MINUTES: "sunshine_daily_minutes",
     SUNSHINE_DAILY_PCT_OF_MAX: "sunshine_daily_pct_of_max",
+    SNOW_DEPTH_DAILY_CM: "snow_depth_daily_cm",
 }
 
 # Derived metric names (prefix DX_):
@@ -201,6 +204,7 @@ TABLE_DAILY_MEASUREMENTS = DataTableSpec(
         SUNSHINE_DAILY_PCT_OF_MAX,
         WIND_SPEED_DAILY_MEAN,
         WIND_DIRECTION_DAILY_MEAN,
+        SNOW_DEPTH_DAILY_CM,
     ],
 )
 
@@ -241,12 +245,12 @@ sa_table_meta_stations = sa.Table(
     sa.Column("station_type_en", sa.Text),
     sa.Column("station_dataowner", sa.Text),
     sa.Column("station_data_since", sa.Text),
-    sa.Column("station_height_masl", sa.Float),
-    sa.Column("station_height_barometer_masl", sa.Float),
-    sa.Column("station_coordinates_lv95_east", sa.Float),
-    sa.Column("station_coordinates_lv95_north", sa.Float),
-    sa.Column("station_coordinates_wgs84_lat", sa.Float),
-    sa.Column("station_coordinates_wgs84_lon", sa.Float),
+    sa.Column("station_height_masl", sa.REAL),
+    sa.Column("station_height_barometer_masl", sa.REAL),
+    sa.Column("station_coordinates_lv95_east", sa.REAL),
+    sa.Column("station_coordinates_lv95_north", sa.REAL),
+    sa.Column("station_coordinates_wgs84_lat", sa.REAL),
+    sa.Column("station_coordinates_wgs84_lon", sa.REAL),
     sa.Column("station_exposition_de", sa.Text),
     sa.Column("station_exposition_fr", sa.Text),
     sa.Column("station_exposition_it", sa.Text),
@@ -309,9 +313,9 @@ sa_table_x_station_data_summary = sa.Table(
     sa.Column("station_url_en", sa.Text),
     sa.Column("station_dataowner", sa.Text),
     sa.Column("station_data_since", sa.Text),
-    sa.Column("station_height_masl", sa.Float),
-    sa.Column("station_coordinates_wgs84_lat", sa.Float),
-    sa.Column("station_coordinates_wgs84_lon", sa.Float),
+    sa.Column("station_height_masl", sa.REAL),
+    sa.Column("station_coordinates_wgs84_lat", sa.REAL),
+    sa.Column("station_coordinates_wgs84_lon", sa.REAL),
     sa.Column("tre200d0_count", sa.Integer, nullable=False),
     sa.Column("tre200d0_min_date", sa.Text),
     sa.Column("tre200d0_max_date", sa.Text),
@@ -328,12 +332,12 @@ sa_table_x_station_var_summary_stats = sa.Table(
     sa.Column("station_abbr", sa.Text, primary_key=True),
     sa.Column("variable", sa.Text, primary_key=True),
     sa.Column("source_granularity", sa.Text),
-    sa.Column("min_value", sa.Float),
+    sa.Column("min_value", sa.REAL),
     sa.Column("min_value_date", sa.Text),
-    sa.Column("mean_value", sa.Float),
-    sa.Column("max_value", sa.Float),
+    sa.Column("mean_value", sa.REAL),
+    sa.Column("max_value", sa.REAL),
     sa.Column("max_value_date", sa.Text),
-    sa.Column("value_sum", sa.Float),
+    sa.Column("value_sum", sa.REAL),
     sa.Column("value_count", sa.Integer),
 )
 

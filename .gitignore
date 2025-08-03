@@ -1,6 +1,7 @@
 # Application-specific exludes
 data/ 
 scripts/*env*.sh
+*.tmp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
