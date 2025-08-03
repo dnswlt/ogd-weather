@@ -653,6 +653,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 "mean_value",
                 "max_value",
                 "max_value_date",
+                "p10_value",
+                "p25_value",
+                "median_value",
+                "p75_value",
+                "p90_value",
                 "value_sum",
                 "value_count",
             ],
@@ -767,6 +772,30 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         self.assertEqual(fd["max_value"], 1.0)
         self.assertEqual(fd["max_value_date"], "1991-01-01")
 
+    def test_extra_column_date_range(self):
+        # Test that the "virtual" column "date_range" is included
+        # and has the total min and max date as extremal points.
+        self._insert_var(
+            "tre200dn",
+            [
+                ("LUG", "1991-01-01", 21),
+                ("LUG", "1992-07-01", 19),
+                ("LUG", "2020-12-31", 18),
+            ],
+        )
+        # Recreate derived table.
+        db.recreate_station_var_summary_stats(self.engine)
+        # Read data
+        with self.engine.begin() as conn:
+            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
+
+        # Check summary stats
+        fd = df.loc["LUG", db.DX_SOURCE_DATE_RANGE]
+        self.assertAlmostEqual(fd["min_value"], 7670.0)  # Days since epoch
+        self.assertEqual(fd["min_value_date"], "1991-01-01")
+        self.assertAlmostEqual(fd["max_value"], 18627.0)
+        self.assertEqual(fd["max_value_date"], "2020-12-31")
+
     def test_derived_sunny_days(self):
         # Insert daily data.
         self._insert_var(
@@ -868,3 +897,18 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         vars = df.loc["BER"].index.get_level_values(0).unique().to_list()
         self.assertIn(db.TEMP_DAILY_MIN, vars)
         self.assertNotIn(db.PRECIP_DAILY_MM, vars)
+
+
+class TestHelpers(unittest.TestCase):
+
+    def test_column_to_dtype(self):
+        def _col(name):
+            return db.TABLE_DAILY_MEASUREMENTS.sa_table.columns[name]
+
+        self.assertEqual(db._column_to_dtype(_col(db.PRECIP_DAILY_MM)), float)
+        self.assertEqual(db._column_to_dtype(_col("station_abbr")), str)
+        int_col = db.sa_table_meta_parameters.columns["parameter_decimals"]
+        self.assertEqual(db._column_to_dtype(int_col), int)
+        # Unsupported type should raise ValueError:
+        with self.assertRaises(ValueError):
+            db._column_to_dtype(sa.Column(name="test", type_=sa.DATE))

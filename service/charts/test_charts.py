@@ -213,6 +213,11 @@ class TestStationPeriodStats(unittest.TestCase):
                     "mean_value": 5.0,
                     "max_value": 25.0,
                     "max_value_date": "1995-07-01",
+                    "p10_value": 0.1,
+                    "p25_value": 0.25,
+                    "median_value": 0.50,
+                    "p75_value": 0.75,
+                    "p90_value": 0.9,
                     "source_granularity": "daily",
                     "value_sum": 5000.0,
                     "value_count": 1000,
@@ -224,6 +229,11 @@ class TestStationPeriodStats(unittest.TestCase):
                     "mean_value": 15.0,
                     "max_value": 35.0,
                     "max_value_date": "1995-08-15",
+                    "p10_value": 0.1,
+                    "p25_value": 0.25,
+                    "median_value": 0.50,
+                    "p75_value": 0.75,
+                    "p90_value": 0.9,
                     "source_granularity": "daily",
                     "value_sum": 15000.0,
                     "value_count": 1000,
@@ -253,6 +263,11 @@ class TestStationPeriodStats(unittest.TestCase):
         self.assertEqual(vmin.source_granularity, "daily")
         self.assertEqual(vmin.value_sum, 5000.0)
         self.assertEqual(vmin.value_count, 1000)
+        self.assertEqual(vmin.p10_value, 0.1)
+        self.assertEqual(vmin.p25_value, 0.25)
+        self.assertEqual(vmin.median_value, 0.5)
+        self.assertEqual(vmin.p75_value, 0.75)
+        self.assertEqual(vmin.p90_value, 0.9)
 
         # --- Check TEMP_DAILY_MAX ---
         vmax = result.variable_stats["temperature_daily_max"]

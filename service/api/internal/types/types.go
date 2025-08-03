@@ -118,6 +118,11 @@ type VariableStats struct {
 	MeanValue         float64 `json:"mean_value"`
 	MaxValue          float64 `json:"max_value"`
 	MaxValueDate      Date    `json:"max_value_date"`
+	P10Value          float64 `json:"p10_value"`
+	P25Value          float64 `json:"p25_value"`
+	MedianValue       float64 `json:"median_value"`
+	P75Value          float64 `json:"p75_value"`
+	P90Value          float64 `json:"p90_value"`
 	SourceGranularity string  `json:"source_granularity"`
 	ValueCount        int     `json:"value_count"`
 }

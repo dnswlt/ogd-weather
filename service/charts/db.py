@@ -162,6 +162,8 @@ DX_TROPICAL_NIGHTS_ANNUAL_COUNT = "tropical_nights_annual_count"
 
 DX_GROWING_DEGREE_DAYS_ANNUAL_SUM = "growing_degree_days_annual_sum"
 
+DX_SOURCE_DATE_RANGE = "source_date_range"
+
 # Table definitions
 
 TABLE_HOURLY_MEASUREMENTS = DataTableSpec(
@@ -335,12 +337,21 @@ sa_table_x_station_var_summary_stats = sa.Table(
     sa.Column("station_abbr", sa.Text, primary_key=True),
     sa.Column("variable", sa.Text, primary_key=True),
     sa.Column("source_granularity", sa.Text),
+    # Min/max including date of occurrence
     sa.Column("min_value", sa.REAL),
     sa.Column("min_value_date", sa.Text),
     sa.Column("mean_value", sa.REAL),
     sa.Column("max_value", sa.REAL),
     sa.Column("max_value_date", sa.Text),
+    # Percentiles (10, 25, 50, 75, 90)
+    sa.Column("p10_value", sa.REAL),
+    sa.Column("p25_value", sa.REAL),
+    sa.Column("median_value", sa.REAL),
+    sa.Column("p75_value", sa.REAL),
+    sa.Column("p90_value", sa.REAL),
+    # Sum
     sa.Column("value_sum", sa.REAL),
+    # Count
     sa.Column("value_count", sa.Integer),
 )
 
@@ -705,12 +716,21 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
     ) -> list[dict[str, Any]]:
         """Returns summary stats for all vars in var_cols as an SQL INSERT tuple."""
         params = []
+
+        def qtl(q):
+            def f(s):
+                return s.quantile(q)
+
+            f.__name__ = f"q{int(round(q*100))}"  # Get columns names q25, q50, etc.
+            return f
+
         for station_abbr, grp in df.groupby("station_abbr"):
             for var in var_cols:
                 if grp[var].isna().all():
                     continue  # No data for this variable
                 a = grp[var].agg(
                     ["min", "max", "idxmin", "idxmax", "mean", "sum", "count"]
+                    + [qtl(0.10), qtl(0.25), qtl(0.5), qtl(0.75), qtl(0.9)]
                 )
                 # Get reference_timestamp value at the index of the min/max value.
                 # Convert to Python datetime, which conn.execute understands.
@@ -727,6 +747,12 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
                         "mean_value": a["mean"],
                         "max_value": a["max"],
                         "max_value_date": max_date,
+                        "p10_value": a["q10"],
+                        "p10_value": a["q10"],
+                        "p25_value": a["q25"],
+                        "median_value": a["q50"],
+                        "p75_value": a["q75"],
+                        "p90_value": a["q90"],
                         "value_sum": a["sum"],
                         "value_count": int(a["count"]),
                     }
@@ -752,9 +778,16 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
         },
     )
 
+    # Add DX_SOURCE_DATE_RANGE column containing epoch seconds.
+    delta_days = pd.to_datetime(df["reference_timestamp"]) - pd.Timestamp("1970-01-01")
+    df[DX_SOURCE_DATE_RANGE] = delta_days / pd.Timedelta(days=1)
+
     # Summary stats across the whole period for all daily vars.
     params = _station_summary(
-        df, date_col="reference_timestamp", var_cols=daily_vars, granularity="daily"
+        df,
+        date_col="reference_timestamp",
+        var_cols=daily_vars + [DX_SOURCE_DATE_RANGE],
+        granularity="daily",
     )
 
     def _day_count(series, condition):
@@ -1208,6 +1241,16 @@ def read_monthly_measurements(
     )
 
 
+def _column_to_dtype(col: sa.Column) -> Any:
+    if isinstance(col.type, sa.Float):
+        return float
+    if isinstance(col.type, sa.String):
+        return str
+    if isinstance(col.type, sa.Integer):
+        return int
+    raise ValueError(f"Cannot determine dtype for {col.name} of type {col.type}")
+
+
 def read_station_var_summary_stats(
     conn: sa.Connection,
     agg_name: str,
@@ -1248,23 +1291,17 @@ def read_station_var_summary_stats(
             params[p] = var
         filters.append(f"variable IN ({', '.join(placeholders)})")
 
-    measure_cols = [
-        "source_granularity",
-        "min_value",
-        "min_value_date",
-        "mean_value",
-        "max_value",
-        "max_value_date",
-        "value_sum",
-        "value_count",
+    excluded_col_names = set(["agg_name"])
+    columns = [
+        c
+        for c in sa_table_x_station_var_summary_stats.columns
+        if c.name not in excluded_col_names
     ]
     sql = f"""
         SELECT
-            station_abbr,
-            variable,
-            {', '.join(measure_cols)}
+            {', '.join(c.name for c in columns)}
         FROM {sa_table_x_station_var_summary_stats.name}
-    """
+        """
     if filters:
         sql += f"WHERE {' AND '.join(filters)}"
 
@@ -1272,18 +1309,7 @@ def read_station_var_summary_stats(
         sa.text(sql),
         conn,
         params=params,
-        dtype={
-            "station_abbr": str,
-            "variable": str,
-            "source_granularity": str,
-            "min_value": float,
-            "min_value_date": str,
-            "mean_value": float,
-            "max_value": float,
-            "max_value_date": str,
-            "value_sum": float,
-            "value_count": float,
-        },
+        dtype={c.name: _column_to_dtype(c) for c in columns},
     )
     if df_long.empty:
         return pd.DataFrame(index=pd.Index([], name="station_abbr"), dtype=str)

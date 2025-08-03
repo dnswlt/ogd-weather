@@ -105,11 +105,29 @@
 <!-- TODO: proper padding for headings, this mt-4 mb-4 is a bit hacky. -->
 <h2 class="text-lg text-gray-800 text-left mb-4 mt-8">Reference period statistics (1991 &ndash; 2020)</h2>
 
+<p class="text-sm text-gray-600 leading-relaxed mb-4">
+    The table below shows summary statistics for the <a class="text-blue-600 hover:underline"
+        href="https://www.ncei.noaa.gov/products/wmo-climate-normals">WMO Climate Normals</a> period
+    1991&ndash;2020. For average values the corresponding <a class="text-blue-600 hover:underline"
+        href="https://en.wikipedia.org/wiki/Interquartile_range" target="_blank">interquartile range (IQR)</a>
+    (the &laquo;middle 50%&raquo;) is shown in parentheses.
+</p>
 
 <table id="station-summary" class="w-full table-auto border-collapse text-sm">
     <tbody>
         {{with .Ref1991To2020Stats}}
 
+        {{if .Vars.SourceDateRange}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Date range    
+            </td>
+            <td class="py-2 text-gray-800">
+                {{datefmt "a J Y" .Vars.SourceDateRange.MinValueDate}} &ndash; 
+                {{datefmt "a J Y" .Vars.SourceDateRange.MaxValueDate}}
+            </td>
+        </tr>
+        {{end}}
         {{if .Vars.TemperatureDailyMin}}
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
@@ -139,6 +157,9 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{printf "%.1f" .Vars.PrecipitationDailyMillimeters.MeanValue}} mm
+                ({{printf "%.1f" .Vars.PrecipitationDailyMillimeters.P25Value}}
+                &ndash;
+                {{printf "%.1f" .Vars.PrecipitationDailyMillimeters.P75Value}} mm)
             </td>
         </tr>
         <tr class="border-b">
@@ -158,6 +179,10 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{min2hours .Vars.SunshineDailyMinutes.MeanValue}} hours
+                ({{min2hours
+                .Vars.SunshineDailyMinutes.P25Value}}
+                &ndash;
+                {{min2hours .Vars.SunshineDailyMinutes.P75Value}} h)
             </td>
         </tr>
         {{end}}
@@ -168,6 +193,9 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{printf "%.0f" .Vars.AtmPressureDailyMean.MeanValue}} hPa
+                ({{printf "%.1f" .Vars.AtmPressureDailyMean.P25Value}}
+                &ndash;
+                {{printf "%.1f" .Vars.AtmPressureDailyMean.P75Value}} hPa)
             </td>
         </tr>
         {{end}}
@@ -189,6 +217,9 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{printf "%.0f" .Vars.SummerDaysAnnualCount.MeanValue}} days
+                ({{printf "%.0f" .Vars.SummerDaysAnnualCount.P25Value}}
+                &ndash;
+                {{printf "%.0f" .Vars.SummerDaysAnnualCount.P75Value}} days)
             </td>
         </tr>
         {{end}}
@@ -199,6 +230,9 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{printf "%.0f" .Vars.SunnyDaysAnnualCount.MeanValue}} days
+                ({{printf "%.0f" .Vars.SunnyDaysAnnualCount.P25Value}}
+                &ndash;
+                {{printf "%.0f" .Vars.SunnyDaysAnnualCount.P75Value}} days)
             </td>
         </tr>
         {{end}}
@@ -209,6 +243,9 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{printf "%.1f" .Vars.TropicalNightsAnnualCount.MeanValue}} nights
+                ({{printf "%.1f" .Vars.TropicalNightsAnnualCount.P25Value}}
+                &ndash;
+                {{printf "%.1f" .Vars.TropicalNightsAnnualCount.P75Value}} nights)
             </td>
         </tr>
         {{if gt .Vars.TropicalNightsAnnualCount.MaxValue 0.05}}
@@ -230,6 +267,9 @@
             </td>
             <td class="py-2 text-gray-800">
                 {{printf "%.0f" .Vars.FrostDaysAnnualCount.MeanValue}} days
+                ({{printf "%.0f" .Vars.FrostDaysAnnualCount.P25Value}}
+                &ndash;
+                {{printf "%.0f" .Vars.FrostDaysAnnualCount.P75Value}} days)
             </td>
         </tr>
         {{end}}
@@ -242,6 +282,9 @@
                 {{printf "%.0f" .Vars.GrowingDegreeDaysAnnualSum.MeanValue}}
                 <a class="text-blue-600 hover:underline" href="https://en.wikipedia.org/wiki/Growing_degree-day"
                     target="_blank">GDD</a>
+                ({{printf "%.0f" .Vars.GrowingDegreeDaysAnnualSum.P25Value}}
+                &ndash;
+                {{printf "%.0f" .Vars.GrowingDegreeDaysAnnualSum.P75Value}})
             </td>
         </tr>
         {{end}}

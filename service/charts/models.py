@@ -64,6 +64,11 @@ class VariableStats(BaseModel):
     mean_value: float
     max_value: float
     max_value_date: date
+    p10_value: float
+    p25_value: float
+    median_value: float
+    p75_value: float
+    p90_value: float
     value_sum: float
     value_count: int
     source_granularity: str

@@ -366,6 +366,7 @@ def main():
 
     if args.recreate_views:
         # Only recreate views, then exit.
+        logger.info("Recreating views only...")
         db.recreate_views(engine)
         logger.info(
             "Recreated materialized views in %.1fs.", time.time() - started_time
