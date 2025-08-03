@@ -9,6 +9,7 @@ services:
     environment:
       OGD_BASE_DIR: "/app/efs"
       OGD_POSTGRES_URL: postgresql+psycopg://ogd_weather@host.docker.internal:5432/ogd_weather
+      PGPASSWORD: "${PGPASSWORD}"
     volumes:
       - ./data:/app/efs:ro # local SQLite folder → /app/efs in container
     extra_hosts:
