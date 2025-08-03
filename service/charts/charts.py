@@ -651,14 +651,33 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
 
     # Color scheme: Oranges (x4), Gray (x1), Blues (x4)
     # You can tweak these if you have a preferred palette.
+
+    # Oranges from "yelloworangered"
+    # "#fd833a",
+    # "#fea045",
+    # "#feb855",
+    # "#fecf6d",
+
+    # Oranges from "blueorange"
+    # "#c5690d",
+    # "#e8932f",
+    # "#fbbf74",
+    # "#fce0ba",
+
+    # Oranges from "redyellowblue"
+    # "#f16e43",
+    # "#fcac64",
+    # "#fedd90",
+    # "#faf8c1",
+
     colors = [
         # 1..4 (oranges, dark to light)
-        "#c5690d",
-        "#e8932f",
-        "#fbbf74",
-        "#fce0ba",
+        "#e07000",
+        "#f18e1c",
+        "#fbb65c",
+        "#fde1b0",
         # 5 (neutral gray)
-        "#f2f0eb",
+        "#f2f2f2",
         # 6..9 (blues, light to dark)
         "#d2e5ef",
         "#9dcae1",
