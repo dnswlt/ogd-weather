@@ -1,6 +1,8 @@
 import datetime
+import io
 import logging
 import os
+import time
 from typing import Any, Collection
 from urllib.parse import urlparse
 import uuid
@@ -414,19 +416,47 @@ def insert_csv_data(
     engine: sa.Engine,
     table_spec: DataTableSpec,
     update: UpdateStatus,
-    update_existing: bool = False,
+    insert_mode: str = "insert_missing",
 ) -> None:
     """Inserts data from a CSV file specified in `update`.
 
-    Column names in the DB tables are identical to column names in the CSV (e.g.,
+    *  Column names in the DB tables are identical to column names in the CSV (e.g.,
     station_abbr, reference_timestamp, tre200d0).
 
-    Dates are stored as TEXT in ISO format "YYYY-MM-DD HH:MM:SSZ" and use UTC time.
+    *  Dates are stored as TEXT in ISO format "YYYY-MM-DD HH:MM:SSZ" and use UTC time.
 
-    The time part is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
+    *  Measurements are stored as REAL (32 bit).
 
-    The UpdateStatus DB table is updated as well.
+    *  The time part is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
+
+    *  The UpdateStatus DB table is updated in the same transaction.
+
+    :param base_dir:
+    The directory in which CSV files are expected.
+
+    :param engine:
+    The SQLAlchemy engine.
+
+    :param table_spec:
+    The table to insert/upsert data into.
+
+    :param update:
+    Information about the CSV file to insert. Also used to update the status_update table.
+
+    :param mode:
+    The insert mode; must be one of
+
+        * "append" - Appends all CSV rows directly to the destination table.
+            This ignores existing rows and will fail if duplicate primary keys
+            are found.
+        * "merge" - Inserts or updates all CSV rows. Existing rows with the
+            same primary key will be updated.
+        * "insert_missing" - Only inserts CSV rows whose primary keys do not exist
+            in the table yet.
     """
+
+    if insert_mode not in ("append", "merge", "insert_missing"):
+        raise ValueError(f"Invalid mode: {insert_mode}")
 
     filename = os.path.join(base_dir, update.filename())
 
@@ -450,11 +480,13 @@ def insert_csv_data(
     for col in table_spec.date_format.keys():
         df[col] = normalize_timestamp(df[col])
 
+    start_time = time.time()
     # Insert rows, ignoring duplicates
     with engine.begin() as conn:
-        if update_existing and engine.name == "postgresql":
-            # Fast path for ON CONFLICT DO UPDATE for PostgreSQL:
-            # NOTE: does not run faster than the standard path for new inserts.
+        if insert_mode == "merge":
+            if engine.name != "postgresql":
+                raise ValueError("Merge is only supported for postgresql")
+            # Use ON CONFLICT DO UPDATE for PostgreSQL:
             insert_stmt = postgresql.insert(table_spec.sa_table)
             insert_stmt = insert_stmt.on_conflict_do_update(
                 index_elements=table_spec.sa_table.primary_key,
@@ -469,9 +501,34 @@ def insert_csv_data(
             logger.info(
                 f"Inserted {len(records)} rows into {table_spec.name} (PostgreSQL upsert path)"
             )
-        else:
-            # Standard path (works in sqlite and postgres): use staging table.
-            # TODO: Support upsert here, too (currently only append)
+        elif insert_mode == "append":
+            if engine.name == "postgresql":
+                # Fast path using PostgreSQL's COPY FROM
+                output = io.StringIO()
+                df.to_csv(output, sep=",", header=False, index=False, na_rep="")
+                output.seek(0)
+                # Grab psycopg3 cursor to run the COPY command.
+                with conn.connection.cursor() as cur:
+                    with cur.copy(
+                        f"""
+                        COPY {table_spec.name} ({', '.join(df.columns)}) FROM STDIN
+                        WITH (
+                            FORMAT csv,
+                            DELIMITER ',',
+                            NULL '',
+                            HEADER false
+                        )"""
+                    ) as copy:
+                        copy.write(output.getvalue())
+            else:
+                # Standard path: use INSERT INTO measurements table.
+                insert_stmt = sa.insert(table_spec.sa_table)
+                # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
+                records = df.replace({np.nan: None}).to_dict(orient="records")
+                conn.execute(insert_stmt, records)
+
+        elif insert_mode == "insert_missing":
+            # Use staging table to identify new (missing) rows.
 
             # Create staging table for bulk update
             staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
@@ -479,18 +536,42 @@ def insert_csv_data(
             conn.execute(
                 sa.text(
                     f"""
-                CREATE TEMP TABLE {staging_name} AS
-                SELECT * FROM {table_spec.name} WHERE 0=1;
-                """
+                    CREATE TEMP TABLE {staging_name} AS
+                    SELECT * FROM {table_spec.name} WHERE 0=1;
+                    """
                 )
             )
-            # Bulk insert into staging table
             staging_table = sa.Table(staging_name, sa.MetaData(), autoload_with=conn)
-            insert_stmt = sa.insert(staging_table)
-            # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
-            records = df.replace({np.nan: None}).to_dict(orient="records")
-            conn.execute(insert_stmt, records)
-            logger.info(f"Inserted {len(records)} rows into staging table")
+
+            # Bulk insert into staging table
+            if engine.name == "postgresql":
+                # Fast path using PostgreSQL's COPY FROM
+                # https://www.postgresql.org/docs/current/sql-copy.html
+                output = io.StringIO()
+                df.to_csv(output, sep=",", header=False, index=False, na_rep="")
+                output.seek(0)
+                # Grab psycopg3 cursor to run the COPY command.
+                with conn.connection.cursor() as cur:
+                    with cur.copy(
+                        f"""
+                        COPY {staging_name} ({', '.join(df.columns)}) FROM STDIN
+                        WITH (
+                            FORMAT csv,
+                            DELIMITER ',',
+                            NULL '',
+                            HEADER false
+                        )"""
+                    ) as copy:
+                        copy.write(output.getvalue())
+            else:
+                # Standard path: INSERT INTO staging table.
+                insert_stmt = sa.insert(staging_table)
+                # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
+                records = df.replace({np.nan: None}).to_dict(orient="records")
+                conn.execute(insert_stmt, records)
+
+            logger.info(f"Inserted {len(df)} rows into staging table")
+
             # Merge into data table
             where_conditions = " AND ".join(
                 [f"DataTable.{pk} = StagingTable.{pk}" for pk in table_spec.primary_key]
@@ -509,8 +590,16 @@ def insert_csv_data(
 
             c = conn.execute(sa.text(insert_sql))
             conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+        else:
+            raise AssertionError(f"Case not handled: mode={insert_mode}")
 
-        logger.info(f"Merged rows into {table_spec.name}")
+        duration = time.time() - start_time
+        logger.info(
+            "Inserted rows (mode=%s) into %s in %.2fs.",
+            insert_mode,
+            table_spec.name,
+            duration,
+        )
 
         # Update UpdateStatus in same transaction
         save_update_status(conn, update)

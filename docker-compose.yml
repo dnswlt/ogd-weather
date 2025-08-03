@@ -8,22 +8,23 @@ services:
       - "8082:8080"
     environment:
       OGD_BASE_DIR: "/app/efs"
+      OGD_POSTGRES_URL: postgresql+psycopg://ogd_weather@host.docker.internal:5432/ogd_weather
     volumes:
-      - ./data:/app/efs:ro   # local SQLite folder → /app/efs in container
-
+      - ./data:/app/efs:ro # local SQLite folder → /app/efs in container
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   api:
     build:
       context: ./service/api
       dockerfile: Dockerfile
     container_name: api
     ports:
-      - "9090:8080"  # Must match reverse proxy config
+      - "9090:8080" # Must match reverse proxy config
     environment:
       OGD_CHART_SERVICE_ENDPOINT: "http://charts:8080"
       OGD_CACHE_SIZE: 104857600
     depends_on:
       - charts
-
   db-updater:
     build:
       context: . # build from repo root
@@ -31,5 +32,9 @@ services:
     container_name: db-updater
     environment:
       OGD_BASE_DIR: "/app/efs"
+      OGD_POSTGRES_URL: postgresql+psycopg://ogd_weather@host.docker.internal:5432/ogd_weather
+      PGPASSWORD: "${PGPASSWORD}"
     volumes:
-      - ./data:/app/efs:rw   # updater writes new SQLite DB here
+      - ./data:/app/efs:rw # updater writes new SQLite DB here
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

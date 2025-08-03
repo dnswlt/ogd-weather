@@ -180,7 +180,7 @@ def import_into_db(
     engine: sa.Engine,
     weather_dir: str,
     resource: CsvResource,
-    update_existing: bool = False,
+    insert_mode: str,
 ):
     """Imports a SwissMetNet (smn) CSV file into the database.
 
@@ -193,7 +193,7 @@ def import_into_db(
             engine,
             table_spec=db.TABLE_DAILY_MEASUREMENTS,
             update=resource.status,
-            update_existing=update_existing,
+            insert_mode=insert_mode,
         )
     elif resource.interval == "h":
         db.insert_csv_data(
@@ -201,7 +201,7 @@ def import_into_db(
             engine,
             table_spec=db.TABLE_HOURLY_MEASUREMENTS,
             update=resource.status,
-            update_existing=update_existing,
+            insert_mode=insert_mode,
         )
     # TODO: add monthly
     elif resource.is_meta:
@@ -338,11 +338,13 @@ def main():
     parser.add_argument(
         "--force-recreate",
         action="store_true",
+        default=False,
         help="If set, ALL DATA IS DROPPED from the database before updating it.",
     )
     parser.add_argument(
         "--force-update",
         action="store_true",
+        default=False,
         help="If set, all downloaded CSV data is upserted into the database (even if data already exists).",
     )
     parser.add_argument(
@@ -354,7 +356,14 @@ def main():
     parser.add_argument(
         "--recreate-views",
         action="store_true",
+        default=False,
         help="Only recreate database views, do not update any data.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="More verbose logging (e.g. SQLAlchemy statements)",
     )
 
     args = parser.parse_args()
@@ -372,24 +381,13 @@ def main():
 
     if postgres_url:
         logger.info("Connecting to postgres DB at %s", postgres_url)
-        engine = sa.create_engine(postgres_url, echo=False)
+        engine = sa.create_engine(postgres_url, echo=args.verbose)
     else:
         db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
         logger.info("Connecting to sqlite DB at %s", db_path)
-        engine = sa.create_engine(f"sqlite:///{db_path}", echo=False)
+        engine = sa.create_engine(f"sqlite:///{db_path}", echo=args.verbose)
 
     logger.info("Using DB engine '%s'", engine.name)
-    # Drop old data if requested.
-    if args.force_recreate:
-        logger.info("Dropping existing data from all tables.")
-        db.metadata.drop_all(bind=engine)
-
-    force_update = args.force_update
-    if force_update:
-        logger.info("--force-update was set, forcing data update for all assets")
-
-    # Create tables if needed.
-    db.metadata.create_all(engine)
 
     if args.recreate_views:
         # Only recreate views, then exit.
@@ -399,6 +397,28 @@ def main():
         )
         return
 
+    force_update: bool = args.force_update
+    force_recreate: bool = args.force_recreate
+
+    # Drop old data if requested.
+    if force_recreate:
+        logger.warning("Dropping existing data from all tables.")
+        db.metadata.drop_all(bind=engine)
+
+    if force_update:
+        logger.info("--force-update was set, forcing data update for all assets")
+
+    # Determine insert mode.
+    insert_mode = "insert_missing"
+    if force_recreate:
+        insert_mode = "append"
+    elif force_update:
+        insert_mode = "merge"
+
+    # Create tables if needed.
+    db.metadata.create_all(engine)
+
+    # Fetch CSV URLs.
     data_csvs = fetch_data_csv_resources(args.csv_filter)
     meta_csvs = fetch_metadata_csv_resources()
     csvs = meta_csvs + data_csvs
@@ -413,7 +433,6 @@ def main():
 
     # Now download CSVs concurrently and feed them to the importer thread
     # via a queue:
-
     import_queue = queue.SimpleQueue()
     with ThreadPoolExecutor(max_workers=8) as executor:
 
@@ -430,7 +449,7 @@ def main():
             if work_item is _NOOP_SENTINEL:
                 continue  # Skip failed CSV imports
             resource: CsvResource = work_item
-            import_into_db(engine, base_dir, resource, update_existing=force_update)
+            import_into_db(engine, base_dir, resource, insert_mode=insert_mode)
 
         # Consume futures (they're all done)
         for fut in as_completed(futures):

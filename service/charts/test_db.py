@@ -3,7 +3,7 @@ import unittest
 import datetime
 import pandas as pd
 import sqlalchemy as sa
-
+from sqlalchemy.exc import IntegrityError
 from . import db
 from . import models
 from .errors import StationNotFoundError
@@ -445,6 +445,73 @@ class TestCreateDb(unittest.TestCase):
             (df[columns].sum() > 0).all(),
             "All measurement columns should have some nonzero values.",
         )
+
+    def test_create_insert_daily_append(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            db.TABLE_DAILY_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_vis_d_recent.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+            insert_mode="append",
+        )
+
+    def test_create_insert_daily_append_twice_failure(self):
+        # Inserting the same data twice should fail in "append" mode.
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        now = datetime.datetime.now()
+
+        def _insert(update_id, mode):
+            db.insert_csv_data(
+                _testdata_dir(),
+                engine,
+                db.TABLE_DAILY_MEASUREMENTS,
+                db.UpdateStatus(
+                    id=update_id,
+                    href="file:///ogd-smn_vis_d_recent.csv",
+                    resource_updated_time=now,
+                    table_updated_time=now,
+                ),
+                insert_mode=mode,
+            )
+
+        _insert(None, "append")
+        # Need to get UpdateStatus ID for second round.
+        updates = db.read_update_status(engine)
+        self.assertEqual(len(updates), 1)
+        update_id = updates[0].id
+        with self.assertRaises(IntegrityError):
+            _insert(update_id, "append")
+
+        # should just do nothing
+        _insert(update_id, "insert_missing")
+
+    def test_create_insert_daily_merge_failure(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        # insert_mode="merge" only works for Postgres and should fail for sqlite.
+        with self.assertRaises(ValueError):
+            db.insert_csv_data(
+                _testdata_dir(),
+                engine,
+                db.TABLE_DAILY_MEASUREMENTS,
+                db.UpdateStatus(
+                    id=None,
+                    href="file:///ogd-smn_vis_d_recent.csv",
+                    resource_updated_time=now,
+                    table_updated_time=now,
+                ),
+                insert_mode="merge",
+            )
 
     def test_create_hourly(self):
         engine = sa.create_engine("sqlite:///:memory:")
