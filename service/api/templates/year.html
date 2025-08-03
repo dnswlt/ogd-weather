@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Weather Data CH</title>
+
+    <!-- Tailwind -->
+    <link rel="stylesheet" href="/static/dist/main.css" />
+
+    <!-- Vega stack -->
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+
+    <!-- htmx + path‑params -->
+    <script src="https://unpkg.com/htmx.org@2.0.6"></script>
+    <script src="https://unpkg.com/htmx-ext-path-params@2.0.0/path-params.js"></script>
+</head>
+
+<body class="min-h-screen bg-gray-50 p-4" data-page="year">
+    <!-- Navbar -->
+    {{template "nav.html" .}}
+
+    <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
+        <h1 class="text-2xl font-semibold text-center">Annual Weather Summary</h1>
+
+        <!-- Controls -->
+        <form class="space-y-4" id="chart-controls">
+
+            <!-- Station -->
+            <div class="grid grid-cols-3 gap-3 items-center">
+                <label for="station" class="col-span-1 font-medium">Station</label>
+
+                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
+                    {{$selected := .Query.station}}
+                    {{range .Stations}}
+                    <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})
+                    </option>
+                    {{end}}
+                </select>
+            </div>
+
+
+            <!-- Year picker -->
+            <div class="grid grid-cols-3 gap-3 items-center">
+                <label for="year" class="col-span-1 font-medium">Year</label>
+                <div class="col-span-2 flex gap-3 items-center">
+                    <button type="button" id="prev-year" class="border rounded px-3 py-2 text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                            stroke="currentColor" class="size-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                        </svg>
+                    </button>
+                    <input type="text" id="year" name="year" placeholder="Pick year" value="{{.Query.year}}"
+                        class="border rounded p-2 w-full">
+
+                    <button type="button" id="current-year" class="border rounded px-3 py-2 text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5"
+                            stroke="currentColor" class="size-6">
+                            <path strokeLinecap="round" strokeLinejoin="round"
+                                d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                        </svg>
+                    </button>
+                    <button type="button" id="next-year" class="border rounded px-3 py-2 text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                            stroke="currentColor" class="size-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+
+        </form>
+
+        <!-- Charts -->
+
+        <!-- Dry / wet spells -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Dry / wet spells</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Amount of rainfall and percentage of possible sunshine for each day of the selected year.
+        </p>
+
+        <div class="mb-8">
+            <button id="drywet-legend-toggle"
+                class="text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none mb-2">
+                Show legend &#9658;
+            </button>
+
+            <div id="drywet-legend-content" class="hidden">
+                <table class="text-sm text-left text-gray-700 border border-gray-200 rounded-md w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 w-4"></th>
+                            <th class="px-3 py-2">Description</th>
+                            <th class="px-3 py-2">Condition</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #e07000;"></div>
+                            </td>
+                            <td class="px-3 py-2">Dry · sunny</td>
+                            <td class="px-3 py-2">Precip. ≤ 0.2 mm and sunshine &gt; 90%</td>
+                        </tr>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #f18e1c;"></div>
+                            </td>
+                            <td class="px-3 py-2">Dry · mostly sunny</td>
+                            <td class="px-3 py-2">Precip ≤ 0.2 mm and sunshine 60-90%</td>
+                        </tr>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #fbb65c;"></div>
+                            </td>
+                            <td class="px-3 py-2">Dry · partly sunny</td>
+                            <td class="px-3 py-2">Precip. ≤ 0.2 mm and sunshine 30-60%</td>
+                        </tr>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #fde1b0;"></div>
+                            </td>
+                            <td class="px-3 py-2">Dry · mostly cloudy</td>
+                            <td class="px-3 py-2">Precip. ≤ 0.2 mm and sunshine 10-30%</td>
+                        </tr>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #f2f2f2;"></div>
+                            </td>
+                            <td class="px-3 py-2">Dry · very overcast or light rain</td>
+                            <td class="px-3 py-2">Precip. ≤ 0.2 mm and sunshine &lt; 10% <em>or</em> Precip. ≥ 0.2 mm
+                                and &lt; 1 mm</td>
+                        </tr>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #d2e5ef;"></div>
+                            </td>
+                            <td class="px-3 py-2">Rain &lt; 4 mm</td>
+                            <td class="px-3 py-2">Precip. ≥ 1 mm and &lt; 4 mm</td>
+                        </tr>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #9dcae1;"></div>
+                            </td>
+                            <td class="px-3 py-2">Rain 4–8 mm</td>
+                            <td class="px-3 py-2">Precip. ≥ 4 mm and &lt; 8 mm</td>
+                        </tr>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #5da2cb;"></div>
+                            </td>
+                            <td class="px-3 py-2">Rain 8–12 mm</td>
+                            <td class="px-3 py-2">Precip. ≥ 8 mm and &lt; 12 mm</td>
+                        </tr>
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <div class="w-4 h-4 rounded-sm" style="background-color: #2f78b3;"></div>
+                            </td>
+                            <td class="px-3 py-2">Rain ≥ 12 mm</td>
+                            <td class="px-3 py-2">Precip. ≥ 12 mm</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div>
+            <div class="mb-8">
+                <div id="drywet-script-container" hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/year/{year}/drywet" hx-include="#chart-controls" hx-target="this"
+                    hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
+                </div>
+                <div id="drywet-chart" class="w-full overflow-hidden"></div>
+            </div>
+        </div>
+
+    </main>
+
+    {{template "disclaimer.html" .}}
+
+    <script type="module" src="/static/dist/main.js"></script>
+
+</body>
+
+</html>

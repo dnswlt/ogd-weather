@@ -16,7 +16,6 @@ function adjustDate(deltaDays) {
 }
 
 function setYesterdayDateString() {
-    console.log("Yesterday");
     const input = document.getElementById("date");
     if (!input || !input.value) return;
 

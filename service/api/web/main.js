@@ -7,6 +7,7 @@ import {
 
 import { initMapPage } from './map.js';
 import { initDayPage } from './day.js';
+import { initYearPage } from './year.js';
 
 // Default initialization for pages with chart controls.
 function initPage() {
@@ -41,6 +42,9 @@ switch (page) {
         break;
     case 'day':
         initDayPage();
+        break;
+    case 'year':
+        initYearPage();
         break;
     case 'map':
         initMapPage();

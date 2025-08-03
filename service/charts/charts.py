@@ -686,6 +686,8 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
     ]
     domain = [class_labels[k] for k in range(1, 10)]
 
+    # Make colors selectable in the legend.
+    highlight = alt.selection_point(fields=["class_label"], bind="legend")
     # Build the grid chart
     # x: day-of-month (1..31), y: month (Jan..Dec) using Vega-Lite timeUnits from the date column
     chart = (
@@ -708,6 +710,7 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
                 scale=alt.Scale(domain=domain, range=colors),
                 legend=alt.Legend(title="Daily class"),
             ),
+            opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
             tooltip=[
                 alt.Tooltip("yearmonthdate(date):T", title="Date", format="%Y-%m-%d"),
                 alt.Tooltip("precip_mm:Q", title="Precip (mm)", format=".1f"),
@@ -715,10 +718,11 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
                 alt.Tooltip("class_label:N", title="Class"),
             ],
         )
+        .add_params(highlight)
         .properties(
             width="container",
             autosize={"type": "fit", "contains": "padding"},
-            title=f"{station_abbr} — Dry/Wet & Sunshine Grid ({year})",
+            title=f"Dry / wet spells and sunshine ({year})",
         )
     )
 
@@ -1021,18 +1025,6 @@ def daily_temp_precip_chart(
     )
 
     return chart.to_dict()
-
-
-def create_year_chart(
-    chart_type: str,
-    df: pd.DataFrame,
-    station_abbr: str,
-    year: int,
-) -> AltairChart:
-    if chart_type != "drywet":
-        raise ValueError(f"Unsupported chart type: {chart_type}")
-
-    return drywet_grid_chart(df, station_abbr, year)
 
 
 def create_chart(

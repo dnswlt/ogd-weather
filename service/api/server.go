@@ -145,6 +145,7 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 		ui.NavItem("/ui/timeline", "Trends").Params("station", "from_year", "to_year", "period", "window"),
 		ui.NavItem("/ui/sun_rain", "Sun & Rain").Params("station", "from_year", "to_year", "period"),
 		ui.NavItem("/ui/day", "Daily").Params("station", "date"),
+		ui.NavItem("/ui/year", "Year").Params("station", "year"),
 		ui.NavItem("/ui/map", "Map").Params("station"),
 	).SetActive(r.URL.Path).SetParams(q)
 
@@ -387,6 +388,11 @@ func serveChartServiceURL[Response any](
 
 func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Request) {
 	chartType := r.PathValue("chartType")
+	if chartType == "" {
+		log.Printf("Missing {chartType} in URL path for %s", r.URL.Path)
+		http.Error(w, "Missing chartType in URL path", http.StatusInternalServerError)
+		return
+	}
 	serveChartServiceURL[types.VegaSpecResponse](s, w, r, "vega_embed.html", map[string]any{
 		"ChartType": chartType,
 	})
@@ -462,6 +468,16 @@ func (s *Server) Serve() error {
 		}
 		s.serveHTMLPage(w, r, "day.html")
 	})
+	mux.HandleFunc("GET /ui/year", func(w http.ResponseWriter, r *http.Request) {
+		// Redirect to the year from N days ago if year= query param is missing.
+		if !r.URL.Query().Has("year") {
+			newURL := withQueryParams(r.URL, map[string]string{
+				"year": time.Now().AddDate(0, 0, -7).Format("2006"),
+			})
+			http.Redirect(w, r, newURL.RequestURI(), http.StatusFound)
+		}
+		s.serveHTMLPage(w, r, "year.html")
+	})
 	mux.HandleFunc("GET /ui/sun_rain", func(w http.ResponseWriter, r *http.Request) {
 		s.serveHTMLPage(w, r, "sun_rain.html")
 	})
@@ -499,7 +515,7 @@ func (s *Server) Serve() error {
 			}
 			proxy.ServeHTTP(w, r)
 		})
-	mux.HandleFunc("GET /stations/{stationID}/charts/daily/{date}/{chartType}",
+	mux.HandleFunc("GET /stations/{stationID}/charts/{periodName}/{date}/{chartType}",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
 				s.serveStationsChartSnippet(w, r)

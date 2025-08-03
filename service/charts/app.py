@@ -203,7 +203,7 @@ async def get_year_chart(
         )
 
     if chart_type == "drywet":
-        chart = charts.create_year_chart(chart_type, df, station_abbr, year)
+        chart = charts.drywet_grid_chart(df, station_abbr, year)
     else:
         # Should have handled this above.
         raise HTTPException(
