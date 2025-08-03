@@ -176,7 +176,12 @@ def fetch_metadata_csv_resources() -> list[CsvResource]:
     return resources
 
 
-def import_into_db(engine: sa.Engine, weather_dir: str, resource: CsvResource):
+def import_into_db(
+    engine: sa.Engine,
+    weather_dir: str,
+    resource: CsvResource,
+    update_existing: bool = False,
+):
     """Imports a SwissMetNet (smn) CSV file into the database.
 
     Assumes that the file has already been downloaded to `weather_dir`.
@@ -188,6 +193,7 @@ def import_into_db(engine: sa.Engine, weather_dir: str, resource: CsvResource):
             engine,
             table_spec=db.TABLE_DAILY_MEASUREMENTS,
             update=resource.status,
+            update_existing=update_existing,
         )
     elif resource.interval == "h":
         db.insert_csv_data(
@@ -195,6 +201,7 @@ def import_into_db(engine: sa.Engine, weather_dir: str, resource: CsvResource):
             engine,
             table_spec=db.TABLE_HOURLY_MEASUREMENTS,
             update=resource.status,
+            update_existing=update_existing,
         )
     # TODO: add monthly
     elif resource.is_meta:
@@ -220,6 +227,7 @@ def fetch_latest_data(
     csvs: list[CsvResource],
     executor: ThreadPoolExecutor,
     import_queue: queue.SimpleQueue,
+    force_update: bool = False,
 ) -> list[CsvResource]:
     now = datetime.datetime.now()
 
@@ -240,6 +248,11 @@ def fetch_latest_data(
     # Determine which CSV resources to update.
     update_csvs: list[CsvResource] = []
     for c in csvs:
+        if force_update:
+            logger.debug("Adding %s (forced)", c.href)
+            update_csvs.append(c)
+            continue
+
         if c.status is None:
             logger.debug("Adding %s (new entry)", c.href)
             update_csvs.append(c)
@@ -269,7 +282,9 @@ def fetch_latest_data(
     def _download_and_queue(c: CsvResource) -> str | None:
         try:
             etag = download_csv(
-                c.href, weather_dir, etag=c.status.etag if c.status else None
+                c.href,
+                weather_dir,
+                etag=c.status.etag if c.status and not force_update else None,
             )
         except Exception as e:
             logger.error("Failed to download %s: %s", c.href, str(e))
@@ -326,6 +341,11 @@ def main():
         help="If set, ALL DATA IS DROPPED from the database before updating it.",
     )
     parser.add_argument(
+        "--force-update",
+        action="store_true",
+        help="If set, all downloaded CSV data is upserted into the database (even if data already exists).",
+    )
+    parser.add_argument(
         "--csv-filter",
         dest="csv_filter",
         metavar="REGEX",
@@ -364,6 +384,10 @@ def main():
         logger.info("Dropping existing data from all tables.")
         db.metadata.drop_all(bind=engine)
 
+    force_update = args.force_update
+    if force_update:
+        logger.info("--force-update was set, forcing data update for all assets")
+
     # Create tables if needed.
     db.metadata.create_all(engine)
 
@@ -393,14 +417,20 @@ def main():
     import_queue = queue.SimpleQueue()
     with ThreadPoolExecutor(max_workers=8) as executor:
 
-        futures = fetch_latest_data(base_dir, csvs, executor, import_queue)
+        futures = fetch_latest_data(
+            base_dir,
+            csvs,
+            executor=executor,
+            import_queue=import_queue,
+            force_update=force_update,
+        )
         # Receive UpdateStatus items to import into the DB:
         for _ in range(len(futures)):
             work_item = import_queue.get()
             if work_item is _NOOP_SENTINEL:
                 continue  # Skip failed CSV imports
             resource: CsvResource = work_item
-            import_into_db(engine, base_dir, resource)
+            import_into_db(engine, base_dir, resource, update_existing=force_update)
 
         # Consume futures (they're all done)
         for fut in as_completed(futures):

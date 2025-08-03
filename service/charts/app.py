@@ -5,8 +5,8 @@ import logging
 import os
 from urllib.parse import urlparse, urlunparse
 import sqlalchemy as sa
-from fastapi import FastAPI, HTTPException, status, Response
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request, status, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from zoneinfo import ZoneInfo
 from . import charts
@@ -87,6 +87,25 @@ def _period_default(period: str | None) -> str:
     return charts.PERIOD_ALL
 
 
+def _bad_request(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=detail,
+    )
+
+
+def _daily_range(date: str) -> tuple[datetime.datetime, datetime.datetime]:
+    try:
+        d = datetime.date.fromisoformat(date)
+    except ValueError:
+        raise _bad_request("Invalid date: {date}")
+    from_date = datetime.datetime(
+        d.year, d.month, d.day, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
+    )
+    to_date = from_date + datetime.timedelta(days=1)
+    return from_date, to_date
+
+
 @app.exception_handler(StationNotFoundError)
 async def station_not_found_handler(request, exc: StationNotFoundError):
     return JSONResponse(
@@ -135,10 +154,8 @@ async def get_chart(
     window: str | None = None,
 ):
     if chart_type not in charts.CHART_TYPE_COLUMNS:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invalid chart type: {chart_type}",
-        )
+        raise _bad_request(f"Invalid chart type: {chart_type}")
+
     period = _period_default(period)
 
     station_abbr = station_abbr.upper()
@@ -163,23 +180,46 @@ async def get_chart(
     }
 
 
-def _bad_request(detail: str) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=detail,
-    )
+@app.get("/stations/{station_abbr}/charts/year/{year}/{chart_type}")
+async def get_year_chart(
+    station_abbr: str,
+    year: int,
+    chart_type: str,
+    request: Request,
+):
+    if chart_type not in ["drywet"]:
+        raise _bad_request(f"Invalid chart type: {chart_type}")
 
+    station_abbr = station_abbr.upper()
 
-def _daily_range(date: str) -> tuple[datetime.datetime, datetime.datetime]:
-    try:
-        d = datetime.date.fromisoformat(date)
-    except ValueError:
-        raise _bad_request("Invalid date: {date}")
-    from_date = datetime.datetime(
-        d.year, d.month, d.day, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Zurich")
-    )
-    to_date = from_date + datetime.timedelta(days=1)
-    return from_date, to_date
+    with app.state.engine.begin() as conn:
+        df = db.read_daily_measurements(
+            conn,
+            station_abbr,
+            period="all",
+            columns=[db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX],
+            from_year=year,
+            to_year=year,
+        )
+
+    if chart_type == "drywet":
+        chart = charts.create_year_chart(chart_type, df, station_abbr, year)
+    else:
+        # Should have handled this above.
+        raise HTTPException(
+            status_code=500, detail=f"Unexpected chart type {chart_type}"
+        )
+
+    # Return chart as a simple HTML page for debugging, if text/html is requested.
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        sb = StringIO()
+        chart.save(sb, format="html")
+        return HTMLResponse(content=sb.getvalue())
+
+    return {
+        "vega_spec": chart.to_dict(),
+    }
 
 
 @app.get("/stations/{station_abbr}/charts/daily/{date}/{chart_type}")

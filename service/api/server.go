@@ -315,6 +315,9 @@ func fetchBackendData[Response any](ctx context.Context, s *Server, backendURL s
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for %s: %v", backendURL, err)
 	}
+	// Ensure we get JSON back. The Python backend might also support
+	// text/html, e.g. for debugging.
+	req.Header.Add("Accept", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("backend error for %s: %v", backendURL, err)
@@ -364,7 +367,7 @@ func serveChartServiceURL[Response any](
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 
 	var output bytes.Buffer
 	templateData := map[string]any{
@@ -424,7 +427,7 @@ func (s *Server) serveStatus(w http.ResponseWriter, r *http.Request) {
 		BackendStatus:  backendStatus,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	json.NewEncoder(w).Encode(status)
 }

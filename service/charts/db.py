@@ -1,7 +1,7 @@
 import datetime
 import logging
 import os
-from typing import Any, Collection, Iterable
+from typing import Any, Collection
 from urllib.parse import urlparse
 import uuid
 import numpy as np
@@ -127,6 +127,8 @@ SUNSHINE_HOURLY_MINUTES = "sre000h0"
 SUNSHINE_DAILY_MINUTES = "sre000d0"
 SUNSHINE_MONTHLY_MINUTES = "sre000m0"
 
+SUNSHINE_DAILY_PCT_OF_MAX = "sremaxdv"
+
 
 # Map SwissMetNet parameter names to readable names to use at the API level
 # (e.g. when returning summary stats for variables).
@@ -142,6 +144,7 @@ VARIABLE_API_NAMES = {
     ATM_PRESSURE_DAILY_MEAN: "atm_pressure_daily_mean",
     REL_HUMITIDY_DAILY_MEAN: "rel_humidity_daily_mean",
     SUNSHINE_DAILY_MINUTES: "sunshine_daily_minutes",
+    SUNSHINE_DAILY_PCT_OF_MAX: "sunshine_daily_pct_of_max",
 }
 
 # Derived metric names (prefix DX_):
@@ -195,6 +198,7 @@ TABLE_DAILY_MEASUREMENTS = DataTableSpec(
         ATM_PRESSURE_DAILY_MEAN,
         REL_HUMITIDY_DAILY_MEAN,
         SUNSHINE_DAILY_MINUTES,
+        SUNSHINE_DAILY_PCT_OF_MAX,
         WIND_SPEED_DAILY_MEAN,
         WIND_DIRECTION_DAILY_MEAN,
     ],
@@ -406,6 +410,7 @@ def insert_csv_data(
     engine: sa.Engine,
     table_spec: DataTableSpec,
     update: UpdateStatus,
+    update_existing: bool = False,
 ) -> None:
     """Inserts data from a CSV file specified in `update`.
 
@@ -443,9 +448,9 @@ def insert_csv_data(
 
     # Insert rows, ignoring duplicates
     with engine.begin() as conn:
-        if engine.name == "DISABLED__postgresql":
-            # DISABLED: does not run faster than the standard path.
-            # Fast path for PostgreSQL:
+        if update_existing and engine.name == "postgresql":
+            # Fast path for ON CONFLICT DO UPDATE for PostgreSQL:
+            # NOTE: does not run faster than the standard path for new inserts.
             insert_stmt = postgresql.insert(table_spec.sa_table)
             insert_stmt = insert_stmt.on_conflict_do_update(
                 index_elements=table_spec.sa_table.primary_key,
@@ -455,15 +460,15 @@ def insert_csv_data(
                     if c not in table_spec.primary_key
                 },
             )
-            # insert_stmt = insert_stmt.on_conflict_do_nothing()
-
             records = df.replace({np.nan: None}).to_dict(orient="records")
             conn.execute(insert_stmt, records)
             logger.info(
-                f"Inserted {len(records)} rows into {table_spec.name} (PostgreSQL fast path)"
+                f"Inserted {len(records)} rows into {table_spec.name} (PostgreSQL upsert path)"
             )
         else:
             # Standard path (works in sqlite and postgres): use staging table.
+            # TODO: Support upsert here, too (currently only append)
+
             # Create staging table for bulk update
             staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
             conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))

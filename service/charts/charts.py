@@ -1,12 +1,14 @@
 from datetime import date
 import datetime
-from typing import Any, Iterable
+from typing import Any, Iterable, TypeAlias, Union
 import altair as alt
 import numpy as np
 import pandas as pd
 from . import db
 from . import models
 from .errors import NoDataError
+
+AltairChart: TypeAlias = Union[alt.Chart, alt.LayerChart]
 
 PERIOD_ALL = "all"
 
@@ -543,6 +545,167 @@ def temperature_deviation_chart(
     ).to_dict()
 
 
+def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairChart:
+    """Returns a grid chart indicating dry and wet spells for the given year.
+
+    The chart shows a grid with month day on the x-axis and month (Jan-Dec)
+    on the y-axis. Each grid cell is colored in either a blue, gray, or
+    orange shade, depending on the amount of rain and sunshine throughout the day.
+
+    First, we classify the day based on precipitation and sunshine amounts:
+
+    Precipitation:
+
+    *  <= 0.2 mm: dry day
+    *  > 0.2 mm, < 1 mm: light rain
+    *  >= 1 mm: rainy day
+
+    Sunshine: (based on sunshine minutes as a % of potential total daily sunshine):
+
+    *  0-10%: very overcast
+    *  10-30%: mostly cloudy
+    *  30-60%: partly sunny
+    *  60-90%: mostly sunny
+    *  >90%: sunny
+
+    Then we map this classification onto a single ordinal dimension:
+
+    {orange gradient}
+    1 = (dry day, sunny)
+    2 = (dry day, mostly sunny)
+    3 = (dry day, partly sunny)
+    4 = (dry day, mostly cloudy)
+    {gray}
+    5 = (dry day, very overcast) OR (light rain, *)
+    {blue}
+    6 = (rainy day, < 4 mm of rain)
+    7 = (rainy day, < 8 mm of rain)
+    8 = (rainy day, < 12 mm of rain)
+    9 = (rainy day, >= 12 mm of rain)
+
+    """
+    if df.empty:
+        raise NoDataError(f"No data for {station_abbr}")
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if not (df.index.year == year).all():
+        raise ValueError(f"Not all rows are for year {year}")
+
+    # Copy columns we need. We'll add more below.
+    precip = df[db.PRECIP_DAILY_MM]
+    sun_pct = df[db.SUNSHINE_DAILY_PCT_OF_MAX]
+    d = pd.DataFrame(
+        {
+            "sunshine_pct": sun_pct,
+            "precip_mm": precip,
+        }
+    ).reset_index(names="date")
+
+    # Classification (vectorized)
+    # 1..4 = dry + sunshine bands; 5 = dry+very overcast OR light rain; 6..9 = rainy bands
+
+    # Define reusable conditions
+    is_dry = precip <= 0.2
+    is_light_rain = (precip > 0.2) & (precip < 1.0)
+    is_rainy = precip >= 1.0
+
+    very_overcast = sun_pct < 10
+    mostly_cloudy = (sun_pct >= 10) & (sun_pct < 30)
+    partly_sunny = (sun_pct >= 30) & (sun_pct < 60)
+    mostly_sunny = (sun_pct >= 60) & (sun_pct <= 90)
+    sunny = sun_pct > 90
+
+    # Classification rules: (class_id, condition)
+    rules = [
+        (1, is_dry & sunny),
+        (2, is_dry & mostly_sunny),
+        (3, is_dry & partly_sunny),
+        (4, is_dry & mostly_cloudy),
+        (5, (is_dry & very_overcast) | is_light_rain),
+        (6, is_rainy & (precip < 4.0)),
+        (7, (precip >= 4.0) & (precip < 8.0)),
+        (8, (precip >= 8.0) & (precip < 12.0)),
+        (9, precip >= 12.0),
+    ]
+    # Classify all days based on rules.
+    vals, conds = zip(*rules)
+    d["class_id"] = np.select(conds, vals, default=np.nan)
+
+    # Drop days we couldn't classify (e.g., missing values)
+    d = d.dropna(subset=["class_id"]).copy()
+    d["class_id"] = d["class_id"].astype(int)
+
+    # Human-friendly labels for the legend (and fixed domain order)
+    class_labels = {
+        1: "1 - Dry · sunny",
+        2: "2 - Dry · mostly sunny",
+        3: "3 - Dry · partly sunny",
+        4: "4 - Dry · mostly cloudy",
+        5: "5 - Dry · very overcast or light rain",
+        6: "6 - Rain < 4 mm",
+        7: "7 - Rain 4-8 mm",
+        8: "8 - Rain 8-12 mm",
+        9: "9 - Rain ≥ 12 mm",
+    }
+    d["class_label"] = d["class_id"].map(class_labels)
+
+    # Color scheme: Oranges (x4), Gray (x1), Blues (x4)
+    # You can tweak these if you have a preferred palette.
+    colors = [
+        # 1..4 (oranges, dark to light)
+        "#c5690d",
+        "#e8932f",
+        "#fbbf74",
+        "#fce0ba",
+        # 5 (neutral gray)
+        "#f2f0eb",
+        # 6..9 (blues, light to dark)
+        "#d2e5ef",
+        "#9dcae1",
+        "#5da2cb",
+        "#2f78b3",
+    ]
+    domain = [class_labels[k] for k in range(1, 10)]
+
+    # Build the grid chart
+    # x: day-of-month (1..31), y: month (Jan..Dec) using Vega-Lite timeUnits from the date column
+    chart = (
+        alt.Chart(d)
+        .mark_rect(stroke="white", strokeWidth=0.5)
+        .encode(
+            x=alt.X(
+                "date(date):O",
+                title="Day",
+                axis=alt.Axis(labelAngle=0),
+                sort=list(range(1, 32)),  # ensure 1..31 order
+            ),
+            y=alt.Y(
+                "month(date):O",
+                title=None,
+                sort="ascending",  # Jan..Dec
+            ),
+            color=alt.Color(
+                "class_label:N",
+                scale=alt.Scale(domain=domain, range=colors),
+                legend=alt.Legend(title="Daily class"),
+            ),
+            tooltip=[
+                alt.Tooltip("yearmonthdate(date):T", title="Date", format="%Y-%m-%d"),
+                alt.Tooltip("precip_mm:Q", title="Precip (mm)", format=".1f"),
+                alt.Tooltip("sunshine_pct:Q", title="Sunshine (%)", format=".0f"),
+                alt.Tooltip("class_label:N", title="Class"),
+            ],
+        )
+        .properties(
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+            title=f"{station_abbr} — Dry/Wet & Sunshine Grid ({year})",
+        )
+    )
+
+    return chart
+
+
 def _hex_to_rgb(color: str) -> tuple[float, float, float]:
     """Convert a #rrggbb hex color to (r, g, b) tuple in [0.0, 1.0]."""
     r = int(color[1:3], 16) / 255.0
@@ -839,6 +1002,18 @@ def daily_temp_precip_chart(
     )
 
     return chart.to_dict()
+
+
+def create_year_chart(
+    chart_type: str,
+    df: pd.DataFrame,
+    station_abbr: str,
+    year: int,
+) -> AltairChart:
+    if chart_type != "drywet":
+        raise ValueError(f"Unsupported chart type: {chart_type}")
+
+    return drywet_grid_chart(df, station_abbr, year)
 
 
 def create_chart(
