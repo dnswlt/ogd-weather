@@ -4,7 +4,6 @@ import datetime
 import logging
 import os
 import queue
-import re
 import sqlalchemy as sa
 import time
 from pydantic import BaseModel
@@ -13,6 +12,7 @@ from urllib.parse import urlparse
 from service.charts import db
 from service.charts import logging_config as _  # configure logging
 
+from .smn import match_csv_resource
 
 OGD_SNM_URL = (
     "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-smn"
@@ -90,15 +90,8 @@ def download_csv(url, output_dir, etag: str | None = None) -> str | None:
     return etag
 
 
-def fetch_data_csv_resources(filter_regex: str | None = None) -> list[CsvResource]:
+def fetch_data_csv_resources(filter_re: str | None = None) -> list[CsvResource]:
     """Fetch URLs of CSV data resources ("items")."""
-
-    filter_re = re.compile(filter_regex) if filter_regex else None
-
-    def _filter(href: str) -> bool:
-        if filter_re is None:
-            return True
-        return bool(filter_re.search(href))
 
     # Fetch assets from /items
     assets = []
@@ -111,22 +104,13 @@ def fetch_data_csv_resources(filter_regex: str | None = None) -> list[CsvResourc
     resources = []
     for asset in assets:
         href = asset["href"]
-        # TODO: Re-enable _now_ data at some point.
-        # It had a few missing points recently,
-        # we don't reconcile with recent data yet, and we're currently
-        # focusing on historical data anyway.
-        mo = re.search(
-            r".*_(?P<interval>d|h)_(historical|historical_(?P<years>\d+-\d+)|recent|now__DISABLED__).csv$",
-            href,
-        )
-        if not mo or not _filter(href):
+        match = match_csv_resource(href, filter_re)
+        if not match:
             continue
-        if years := mo.group("years"):
+        if match.years and match.years[0] < 1990 and match.interval == "h":
             # Only download hourly historical data from 1990 onwards.
             # (Keep data volume at bay, and many stations don't have older data anyway)
-            y_start, _ = map(int, years.split("-"))
-            if y_start < 1990 and mo.group("interval") == "h":
-                continue
+            continue
 
         updated = (
             datetime.datetime.fromisoformat(asset["updated"])
@@ -134,20 +118,12 @@ def fetch_data_csv_resources(filter_regex: str | None = None) -> list[CsvResourc
             else None
         )
 
-        interval = mo.group(1)
-        if interval not in ["d", "h"]:
-            raise ValueError(f"Unknown interval {interval}")
-
-        freq = mo.group(2).split("_")[0]
-        if freq not in ["historical", "recent", "now"]:
-            raise ValueError(f"Failed to identify freshness of {href}: {freq}")
-
         resources.append(
             CsvResource(
                 href=href,
                 updated=updated,
-                frequency=freq,
-                interval=interval,
+                frequency=match.frequency,
+                interval=match.interval,
             )
         )
     return resources
@@ -187,30 +163,27 @@ def import_into_db(
     Assumes that the file has already been downloaded to `weather_dir`.
     """
 
-    if resource.interval == "d":
+    measurement_tables = {
+        "h": db.TABLE_HOURLY_MEASUREMENTS,
+        "d": db.TABLE_DAILY_MEASUREMENTS,
+        "m": db.TABLE_MONTHLY_MEASUREMENTS,
+    }
+    metadata_tables = {
+        "ogd-smn_meta_parameters.csv": db.sa_table_meta_parameters,
+        "ogd-smn_meta_stations.csv": db.sa_table_meta_stations,
+    }
+
+    if resource.interval in measurement_tables:
         db.insert_csv_data(
             weather_dir,
             engine,
-            table_spec=db.TABLE_DAILY_MEASUREMENTS,
+            table_spec=measurement_tables[resource.interval],
             update=resource.status,
             insert_mode=insert_mode,
         )
-    elif resource.interval == "h":
-        db.insert_csv_data(
-            weather_dir,
-            engine,
-            table_spec=db.TABLE_HOURLY_MEASUREMENTS,
-            update=resource.status,
-            insert_mode=insert_mode,
-        )
-    # TODO: add monthly
     elif resource.is_meta:
-        table_map = {
-            "ogd-smn_meta_parameters.csv": db.sa_table_meta_parameters,
-            "ogd-smn_meta_stations.csv": db.sa_table_meta_stations,
-        }
         csv_file = resource.status.filename()
-        table = table_map.get(csv_file)
+        table = metadata_tables.get(csv_file)
         if table is None:
             logger.warning("Ignoring unknown metadata CSV file %s", csv_file)
             return
@@ -220,6 +193,8 @@ def import_into_db(
             table=table,
             update=resource.status,
         )
+    else:
+        raise AssertionError(f"Unhandled case: {resource}")
 
 
 def fetch_latest_data(

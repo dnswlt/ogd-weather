@@ -414,7 +414,7 @@ class TestDbHourly(TestDb):
 
 class TestCreateDb(unittest.TestCase):
 
-    def test_create_insert_daily(self):
+    def test_create_daily(self):
         engine = sa.create_engine("sqlite:///:memory:")
         db.metadata.create_all(engine)
         now = datetime.datetime.now()
@@ -446,7 +446,7 @@ class TestCreateDb(unittest.TestCase):
             "All measurement columns should have some nonzero values.",
         )
 
-    def test_create_insert_daily_append(self):
+    def test_create_daily_append(self):
         engine = sa.create_engine("sqlite:///:memory:")
         db.metadata.create_all(engine)
         now = datetime.datetime.now()
@@ -463,7 +463,7 @@ class TestCreateDb(unittest.TestCase):
             insert_mode="append",
         )
 
-    def test_create_insert_daily_append_twice_failure(self):
+    def test_create_daily_append_twice_failure(self):
         # Inserting the same data twice should fail in "append" mode.
         engine = sa.create_engine("sqlite:///:memory:")
         db.metadata.create_all(engine)
@@ -494,7 +494,7 @@ class TestCreateDb(unittest.TestCase):
         # should just do nothing
         _insert(update_id, "insert_missing")
 
-    def test_create_insert_daily_merge_failure(self):
+    def test_create_daily_merge_failure(self):
         engine = sa.create_engine("sqlite:///:memory:")
         db.metadata.create_all(engine)
         now = datetime.datetime.now()
@@ -538,6 +538,40 @@ class TestCreateDb(unittest.TestCase):
                 columns=columns,
             )
         self.assertEqual(len(df), 500)
+        self.assertTrue(
+            (df[columns].sum() > 0).all(),
+            "All measurement columns should have some nonzero values.",
+        )
+
+    def test_create_monthly(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            db.TABLE_MONTHLY_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_vis_m.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+        columns = [
+            db.TEMP_MONTHLY_MEAN,
+            db.PRECIP_MONTHLY_MM,
+            db.REL_HUMITIDY_MONTHLY_MEAN,
+        ]
+        with engine.connect() as conn:
+            df = db.read_monthly_measurements(
+                conn,
+                "VIS",
+                from_date=datetime.datetime(2020, 1, 1),
+                to_date=datetime.datetime(2021, 1, 1),
+                columns=columns,
+            )
+        self.assertEqual(len(df), 12)
         self.assertTrue(
             (df[columns].sum() > 0).all(),
             "All measurement columns should have some nonzero values.",

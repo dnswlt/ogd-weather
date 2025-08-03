@@ -79,6 +79,9 @@ class DataTableSpec:
 
         return sa.Table(self.name, metadata, *(pk_columns + measurement_columns))
 
+    def columns(self):
+        return self.primary_key + self.measurements
+
 
 # Filename for the sqlite3 database.
 DATABASE_FILENAME = "swissmetnet.sqlite"
@@ -86,14 +89,14 @@ DATABASE_FILENAME = "swissmetnet.sqlite"
 # Column names for weather measurements.
 
 # Temperature
-TEMP_HOURLY_MEAN = "tre200h0"
 TEMP_HOURLY_MIN = "tre200hn"
+TEMP_HOURLY_MEAN = "tre200h0"
 TEMP_HOURLY_MAX = "tre200hx"
-TEMP_DAILY_MEAN = "tre200d0"
 TEMP_DAILY_MIN = "tre200dn"
+TEMP_DAILY_MEAN = "tre200d0"
 TEMP_DAILY_MAX = "tre200dx"
-TEMP_MONTHLY_MEAN = "tre200m0"
 TEMP_MONTHLY_MIN = "tre200mn"
+TEMP_MONTHLY_MEAN = "tre200m0"
 TEMP_MONTHLY_MAX = "tre200mx"
 
 # Precipitation
@@ -108,7 +111,6 @@ WIND_SPEED_MONTHLY_MEAN = "fkl010m0"
 
 WIND_DIRECTION_HOURLY_MEAN = "dkl010h0"
 WIND_DIRECTION_DAILY_MEAN = "dkl010d0"
-WIND_DIRECTION_MONTHLY_MEAN = "dkl010m0"
 
 GUST_PEAK_HOURLY_MAX = "fkl010h1"
 GUST_PEAK_DAILY_MAX = "fkl010d1"
@@ -220,16 +222,15 @@ TABLE_MONTHLY_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        TEMP_DAILY_MEAN,
-        TEMP_DAILY_MIN,
-        TEMP_DAILY_MAX,
-        PRECIP_DAILY_MM,
-        GUST_PEAK_DAILY_MAX,
-        ATM_PRESSURE_DAILY_MEAN,
-        REL_HUMITIDY_DAILY_MEAN,
-        SUNSHINE_DAILY_MINUTES,
-        WIND_SPEED_DAILY_MEAN,
-        WIND_DIRECTION_DAILY_MEAN,
+        TEMP_MONTHLY_MIN,
+        TEMP_MONTHLY_MEAN,
+        TEMP_MONTHLY_MAX,
+        PRECIP_MONTHLY_MM,
+        WIND_SPEED_MONTHLY_MEAN,
+        GUST_PEAK_MONTHLY_MAX,
+        ATM_PRESSURE_MONTHLY_MEAN,
+        REL_HUMITIDY_MONTHLY_MEAN,
+        SUNSHINE_MONTHLY_MINUTES,
     ],
 )
 
@@ -464,7 +465,7 @@ def insert_csv_data(
     for c in table_spec.measurements:
         csv_dtype[c] = float
 
-    columns = table_spec.primary_key + table_spec.measurements
+    columns = table_spec.columns()
     logger.info(f"Importing {filename} into database...")
     df = pd.read_csv(
         filename,
@@ -1093,6 +1094,19 @@ def utc_timestr(d: datetime.datetime) -> str:
     return d.strftime("%Y-%m-%d %H:%M:%SZ")
 
 
+def utc_datestr(d: datetime.datetime) -> str:
+    """Returns the given datetime as a UTC date string in ISO format.
+
+    Example: "2025-03-31"
+
+    If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
+    """
+    if d.tzinfo is not None:
+        # datetime.UTC is only available since Python 3.11
+        d = d.astimezone(datetime.timezone.utc)
+    return d.strftime("%Y-%m-%d")
+
+
 def read_hourly_measurements(
     conn: sa.Connection,
     station_abbr: str,
@@ -1121,6 +1135,59 @@ def read_hourly_measurements(
         filters.append(f"reference_timestamp >= '{utc_timestr(from_date)}'")
     if to_date is not None:
         filters.append(f"reference_timestamp < '{utc_timestr(to_date)}'")
+
+    # Filter out any row that has only NULL measurements.
+    if columns:
+        non_null = " OR ".join(f"{c} IS NOT NULL" for c in columns)
+        filters.append(f"({non_null})")
+
+    sql += " WHERE " + " AND ".join(filters)
+    sql += " ORDER BY reference_timestamp ASC"
+    if limit > 0:
+        sql += f" LIMIT {limit}"
+
+    return pd.read_sql_query(
+        sa.text(sql),
+        conn,
+        params=params,
+        parse_dates=["reference_timestamp"],
+        index_col="reference_timestamp",
+    )
+
+
+def read_monthly_measurements(
+    conn: sa.Connection,
+    station_abbr: str,
+    from_date: datetime.datetime,
+    to_date: datetime.datetime,
+    columns: list[str] | None = None,
+    limit: int = -1,
+) -> pd.DataFrame:
+    if columns is None:
+        columns = [
+            TEMP_MONTHLY_MIN,
+            TEMP_MONTHLY_MEAN,
+            TEMP_MONTHLY_MAX,
+            PRECIP_MONTHLY_MM,
+        ]
+
+    # Validate column names to prevent SQL injection
+    if not all(re.search(r"^[a-z][a-zA-Z0-9_]*$", c) for c in columns):
+        raise ValueError(f"Invalid columns: {','.join(columns)}")
+
+    select_columns = ["station_abbr", "reference_timestamp"] + columns
+    sql = f"""
+        SELECT {', '.join(select_columns)}
+        FROM {TABLE_MONTHLY_MEASUREMENTS.name}
+    """
+    # Filter by station.
+    filters = ["station_abbr = :station_abbr"]
+    params = {"station_abbr": station_abbr}
+
+    if from_date is not None:
+        filters.append(f"reference_timestamp >= '{utc_datestr(from_date)}'")
+    if to_date is not None:
+        filters.append(f"reference_timestamp < '{utc_datestr(to_date)}'")
 
     # Filter out any row that has only NULL measurements.
     if columns:
