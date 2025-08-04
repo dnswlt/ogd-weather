@@ -824,7 +824,7 @@ def monthly_precipitation_bar_chart(
     data = months.join(ref_months, how="left")
 
     data = data.reset_index(names="month_num")
-    data["month_name"] = data.index.map(lambda k: calendar.month_abbr[k])
+    data["month_name"] = data["month_num"].map(lambda k: calendar.month_abbr[k])
 
     return bar_chart_with_reference(
         data,
