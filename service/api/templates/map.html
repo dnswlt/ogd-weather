@@ -35,7 +35,11 @@
             <div class="font-medium text-gray-800 py-2 text-sm">Click on a station to show information about it.</div>
         </div>
 
-        <!-- Disclaimers -->
+        {{template "disclaimer.html" .}}
+
+    </main>
+
+    <footer>
         <div class="text-center text-gray-500 text-xs mt-4">
             The map outline SVG is based on
             <a href="https://commons.wikimedia.org/wiki/File:Suisse_cantons.svg" target="_blank">Suisse_cantons.svg</a>
@@ -44,10 +48,9 @@
             Only the map graphic is covered by this license;
             all other parts of this application remain under their respective licenses.
         </div>
-        
-        {{template "disclaimer.html" .}}
 
-    </main>
+        {{template "disclaimer.html" .}}
+    </footer>
 
     <script type="module" src="/static/dist/main.js"></script>
 

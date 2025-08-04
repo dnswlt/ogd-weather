@@ -393,6 +393,8 @@ func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Missing chartType in URL path", http.StatusInternalServerError)
 		return
 	}
+	// Use "-" as a separator for CSS classes and HTML entity IDs etc.
+	chartType = strings.ReplaceAll(chartType, ":", "-")
 	serveChartServiceURL[types.VegaSpecResponse](s, w, r, "vega_embed.html", map[string]any{
 		"ChartType": chartType,
 	})

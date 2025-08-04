@@ -81,7 +81,7 @@
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
             Amount of rainfall and percentage of possible sunshine for each day of the selected year.
         </p>
-
+        <!-- Expandable legend -->
         <div class="mb-8">
             <button id="drywet-legend-toggle"
                 class="text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none mb-2">
@@ -166,7 +166,6 @@
                 </table>
             </div>
         </div>
-
         <div>
             <div class="mb-8">
                 <div id="drywet-script-container" hx-ext="path-params" hx-trigger="change from:#chart-controls"
@@ -178,9 +177,65 @@
             </div>
         </div>
 
+
+        <!-- Monthly temperature distribution -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Daily maximum temperature</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+
+            Distribution of daily maximum temperatures by month.
+            Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
+                target="_blank">box plot</a> shows the middle 50% of temperatures (the interquartile range) for that
+            month. The whiskers
+            indicate the minimum and maximum values.
+        </p>
+        <div>
+            <div class="mb-8">
+                <div id="temperature-month-script-container" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/year/{year}/temperature:month" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
+                </div>
+                <div id="temperature-month-chart" class="w-full overflow-hidden"></div>
+            </div>
+        </div>
+
+        <!-- Monthly humidity distribution -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Daily relative humidity</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Distribution of daily average relative humidity by month.
+        </p>
+        <div>
+            <div class="mb-8">
+                <div id="humidity-month-script-container" hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/year/{year}/humidity:month" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
+                </div>
+                <div id="humidity-month-chart" class="w-full overflow-hidden"></div>
+            </div>
+        </div>
+
+        <!-- Monthly humidity distribution -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Daily sunshine hours</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Distribution of daily sunshine hours by month.
+        </p>
+        <div>
+            <div class="mb-8">
+                <div id="sunshine-month-script-container" hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/year/{year}/sunshine:month" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
+                </div>
+                <div id="sunshine-month-chart" class="w-full overflow-hidden"></div>
+            </div>
+        </div>
     </main>
 
-    {{template "disclaimer.html" .}}
+    <footer>
+        {{template "disclaimer.html" .}}
+    </footer>
 
     <script type="module" src="/static/dist/main.js"></script>
 

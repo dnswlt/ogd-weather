@@ -592,6 +592,8 @@ def boxplot_chart(
     y_title: str,
     title: str = "Untitled chart",
     sort_field: str | None = None,
+    color: str = "#ff7f0e",  # Prefer using category20 values here
+    tick_color: str = "#ffffff",
 ) -> alt.LayerChart:
     """Creates a boxplot (a.k.a. box-and-whisker plot).
 
@@ -633,9 +635,9 @@ def boxplot_chart(
         x=x,
         y=alt.Y("p25:Q"),
         y2=alt.Y2("p75:Q"),
-        color=alt.value("#ff7f0e"),
+        color=alt.value(color),
     )
-    median_tick = base.mark_tick(color="white").encode(
+    median_tick = base.mark_tick(color=tick_color, width={"band": 0.5}).encode(
         x=x,
         y=alt.Y("p50:Q"),
     )
@@ -663,6 +665,7 @@ def monthly_humidity_boxplot_chart(
         y_title="Rel. humidity (%)",
         sort_field="month_num",
         title=f"Rel. humidity (%) for each month in {year}",
+        color="#aec7e8",
     )
 
 
@@ -679,6 +682,7 @@ def monthly_sunshine_boxplot_chart(
         y_title="Sunshine (hours)",
         sort_field="month_num",
         title=f"Daily sunshine hours for each month in {year}",
+        color="#ffbb78",
     )
 
 
@@ -695,6 +699,7 @@ def monthly_temp_boxplot_chart(
         y_title="Daily max. temp. (° C)",
         sort_field="month_num",
         title=f"Daily max. temperature for each month in {year}",
+        color="#ff9896",
     )
 
 
