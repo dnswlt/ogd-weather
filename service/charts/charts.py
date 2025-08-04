@@ -1,9 +1,12 @@
+import calendar
 from datetime import date
 import datetime
 from typing import Any, Iterable, TypeAlias, Union
 import altair as alt
 import numpy as np
 import pandas as pd
+
+from .pandas_funcs import pctl
 from . import db
 from . import models
 from .errors import NoDataError
@@ -123,6 +126,15 @@ def _verify_timeline_data(
         raise NoDataError(f"No data for {station_abbr}")
     _verify_period(df, period)
     _verify_columns(df, columns)
+
+
+def _verify_monthly_boxplot_data(df: pd.DataFrame, station_abbr: str, year: int):
+    if df.empty:
+        raise NoDataError(f"No data for {station_abbr}")
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if not (df.index.year == year).all():
+        raise ValueError(f"Not all rows are for year {year}")
 
 
 _SEASONS = {
@@ -557,6 +569,135 @@ def temperature_deviation_chart(
     )
 
 
+def monthly_boxplot_chart_data(ser: pd.Series):
+    if ser.empty:
+        raise NoDataError(f"No data for boxplot")
+
+    if ser.index.tz:
+        # Localize to Swiss time, then drop tz (works best with Vega)
+        ser.index = ser.index.tz_convert("Europe/Zurich").tz_localize(None)
+
+    months = (
+        ser.groupby(ser.index.month).agg(["min", pctl(25), pctl(50), pctl(75), "max"])
+    ).reset_index(names="month_num")
+    months["month_name"] = months["month_num"].map(lambda k: calendar.month_abbr[k])
+
+    return months
+
+
+def boxplot_chart(
+    df: pd.Series,
+    x_col: str,
+    x_title: str,
+    y_title: str,
+    title: str = "Untitled chart",
+    sort_field: str | None = None,
+) -> alt.LayerChart:
+    """Creates a boxplot (a.k.a. box-and-whisker plot).
+
+    Altair's built-in boxplot has some quirks (e.g. with showing tooltips).
+    """
+    # df should have all required columns:
+    required_cols = set(["min", "p25", "p50", "p75", "max"] + [x_col])
+    if sort_field:
+        required_cols.add(sort_field)
+    col_diff = required_cols - set(df.columns)
+    if len(col_diff) > 0:
+        raise ValueError(f"Not all required columns are present (missing: {col_diff})")
+    # x_col should be a unique key for df:
+    if df[x_col].nunique() != len(df):
+        raise ValueError(f"x_col must be a unique key in df")
+
+    base = alt.Chart(df)
+    sort_order = "ascending"
+    if sort_field:
+        sort_order = alt.EncodingSortField(
+            field=sort_field, op="min", order="ascending"
+        )
+    x = alt.X(f"{x_col}:O").sort(sort_order).title(x_title)
+    upper_whisker = base.mark_rule().encode(
+        x=x,
+        y=alt.Y("max:Q").axis(title=y_title),
+        y2=alt.Y2("p75"),
+        size=alt.value(2),
+        color=alt.value("#7f7f7f"),
+    )
+    lower_whisker = base.mark_rule().encode(
+        x=x,
+        y=alt.Y("p25:Q"),
+        y2=alt.Y2("min"),
+        size=alt.value(2),
+        color=alt.value("#7f7f7f"),
+    )
+    box = base.mark_bar(width={"band": 0.5}).encode(
+        x=x,
+        y=alt.Y("p25:Q"),
+        y2=alt.Y2("p75:Q"),
+        color=alt.value("#ff7f0e"),
+    )
+    median_tick = base.mark_tick(color="white").encode(
+        x=x,
+        y=alt.Y("p50:Q"),
+    )
+    return (
+        alt.layer(upper_whisker, lower_whisker, box, median_tick)
+        .properties(
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+            title=title,
+        )
+        .configure_tick(thickness=2)
+    )
+
+
+def monthly_humidity_boxplot_chart(
+    df: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+
+    _verify_monthly_boxplot_data(df, station_abbr, year)
+    months = monthly_boxplot_chart_data(df[db.REL_HUMITIDY_DAILY_MEAN])
+    return boxplot_chart(
+        months,
+        x_col="month_name",
+        x_title="Month",
+        y_title="Rel. humidity (%)",
+        sort_field="month_num",
+        title=f"Rel. humidity (%) for each month in {year}",
+    )
+
+
+def monthly_sunshine_boxplot_chart(
+    df: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+
+    _verify_monthly_boxplot_data(df, station_abbr, year)
+    months = monthly_boxplot_chart_data(df[db.SUNSHINE_DAILY_MINUTES] / 60.0)
+    return boxplot_chart(
+        months,
+        x_col="month_name",
+        x_title="Month",
+        y_title="Sunshine (hours)",
+        sort_field="month_num",
+        title=f"Daily sunshine hours for each month in {year}",
+    )
+
+
+def monthly_temp_boxplot_chart(
+    df: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+
+    _verify_monthly_boxplot_data(df, station_abbr, year)
+    months = monthly_boxplot_chart_data(df[db.TEMP_DAILY_MAX])
+    return boxplot_chart(
+        months,
+        x_col="month_name",
+        x_title="Month",
+        y_title="Daily max. temp. (° C)",
+        sort_field="month_num",
+        title=f"Daily max. temperature for each month in {year}",
+    )
+
+
 def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairChart:
     """Returns a grid chart indicating dry and wet spells for the given year.
 
@@ -850,6 +991,7 @@ def daily_temp_precip_chart(
     # The key is to create explicit start, end, and midpoint columns for our intervals.
     # We convert the index to timezone-naive 'Europe/Zurich' time as Vega/Altair
     # work best with naive datetimes, avoiding browser-local adjustments.
+    # https://altair-viz.github.io/user_guide/times_and_dates.html
     df_prep["time_end"] = df_prep.index.tz_convert("Europe/Zurich").tz_localize(None)
     df_prep["time_start"] = df_prep["time_end"] - pd.Timedelta(hours=1)
     df_prep["time_midpoint"] = df_prep["time_start"] + pd.Timedelta(minutes=30)
@@ -1076,12 +1218,6 @@ def create_annual_chart(
         return rainiest_day_chart(df, station_abbr=station_abbr, period=period)
     else:
         raise ValueError(f"Invalid chart type: {chart_type}")
-
-
-def create_year_chart(
-    chart_type: str, df: pd.DataFrame, station_abbr: str, year: int
-) -> AltairChart:
-    pass
 
 
 def station_stats(

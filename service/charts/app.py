@@ -201,28 +201,34 @@ async def get_year_chart(
     year: int,
     chart_type: str,
 ):
-    if chart_type not in ["drywet"]:
-        raise _bad_request(f"Invalid chart type: {chart_type}")
 
     station_abbr = station_abbr.upper()
 
-    with app.state.engine.begin() as conn:
-        df = db.read_daily_measurements(
-            conn,
-            station_abbr,
-            period="all",
-            columns=[db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX],
-            from_year=year,
-            to_year=year,
-        )
+    def _read_data(columns):
+        with app.state.engine.begin() as conn:
+            return db.read_daily_measurements(
+                conn,
+                station_abbr,
+                period="all",
+                columns=columns,
+                from_year=year,
+                to_year=year,
+            )
 
     if chart_type == "drywet":
+        df = _read_data([db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX])
         chart = charts.drywet_grid_chart(df, station_abbr, year)
+    elif chart_type == "temperature:month":
+        df = _read_data([db.TEMP_DAILY_MAX])
+        chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year)
+    elif chart_type == "sunshine:month":
+        df = _read_data([db.SUNSHINE_DAILY_MINUTES])
+        chart = charts.monthly_sunshine_boxplot_chart(df, station_abbr, year)
+    elif chart_type == "humidity:month":
+        df = _read_data([db.REL_HUMITIDY_DAILY_MEAN])
+        chart = charts.monthly_humidity_boxplot_chart(df, station_abbr, year)
     else:
-        # Should have handled this above.
-        raise HTTPException(
-            status_code=500, detail=f"Unexpected chart type {chart_type}"
-        )
+        raise _bad_request(f"Invalid chart type: {chart_type}")
 
     return _vega_chart(request, chart)
 

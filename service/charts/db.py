@@ -13,6 +13,8 @@ import re
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+
+from .pandas_funcs import pctl
 from . import models
 from . import sql_queries
 
@@ -717,20 +719,13 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
         """Returns summary stats for all vars in var_cols as an SQL INSERT tuple."""
         params = []
 
-        def qtl(q):
-            def f(s):
-                return s.quantile(q)
-
-            f.__name__ = f"q{int(round(q*100))}"  # Get columns names q25, q50, etc.
-            return f
-
         for station_abbr, grp in df.groupby("station_abbr"):
             for var in var_cols:
                 if grp[var].isna().all():
                     continue  # No data for this variable
                 a = grp[var].agg(
                     ["min", "max", "idxmin", "idxmax", "mean", "sum", "count"]
-                    + [qtl(0.10), qtl(0.25), qtl(0.5), qtl(0.75), qtl(0.9)]
+                    + [pctl(10), pctl(25), pctl(50), pctl(75), pctl(90)]
                 )
                 # Get reference_timestamp value at the index of the min/max value.
                 # Convert to Python datetime, which conn.execute understands.
@@ -747,12 +742,12 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
                         "mean_value": a["mean"],
                         "max_value": a["max"],
                         "max_value_date": max_date,
-                        "p10_value": a["q10"],
-                        "p10_value": a["q10"],
-                        "p25_value": a["q25"],
-                        "median_value": a["q50"],
-                        "p75_value": a["q75"],
-                        "p90_value": a["q90"],
+                        "p10_value": a["p10"],
+                        "p10_value": a["p10"],
+                        "p25_value": a["p25"],
+                        "median_value": a["p50"],
+                        "p75_value": a["p75"],
+                        "p90_value": a["p90"],
                         "value_sum": a["sum"],
                         "value_count": int(a["count"]),
                     }
