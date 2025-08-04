@@ -343,7 +343,7 @@ def day_count_chart(
     predicate: pd.Series,
     period: str = PERIOD_ALL,
     title: str = "Untitled chart",
-):
+) -> AltairChart:
     """Creates a chart for "# days" of some boolean predicate."""
     data_long, trend_long = day_count_chart_data(predicate)
     return timeline_years_chart(
@@ -352,10 +352,12 @@ def day_count_chart(
         typ="bar",
         title=f"{title} in {period_to_title(period)}, by year".strip(),
         y_label="# days",
-    ).to_dict()
+    )
 
 
-def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
+def raindays_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+) -> AltairChart:
     """Creates a "# rain days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, db.PRECIP_DAILY_MM)
     return day_count_chart(
@@ -365,7 +367,9 @@ def raindays_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
     )
 
 
-def sunny_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
+def sunny_days_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+) -> AltairChart:
     """Creates a "# sunny days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, db.SUNSHINE_DAILY_MINUTES)
     return day_count_chart(
@@ -375,7 +379,9 @@ def sunny_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_A
     )
 
 
-def frost_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
+def frost_days_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+) -> AltairChart:
     """Creates a "# frost days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, db.TEMP_DAILY_MIN)
     return day_count_chart(
@@ -385,7 +391,9 @@ def frost_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_A
     )
 
 
-def summer_days_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
+def summer_days_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+) -> AltairChart:
     """Creates a "# summer days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, db.TEMP_DAILY_MAX)
     return day_count_chart(
@@ -425,7 +433,9 @@ def timeline_years_chart_data(
     return data_long, trend_long
 
 
-def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
+def sunshine_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+) -> AltairChart:
     _verify_timeline_data(df, [db.SUNSHINE_DAILY_MINUTES], station_abbr, period)
 
     sunshine = df[db.SUNSHINE_DAILY_MINUTES] / 60.0
@@ -441,14 +451,16 @@ def sunshine_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
         typ="bar",
         title=title,
         y_label="hours/d",
-    ).to_dict()
+    )
 
 
-def rainiest_day_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL):
+def rainiest_day_chart(
+    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+) -> AltairChart:
     _verify_timeline_data(df, [db.PRECIP_DAILY_MM], station_abbr, period)
 
     data = pd.DataFrame({"precip (mm)": df[db.PRECIP_DAILY_MM]})
-    data_long, trend_long = timeline_years_chart_data(data, "mean")
+    data_long, trend_long = timeline_years_chart_data(data, "max")
 
     title = f"Max daily amount of rain in {period_to_title(period)}, by year".strip()
     return timeline_years_chart(
@@ -457,7 +469,7 @@ def rainiest_day_chart(df: pd.DataFrame, station_abbr: str, period: str = PERIOD
         typ="bar",
         title=title,
         y_label="mm",
-    ).to_dict()
+    )
 
 
 def temperature_chart(
@@ -465,7 +477,7 @@ def temperature_chart(
     station_abbr: str,
     period: str = PERIOD_ALL,
     window: int = 1,
-) -> alt.LayerChart:
+) -> AltairChart:
     columns = [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]
     _verify_timeline_data(df, columns, station_abbr, period)
 
@@ -491,7 +503,7 @@ def temperature_chart(
         typ="line",
         title=title,
         y_label="°C",
-    ).to_dict()
+    )
 
 
 def precipitation_chart(
@@ -499,7 +511,7 @@ def precipitation_chart(
     station_abbr: str,
     period: str = PERIOD_ALL,
     window: int | None = None,
-):
+) -> AltairChart:
     _verify_timeline_data(df, [db.PRECIP_DAILY_MM], station_abbr, period)
 
     data = pd.DataFrame({"precip (mm)": df[db.PRECIP_DAILY_MM]})
@@ -513,7 +525,7 @@ def precipitation_chart(
         typ="bar",
         title=title,
         y_label="mm",
-    ).to_dict()
+    )
 
 
 def temperature_deviation_chart(
@@ -521,7 +533,7 @@ def temperature_deviation_chart(
     station_abbr: str,
     period: str = PERIOD_ALL,
     window: int | None = None,
-):
+) -> AltairChart:
     if not (df["station_abbr"] == station_abbr).all():
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if df.empty:
@@ -542,7 +554,7 @@ def temperature_deviation_chart(
     return dynamic_baseline_bars_chart(
         data_long,
         f"Temperature deviation from mean in {period_to_title(period)}",
-    ).to_dict()
+    )
 
 
 def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairChart:
@@ -807,7 +819,7 @@ def _renormalize_stops(
 
 def daily_temp_precip_chart(
     df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
-) -> dict[str, Any]:
+) -> AltairChart:
     """
     Generates a combined, layered chart of hourly precipitation and temperature.
 
@@ -1024,16 +1036,16 @@ def daily_temp_precip_chart(
         )
     )
 
-    return chart.to_dict()
+    return chart
 
 
-def create_chart(
+def create_annual_chart(
     chart_type: str,
     df: pd.DataFrame,
     station_abbr: str,
     period: str = PERIOD_ALL,
     window: int | None = None,
-):
+) -> AltairChart:
     if window is None:
         # Simplify treatment of window inside the module
         window = 1
@@ -1064,6 +1076,12 @@ def create_chart(
         return rainiest_day_chart(df, station_abbr=station_abbr, period=period)
     else:
         raise ValueError(f"Invalid chart type: {chart_type}")
+
+
+def create_year_chart(
+    chart_type: str, df: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+    pass
 
 
 def station_stats(

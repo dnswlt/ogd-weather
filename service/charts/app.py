@@ -106,6 +106,19 @@ def _daily_range(date: str) -> tuple[datetime.datetime, datetime.datetime]:
     return from_date, to_date
 
 
+def _vega_chart(request: Request, chart: charts.AltairChart) -> Response:
+    if "text/html" in request.headers.get("accept", ""):
+        sb = StringIO()
+        chart.save(sb, format="html")
+        return HTMLResponse(content=sb.getvalue())
+
+    return JSONResponse(
+        content={
+            "vega_spec": chart.to_dict(),
+        }
+    )
+
+
 @app.exception_handler(StationNotFoundError)
 async def station_not_found_handler(request, exc: StationNotFoundError):
     return JSONResponse(
@@ -145,7 +158,8 @@ def server_status():
 
 
 @app.get("/stations/{station_abbr}/charts/annual/{chart_type}")
-async def get_chart(
+async def get_annual_chart(
+    request: Request,
     station_abbr: str,
     chart_type: str,
     period: str | None = None,
@@ -173,19 +187,19 @@ async def get_chart(
             from_year=from_year_int,
             to_year=to_year_int,
         )
-    return {
-        "vega_spec": charts.create_chart(
-            chart_type, df, station_abbr, period=period, window=window_int
-        ),
-    }
+
+    chart = charts.create_annual_chart(
+        chart_type, df, station_abbr, period=period, window=window_int
+    )
+    return _vega_chart(request, chart)
 
 
 @app.get("/stations/{station_abbr}/charts/year/{year}/{chart_type}")
 async def get_year_chart(
+    request: Request,
     station_abbr: str,
     year: int,
     chart_type: str,
-    request: Request,
 ):
     if chart_type not in ["drywet"]:
         raise _bad_request(f"Invalid chart type: {chart_type}")
@@ -210,20 +224,12 @@ async def get_year_chart(
             status_code=500, detail=f"Unexpected chart type {chart_type}"
         )
 
-    # Return chart as a simple HTML page for debugging, if text/html is requested.
-    accept = request.headers.get("accept", "")
-    if "text/html" in accept:
-        sb = StringIO()
-        chart.save(sb, format="html")
-        return HTMLResponse(content=sb.getvalue())
-
-    return {
-        "vega_spec": chart.to_dict(),
-    }
+    return _vega_chart(request, chart)
 
 
 @app.get("/stations/{station_abbr}/charts/day/{date}/{chart_type}")
 async def get_daily_chart(
+    request: Request,
     station_abbr: str,
     date: str,
     chart_type: str,
@@ -245,9 +251,9 @@ async def get_daily_chart(
             to_date=to_date,
             columns=[db.TEMP_HOURLY_MEAN, db.PRECIP_HOURLY_MM],
         )
-    return {
-        "vega_spec": charts.daily_temp_precip_chart(df, from_date, station_abbr),
-    }
+    chart = charts.daily_temp_precip_chart(df, from_date, station_abbr)
+
+    return _vega_chart(request, chart)
 
 
 @app.get("/stations/{station_abbr}/stats/day/{date}/measurements")
