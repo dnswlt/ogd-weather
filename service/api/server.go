@@ -451,8 +451,8 @@ func withQueryParams(u *url.URL, params map[string]string) *url.URL {
 func (s *Server) Serve() error {
 	mux := http.NewServeMux()
 
-	// Root page
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+	// Root UI page
+	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/ui/timeline", http.StatusTemporaryRedirect)
 	})
 	mux.HandleFunc("GET /ui/timeline", func(w http.ResponseWriter, r *http.Request) {
@@ -507,7 +507,7 @@ func (s *Server) Serve() error {
 
 	// Reverse proxy
 	proxy := httputil.NewSingleHostReverseProxy(s.chartServiceBaseURL)
-	mux.HandleFunc("GET /stations/{stationID}/charts/{chartType}",
+	mux.HandleFunc("GET /stations/{stationID}/charts/{periodName}/{chartType}",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
 				s.serveStationsChartSnippet(w, r)
@@ -539,7 +539,7 @@ func (s *Server) Serve() error {
 			}
 			proxy.ServeHTTP(w, r)
 		})
-	mux.HandleFunc("GET /stations/{stationID}/daily",
+	mux.HandleFunc("GET /stations/{stationID}/stats/day/{date}/measurements",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
 				serveChartServiceURL[types.StationMeasurementsResponse](s, w, r, "daily_measurements.html", nil)
@@ -563,6 +563,27 @@ func (s *Server) Serve() error {
 		func(w http.ResponseWriter, r *http.Request) {
 			proxy.ServeHTTP(w, r)
 		})
+
+	// Default route (all other paths): redirect to the UI home page
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Hx-Request") != "" {
+			// Do not redirect htmx requests, those should only request valid paths.
+			http.Error(w, "", http.StatusNotFound)
+			return
+		}
+		refererURL, err := url.Parse(r.Header.Get("Referer"))
+		if err == nil && refererURL.Host == r.Host {
+			// Request is coming from our own domain: this indicates an internal broken link.
+			http.Error(w, "Broken link", http.StatusNotFound)
+			return
+		}
+		// Redirect GET to the UI home page.
+		http.Redirect(w, r, "/ui", http.StatusTemporaryRedirect)
+	})
 
 	var handler http.Handler = mux
 	if s.opts.DebugMode {

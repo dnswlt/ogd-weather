@@ -144,7 +144,7 @@ def server_status():
     return status
 
 
-@app.get("/stations/{station_abbr}/charts/{chart_type}")
+@app.get("/stations/{station_abbr}/charts/annual/{chart_type}")
 async def get_chart(
     station_abbr: str,
     chart_type: str,
@@ -222,7 +222,7 @@ async def get_year_chart(
     }
 
 
-@app.get("/stations/{station_abbr}/charts/daily/{date}/{chart_type}")
+@app.get("/stations/{station_abbr}/charts/day/{date}/{chart_type}")
 async def get_daily_chart(
     station_abbr: str,
     date: str,
@@ -250,10 +250,10 @@ async def get_daily_chart(
     }
 
 
-@app.get("/stations/{station_abbr}/daily")
+@app.get("/stations/{station_abbr}/stats/day/{date}/measurements")
 async def get_daily_measurements(
     station_abbr: str,
-    date: str | None = None,
+    date: str,
 ):
     station_abbr = station_abbr.upper()
     # Parse date, if specified, else assume yesterday.
