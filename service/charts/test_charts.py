@@ -1,3 +1,4 @@
+import altair as alt
 from datetime import date
 import datetime
 import numpy as np
@@ -53,10 +54,7 @@ class TestStationNumDays(PandasTestCase):
             period=charts.PERIOD_ALL,
         )
 
-        self.assertIsInstance(chart, dict)
-        # Dict should have some typical Vega-Lite fields
-        self.assertIn("layer", chart.keys())
-        self.assertIn("datasets", chart.keys())
+        self.assertIsInstance(chart, alt.LayerChart)
 
     def test_day_count_chart_data_all_false(self):
         """Tests that years don't get removed if they have a zero count."""
