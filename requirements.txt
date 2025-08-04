@@ -1,5 +1,5 @@
 # Shared requirements.txt file for all Python services in this repo.
-altair
+altair==5.5.0
 fastapi
 numpy
 pandas
@@ -8,5 +8,5 @@ uvicorn[standard]
 pytest
 pytest-cov
 pydantic
-sqlalchemy
-psycopg[binary]
+sqlalchemy==2.0.41
+psycopg[binary]==3.2.9

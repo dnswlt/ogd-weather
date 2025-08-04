@@ -2,20 +2,7 @@
 <html lang="en">
 
 <head>
-    <meta charset="utf-8" />
-    <title>Weather Data CH</title>
-
-    <!-- Tailwind -->
-    <link rel="stylesheet" href="/static/dist/main.css" />
-
-    <!-- Vega stack -->
-    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
-
-    <!-- htmx + path‑params -->
-    <script src="https://unpkg.com/htmx.org@2.0.6"></script>
-    <script src="https://unpkg.com/htmx-ext-path-params@2.0.0/path-params.js"></script>
+    {{ template "head.html" }}
 </head>
 
 <body class="min-h-screen bg-gray-50 p-4" data-page="year">
@@ -184,7 +171,8 @@
 
             Distribution of daily maximum temperatures by month.
             Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
-                target="_blank">box plot</a> shows the middle 50% of temperatures (the interquartile range) for that
+                target="_blank">box plot</a> shows the middle 50% (the interquartile range; IQR) of temperatures for
+            that
             month. The whiskers
             indicate the minimum and maximum values.
         </p>
@@ -205,7 +193,7 @@
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
             Distribution of daily average relative humidity by month.
             Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
-                target="_blank">box plot</a> shows the middle 50% of daily relative humidity (the interquartile range)
+                target="_blank">box plot</a> shows the middle 50% (IQR) of daily relative humidity
             for that month. The whiskers indicate the minimum and maximum values.
         </p>
         <div>
@@ -224,7 +212,7 @@
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
             Distribution of daily sunshine hours by month.
             Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
-                target="_blank">box plot</a> shows the middle 50% of daily sunshine hours (the interquartile range) for
+                target="_blank">box plot</a> shows the middle 50% (IQR) of daily sunshine hours for
             that month. The whiskers indicate the minimum and maximum values.
         </p>
         <div>
@@ -235,6 +223,27 @@
                     <!-- Vega script goes here -->
                 </div>
                 <div id="sunshine-month-chart" class="w-full overflow-hidden"></div>
+            </div>
+        </div>
+
+        <!-- Monthly precipitation compared to reference period 1991-2020 -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Monthly precipiation</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Total precipitation by month. The light coloured boxes indicate the middle 50% (IQR) of monthly
+            precipitation in the
+            <a class="text-blue-600 hover:underline" href="https://www.ncei.noaa.gov/products/wmo-climate-normals">WMO
+                Climate Normals</a> period
+            1991&ndash;2020.
+        </p>
+        <div>
+            <div class="mb-8">
+                <div id="precipitation-month-script-container" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/year/{year}/precipitation:month" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
+                </div>
+                <div id="precipitation-month-chart" class="w-full overflow-hidden"></div>
             </div>
         </div>
     </main>

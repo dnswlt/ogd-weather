@@ -1191,6 +1191,12 @@ def read_monthly_measurements(
     columns: list[str] | None = None,
     limit: int = -1,
 ) -> pd.DataFrame:
+    """Reads rows from the monthly measurements table.
+
+    Args:
+        from_date: inclusive lower bound of the time range to read.
+        to_date: exclusive upper bound of the time range to read.
+    """
     if columns is None:
         columns = [
             TEMP_MONTHLY_MIN,

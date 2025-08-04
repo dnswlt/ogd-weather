@@ -61,6 +61,31 @@ CHART_TYPE_COLUMNS = {
     "rainiest_day": [db.PRECIP_DAILY_MM],
 }
 
+# tableau20 colors from
+# https://vega.github.io/vega/docs/schemes/
+COLORS_TABLEAU20 = [
+    "#4c78a8",
+    "#9ecae9",
+    "#f58518",
+    "#ffbf79",
+    "#54a24b",
+    "#88d27a",
+    "#b79a20",
+    "#f2cf5b",
+    "#439894",
+    "#83bcb6",
+    "#e45756",
+    "#ff9d98",
+    "#79706e",
+    "#bab0ac",
+    "#d67195",
+    "#fcbfd2",
+    "#b279a2",
+    "#d6a5c9",
+    "#9e765f",
+    "#d8b5a5",
+]
+
 
 def period_to_title(period: str) -> str:
     if period.isdigit():
@@ -585,19 +610,92 @@ def monthly_boxplot_chart_data(ser: pd.Series):
     return months
 
 
+def bar_chart_with_reference(
+    df: pd.DataFrame,
+    x_col: str,
+    x_title: str,
+    y_title: str,
+    y_col: str = "value",
+    title: str = "Untitled chart",
+    sort_field: str | None = None,
+    color: str = "#1f77b4",  # Prefer using category20 values here
+    tick_color: str = "#f58518",
+) -> alt.LayerChart:
+    """Creates a bar chart of the x_col column with three reference ticks
+    at the p25, p50 and p75 columns.
+
+    Prefer using `COLORS_TABLEAU20` values for `color` for consistency.
+    """
+    # df should have all required columns:
+    required_cols = set(["p25", "p50", "p75"] + [x_col, y_col])
+    if sort_field:
+        required_cols.add(sort_field)
+    col_diff = required_cols - set(df.columns)
+    if len(col_diff) > 0:
+        raise ValueError(f"Not all required columns are present (missing: {col_diff})")
+    # x_col should be a unique key for df:
+    if df[x_col].nunique() != len(df):
+        raise ValueError(f"x_col must be a unique key in df")
+
+    base = alt.Chart(df)
+    sort_order = "ascending"
+    if sort_field:
+        sort_order = alt.EncodingSortField(
+            field=sort_field, op="min", order="ascending"
+        )
+    x = (
+        alt.X(f"{x_col}:O")
+        .sort(sort_order)
+        .title(x_title)
+        # .scale(type="band", paddingInner=0.5, paddingOuter=0.1)
+    )
+    ref_width = {"band": 0.75}
+    bar = base.mark_bar(width={"band": 0.5}).encode(
+        x=x,
+        y=alt.Y(f"{y_col}:Q").axis(title=y_title),
+        color=alt.value(color),
+    )
+    p25_tick = base.mark_tick(color=tick_color, thickness=2, width=ref_width).encode(
+        x=x,
+        y=alt.Y("p25:Q"),
+        opacity=alt.value(0.1),
+    )
+    p50_tick = base.mark_tick(color=tick_color, thickness=2, width=ref_width).encode(
+        x=x,
+        y=alt.Y("p50:Q"),
+    )
+    p75_tick = base.mark_tick(color=tick_color, thickness=2, width=ref_width).encode(
+        x=x, y=alt.Y("p75:Q"), opacity=alt.value(0.1)
+    )
+    ref_bar = base.mark_bar(width=ref_width).encode(
+        x=x,
+        y=alt.Y(f"p25:Q"),
+        y2=alt.Y2(f"p75:Q"),
+        color=alt.value(color),
+        opacity=alt.value(0.15),
+    )
+    return alt.layer(ref_bar, bar, p25_tick, p50_tick, p75_tick).properties(
+        width="container",
+        autosize={"type": "fit", "contains": "padding"},
+        title=title,
+    )
+
+
 def boxplot_chart(
-    df: pd.Series,
+    df: pd.DataFrame,
     x_col: str,
     x_title: str,
     y_title: str,
     title: str = "Untitled chart",
     sort_field: str | None = None,
-    color: str = "#ff7f0e",  # Prefer using category20 values here
+    color: str = "#ff7f0e",
     tick_color: str = "#ffffff",
 ) -> alt.LayerChart:
     """Creates a boxplot (a.k.a. box-and-whisker plot).
 
     Altair's built-in boxplot has some quirks (e.g. with showing tooltips).
+
+    Prefer using `COLORS_TABLEAU20` values for `color` for consistency.
     """
     # df should have all required columns:
     required_cols = set(["min", "p25", "p50", "p75", "max"] + [x_col])
@@ -637,18 +735,16 @@ def boxplot_chart(
         y2=alt.Y2("p75:Q"),
         color=alt.value(color),
     )
-    median_tick = base.mark_tick(color=tick_color, width={"band": 0.5}).encode(
+    median_tick = base.mark_tick(
+        color=tick_color, thickness=2, width={"band": 0.5}
+    ).encode(
         x=x,
         y=alt.Y("p50:Q"),
     )
-    return (
-        alt.layer(upper_whisker, lower_whisker, box, median_tick)
-        .properties(
-            width="container",
-            autosize={"type": "fit", "contains": "padding"},
-            title=title,
-        )
-        .configure_tick(thickness=2)
+    return alt.layer(upper_whisker, lower_whisker, box, median_tick).properties(
+        width="container",
+        autosize={"type": "fit", "contains": "padding"},
+        title=title,
     )
 
 
@@ -700,6 +796,44 @@ def monthly_temp_boxplot_chart(
         sort_field="month_num",
         title=f"Daily max. temperature for each month in {year}",
         color="#ff9896",
+    )
+
+
+def _localize_tz(data: pd.DataFrame | pd.Series) -> pd.DataFrame:
+    if data.index.tz is not None:
+        data = data.copy(deep=False)
+        # Localize to Swiss time, then drop tz (works best with Vega)
+        data.index = data.index.tz_convert("Europe/Zurich").tz_localize(None)
+    return data
+
+
+def monthly_precipitation_bar_chart(
+    df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+
+    ser = _localize_tz(df[db.PRECIP_DAILY_MM])
+    ref = _localize_tz(df_ref[db.PRECIP_MONTHLY_MM])
+
+    # Sum daily precipitation for each month.
+    months = ser.groupby(ser.index.month).agg([("value", "sum")])
+
+    # Calculate percentiles for monthly precipitation over reference data.
+    ref_months = ref.groupby(ref.index.month).agg([pctl(25), pctl(50), pctl(75)])
+
+    # Join, keep data only for months where `months` has data (left join).
+    data = months.join(ref_months, how="left")
+
+    data = data.reset_index(names="month_num")
+    data["month_name"] = data.index.map(lambda k: calendar.month_abbr[k])
+
+    return bar_chart_with_reference(
+        data,
+        x_col="month_name",
+        y_col="value",
+        x_title="Month",
+        y_title="Total precipitation (mm)",
+        sort_field="month_num",
+        title=f"Monthly precipitation in {year}",
     )
 
 

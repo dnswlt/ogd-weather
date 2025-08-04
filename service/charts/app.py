@@ -14,7 +14,13 @@ from . import db
 from . import models
 from . import logging_config as _  # configure logging
 from .errors import NoDataError, StationNotFoundError
+from altair.utils import spec_to_html
 
+# Used for HTML exports
+# Keep in sync with versions in the "head.html" template!
+_VEGA_LITE_VERSION = "5.23.0"
+_VEGA_VERSION = "5.33.0"
+_VEGA_EMBED_VERSION = "6.29.0"
 
 logger = logging.getLogger("app")
 
@@ -108,9 +114,32 @@ def _daily_range(date: str) -> tuple[datetime.datetime, datetime.datetime]:
 
 def _vega_chart(request: Request, chart: charts.AltairChart) -> Response:
     if "text/html" in request.headers.get("accept", ""):
-        sb = StringIO()
-        chart.save(sb, format="html")
-        return HTMLResponse(content=sb.getvalue())
+        # NOTE: Using chart.to_html() here fixes the vega versions
+        # (e.g. to "vega-lite@5.20.1") and you cannot override them.
+        # This cost me a dear few hours to debug: in the app we used
+        # 'latest' versions to load the JS (e.g. "vega-lite@5"), while this
+        # code used .to_html with older versions. Somewhere in between the
+        # versions, support for
+        #
+        #     base.mark_tick( width={"band": 0.8} )
+        #
+        # was added. The result was that the tick was not visible on
+        # this _vega_chart, but it showed up in the chart in our app,
+        # which used the newer Vega versions. Whaaaa!!!
+        #
+        # It gets better:
+        # Just saw that 3 weeks ago (i.e. after my last pip install),
+        # they bumped the versions way past what we have here, to v6:
+        # https://github.com/vega/altair/pull/3831 (not released yet)
+        html = spec_to_html(
+            chart.to_dict(),
+            mode="vega-lite",
+            vega_version=_VEGA_VERSION,
+            vegalite_version=_VEGA_LITE_VERSION,
+            vegaembed_version=_VEGA_EMBED_VERSION,
+            base_url="https://unpkg.com",
+        )
+        return HTMLResponse(content=html)
 
     return JSONResponse(
         content={
@@ -227,6 +256,17 @@ async def get_year_chart(
     elif chart_type == "humidity:month":
         df = _read_data([db.REL_HUMITIDY_DAILY_MEAN])
         chart = charts.monthly_humidity_boxplot_chart(df, station_abbr, year)
+    elif chart_type == "precipitation:month":
+        df = _read_data([db.PRECIP_DAILY_MM])
+        with app.state.engine.begin() as conn:
+            df_ref = db.read_monthly_measurements(
+                conn,
+                station_abbr,
+                from_date=datetime.datetime(1991, 1, 1),
+                to_date=datetime.datetime(2021, 1, 1),
+                columns=[db.PRECIP_MONTHLY_MM],
+            )
+        chart = charts.monthly_precipitation_bar_chart(df, df_ref, station_abbr, year)
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
 
