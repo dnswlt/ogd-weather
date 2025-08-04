@@ -20,6 +20,27 @@ CLUSTER = weather-cluster
 
 .PHONY: up restart update-db logs clean rebuild aws-login build-aws push-aws deploy-aws
 
+## Local testing =====================================================
+.PHONY: test-all test-api test-db-updater test-charts
+
+# --- General Test Commands ---
+
+# Runs all tests sequentially.
+test: test-api test-db-updater test-charts
+
+test-api:
+	@echo "--- Running tests for Go service/api ---"
+	cd service/api && go test ./...
+
+test-db-updater:
+	@echo "--- Running tests for Python service/db_updater ---"
+	cd service/db_updater && pytest
+
+test-charts:
+	@echo "--- Running tests for Python service/charts ---"
+	cd service/charts && pytest
+
+
 ## Local Dev =========================================================
 
 build: ## Build all local images
