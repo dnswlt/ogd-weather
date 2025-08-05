@@ -857,10 +857,37 @@ def monthly_precipitation_bar_chart(
     )
 
 
-def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairChart:
-    """Returns a grid chart indicating dry and wet spells for the given year.
+def find_spells(runs: pd.Series, min_days=3):
+    """Returns a DataFrame with all spells of length min_days or more.
 
-    The chart shows a grid with month day on the x-axis and month (Jan-Dec)
+    Args:
+        runs: Series of categorical values. Must have a datetime index.
+        min_days: min length of a run (i.e. subsequent equal values in runs).
+    """
+    nz = np.nonzero(np.convolve(runs, [-1, 1], mode="same"))
+    edges = runs.iloc[nz]
+    if edges.empty:
+        return edges
+
+    # Days until the next change for each edge
+    diff = -edges.index.to_series().diff(periods=-1)
+    spans = diff.ge(pd.Timedelta(days=min_days))
+
+    return pd.DataFrame(
+        {
+            "duration_days": diff[spans].dt.days,
+            "category": edges[spans],
+        }
+    )
+
+
+def drywet_grid_chart(
+    df: pd.DataFrame, station_abbr: str, year: int
+) -> tuple[AltairChart, AltairChart]:
+    """Returns two charts: a grid chart indicating dry and wet spells for the given year,
+    and a horizontal bar chart showing the N longest dry and wet spells.
+
+    The main chart shows a grid with month day on the x-axis and month (Jan-Dec)
     on the y-axis. Each grid cell is colored in either a blue, gray, or
     orange shade, depending on the amount of rain and sunshine throughout the day.
 
@@ -868,8 +895,8 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
 
     Precipitation:
 
-    *  <= 0.2 mm: dry day
-    *  > 0.2 mm, < 1 mm: light rain
+    *  < 0.2 mm: dry day
+    *  >= 0.2 mm, < 1 mm: light rain
     *  >= 1 mm: rainy day
 
     Sunshine: (based on sunshine minutes as a % of potential total daily sunshine):
@@ -911,7 +938,7 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
             "sunshine_pct": sun_pct,
             "precip_mm": precip,
         }
-    ).reset_index(names="date")
+    )
 
     # Classification (vectorized)
     # 1..4 = dry + sunshine bands; 5 = dry+very overcast OR light rain; 6..9 = rainy bands
@@ -960,6 +987,25 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
         9: "9 - Rain ≥ 12 mm",
     }
     d["class_label"] = d["class_id"].map(class_labels)
+
+    # Calculate "spells", i.e. periods of uninterrupted rain or drought.
+    bins = [0, 4, 5.5, 9]
+    codes = [1.0, 2.0, 3.0]  # dry=1, neutral=2, wet=3 (arbitrary choice)
+    runs = pd.cut(d["class_id"], bins=bins, labels=codes).astype(float)
+    spells = find_spells(runs)
+    # Take the top 3 spells of dry and wet periods.
+    top_spells = (
+        spells[spells["category"].isin([1.0, 3.0])]
+        .sort_values(["category", "duration_days"], ascending=[True, False])
+        .groupby("category", group_keys=False)
+        .head(3)
+    )
+    # Map "category" floats back to strings.
+    top_spells["category"] = top_spells["category"].map({1.0: "dry", 3.0: "wet"})
+    top_spells = top_spells.reset_index(names="date")
+
+    # Reset index after creating spells, which assumes a datetime index.
+    d = d.reset_index(names="date")
 
     # Color scheme: Oranges (x4), Gray (x1), Blues (x4)
     colors = [
@@ -1012,13 +1058,36 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
         )
         .add_params(highlight)
         .properties(
-            width="container",
-            autosize={"type": "fit", "contains": "padding"},
             title=f"Dry / wet spells and sunshine ({year})",
+            width="container",
         )
     )
 
-    return chart
+    spell_bars = (
+        alt.Chart(top_spells)
+        .mark_bar()
+        .encode(
+            x=alt.X("duration_days:Q", title="# days").scale(
+                domain=(0, 0.5 + max(30, top_spells["duration_days"].max()))
+            ),
+            y=alt.Y("monthdate(date):O", title=None).axis(format="%-d %b"),
+            color=alt.Color(
+                "category:N",
+                legend=alt.Legend(title="Cat."),
+                scale=alt.Scale(
+                    domain=["dry", "wet"],
+                    range=["#f18e1c", "#2f78b3"],
+                ),
+            ),
+        )
+        .properties(
+            title=f"Longest dry / wet spells (top 3 · {year})",
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+        )
+    )
+
+    return (chart, spell_bars)
 
 
 def _hex_to_rgb(color: str) -> tuple[float, float, float]:

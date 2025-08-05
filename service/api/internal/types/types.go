@@ -155,7 +155,8 @@ type StationInfoResponse struct {
 }
 
 type VegaSpecResponse struct {
-	VegaSpec map[string]any `json:"vega_spec"`
+	VegaSpec        map[string]any   `json:"vega_spec"`
+	AdditionalSpecs []map[string]any `json:"additional_specs"`
 }
 
 type MeasurementsRow struct {

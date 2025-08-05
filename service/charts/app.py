@@ -246,7 +246,15 @@ async def get_year_chart(
 
     if chart_type == "drywet":
         df = _read_data([db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX])
-        chart = charts.drywet_grid_chart(df, station_abbr, year)
+        chart, spell_chart = charts.drywet_grid_chart(df, station_abbr, year)
+        return JSONResponse(
+            content={
+                "vega_spec": chart.to_dict(),
+                "additional_specs": [
+                    spell_chart.to_dict(),
+                ],
+            }
+        )
     elif chart_type == "temperature:month":
         df = _read_data([db.TEMP_DAILY_MAX])
         chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year)

@@ -1,3 +1,8 @@
+
 <script id="{{.ChartType}}-chart-script">
     vegaEmbed("#{{.ChartType}}-chart", {{.Response.VegaSpec }}, { actions: false });
+    // {{ $chartType := .ChartType }}
+    // {{range $i, $spec := .Response.AdditionalSpecs }}
+    vegaEmbed("#{{$chartType}}-chart-{{ $i }}", {{ $spec }}, { actions: false });
+    // {{end}}
 </script>
