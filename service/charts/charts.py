@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .pandas_funcs import pctl
+from . import colors
 from . import db
 from . import models
 from .errors import NoDataError
@@ -61,30 +62,9 @@ CHART_TYPE_COLUMNS = {
     "rainiest_day": [db.PRECIP_DAILY_MM],
 }
 
-# tableau20 colors from
-# https://vega.github.io/vega/docs/schemes/
-COLORS_TABLEAU20 = [
-    "#4c78a8",
-    "#9ecae9",
-    "#f58518",
-    "#ffbf79",
-    "#54a24b",
-    "#88d27a",
-    "#b79a20",
-    "#f2cf5b",
-    "#439894",
-    "#83bcb6",
-    "#e45756",
-    "#ff9d98",
-    "#79706e",
-    "#bab0ac",
-    "#d67195",
-    "#fcbfd2",
-    "#b279a2",
-    "#d6a5c9",
-    "#9e765f",
-    "#d8b5a5",
-]
+# Short names for the color palettes, for concise code.
+_C = colors.COLORS_TABLEAU20
+_G = colors.COLORS_COMMON_GRAYS
 
 
 def period_to_title(period: str) -> str:
@@ -239,14 +219,18 @@ def _year_to_dt(df: pd.DataFrame) -> pd.DataFrame:
     return df.assign(year=pd.to_datetime(df["year"], format="%Y"))
 
 
-def timeline_years_chart(
+def annual_timeline_chart(
     values_long: pd.DataFrame,
     trend_long: pd.DataFrame | None = None,
     typ: str = "line",
     y_label: str = "value",
     title: str = "Untitled chart",
+    palette: colors.Palette | None = None,
+    trend_palette: colors.Palette | None = None,
 ) -> alt.LayerChart:
-    highlight = alt.selection_point(fields=["measurement"], bind="legend")
+
+    if palette is not None and trend_palette is None:
+        trend_palette = palette.invert()  # Use inverted colors for trendlines
 
     values_long = _year_to_dt(values_long)
     # Actual data
@@ -258,10 +242,24 @@ def timeline_years_chart(
     else:
         raise ValueError(f"Unsupported chart type {typ}")
 
+    if palette is None:
+        color_schema = alt.Color(
+            "measurement:N", legend=alt.Legend(title="Measurement")
+        )
+    else:
+        color_schema = alt.Color(
+            field="measurement",
+            type="nominal",
+            scale=palette.scale(values_long["measurement"]),
+            legend=alt.Legend(title="Measurement"),
+        )
+
+    highlight = alt.selection_point(fields=["measurement"], bind="legend")
+
     values = values.encode(
-        x=alt.X("year:T", timeUnit="year"),
+        x=alt.X("year:T", timeUnit="year", title="Year"),
         y=alt.Y("value:Q", title=y_label),
-        color=alt.Color("measurement:N", legend=alt.Legend(title="Measurement")),
+        color=color_schema,
         opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
         tooltip=[
             alt.Tooltip("year:T", title="Year", format="%Y"),
@@ -274,24 +272,40 @@ def timeline_years_chart(
     trend = None
     if trend_long is not None:
         trend_long = _year_to_dt(trend_long)
+        # Rename measurements so they're different from real measurements
+        trend_long = trend_long.assign(
+            measurement_trend="trend:" + trend_long["measurement"]
+        )
+        if palette is None:
+            trend_colors = alt.Color("measurement:N", legend=None)
+        else:
+            trend_colors = alt.Color(
+                field="measurement_trend",
+                type="nominal",
+                scale=trend_palette.scale(trend_long["measurement_trend"]),
+                legend=None,
+            )
+
         trend = (
             alt.Chart(trend_long)
             .mark_line(strokeDash=[4, 4])
             .encode(
                 x=alt.X("year:T", timeUnit="year"),
                 y="value:Q",
-                color="measurement:N",
+                color=trend_colors,
                 opacity=alt.condition(highlight, alt.value(1.0), alt.value(0.1)),
             )
         )
 
     layer_chart = values + trend if trend else alt.layer(values)
     return (
-        layer_chart.add_params(highlight).properties(
+        layer_chart.add_params(highlight)
+        .properties(
             width="container",
             autosize={"type": "fit", "contains": "padding"},
             title=title,
         )
+        .resolve_scale(color="independent")
         # .interactive()
     )
 
@@ -309,16 +323,14 @@ def dynamic_baseline_bars_chart(
     df["sign"] = df["anomaly"].apply(lambda x: "below mean" if x < 0 else "above mean")
 
     # Color scale for below/above baseline
-    color_scale = alt.Scale(
-        domain=["below mean", "above mean"], range=["#2166ac", "#b2182b"]
-    )
+    color_scale = colors.Custom.tab20("SteelBlue", "CoralRed").scale(df["sign"])
 
     # Bars for anomalies
     bars = (
         alt.Chart(df)
         .mark_bar()
         .encode(
-            x=alt.X("year:T", timeUnit="year"),
+            x=alt.X("year:T", timeUnit="year", title="Year"),
             y=alt.Y("anomaly:Q", title=f"Deviation from mean ({baseline:.2f} °C)"),
             color=alt.Color(
                 "sign:N", scale=color_scale, legend=alt.Legend(title="Vs. baseline")
@@ -380,15 +392,17 @@ def day_count_chart(
     predicate: pd.Series,
     period: str = PERIOD_ALL,
     title: str = "Untitled chart",
+    palette: colors.Palette | None = None,
 ) -> AltairChart:
     """Creates a chart for "# days" of some boolean predicate."""
     data_long, trend_long = day_count_chart_data(predicate)
-    return timeline_years_chart(
+    return annual_timeline_chart(
         data_long,
         trend_long,
         typ="bar",
         title=f"{title} in {period_to_title(period)}, by year".strip(),
         y_label="# days",
+        palette=palette,
     )
 
 
@@ -398,9 +412,10 @@ def raindays_chart(
     """Creates a "# rain days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, db.PRECIP_DAILY_MM)
     return day_count_chart(
-        predicate=df[db.PRECIP_DAILY_MM] >= 0.1,
+        predicate=df[db.PRECIP_DAILY_MM] >= 1.0,
         period=period,
-        title="Number of rain days (≥ 0.1 mm precip.)",
+        title="Number of rain days (≥ 1.0 mm precip.)",
+        palette=colors.Tab20("SkyBlue"),
     )
 
 
@@ -413,6 +428,7 @@ def sunny_days_chart(
         predicate=df[db.SUNSHINE_DAILY_MINUTES] >= 6 * 60,
         period=period,
         title="Number of sunny days (≥ 6 h of sunshine)",
+        palette=colors.Tab20("Apricot"),
     )
 
 
@@ -425,6 +441,7 @@ def frost_days_chart(
         predicate=df[db.TEMP_DAILY_MIN] < 0,
         period=period,
         title="Number of frost days (min. < 0 °C)",
+        palette=colors.Tab20("SkyBlue"),
     )
 
 
@@ -437,6 +454,7 @@ def summer_days_chart(
         predicate=df[db.TEMP_DAILY_MAX] >= 25,
         period=period,
         title="Number of summer days (max. ≥ 25 °C)",
+        palette=colors.Tab20("Lavender"),
     )
 
 
@@ -482,12 +500,13 @@ def sunshine_chart(
     title = (
         f"Mean daily hours of sunshine in {period_to_title(period)}, by year".strip()
     )
-    return timeline_years_chart(
+    return annual_timeline_chart(
         data_long,
         trend_long,
         typ="bar",
         title=title,
-        y_label="hours/d",
+        y_label="hours / day",
+        palette=colors.Tab20("PaleGold"),
     )
 
 
@@ -500,12 +519,13 @@ def rainiest_day_chart(
     data_long, trend_long = timeline_years_chart_data(data, "max")
 
     title = f"Max daily amount of rain in {period_to_title(period)}, by year".strip()
-    return timeline_years_chart(
+    return annual_timeline_chart(
         data_long,
         trend_long,
         typ="bar",
         title=title,
         y_label="mm",
+        palette=colors.Tab20("Aqua"),
     )
 
 
@@ -534,7 +554,7 @@ def temperature_chart(
     title = (
         f"Avg. temperatures in {period_to_title(period)}, by year {window_info}".strip()
     )
-    return timeline_years_chart(
+    return annual_timeline_chart(
         data_long,
         trend_long,
         typ="line",
@@ -556,7 +576,7 @@ def precipitation_chart(
 
     window_info = f"({window}y rolling avg.)" if window else ""
     title = f"Total precipitation in {period_to_title(period)}, by year {window_info}".strip()
-    return timeline_years_chart(
+    return annual_timeline_chart(
         data_long,
         trend_long,
         typ="bar",
@@ -618,8 +638,8 @@ def bar_chart_with_reference(
     y_col: str = "value",
     title: str = "Untitled chart",
     sort_field: str | None = None,
-    color: str = "#1f77b4",  # Prefer using category20 values here
-    tick_color: str = "#f58518",
+    color: str = _C["SteelBlue"],
+    tick_color: str = _C["Tangerine"],
 ) -> alt.LayerChart:
     """Creates a bar chart of the x_col column with three reference ticks
     at the p25, p50 and p75 columns.
@@ -688,8 +708,8 @@ def boxplot_chart(
     y_title: str,
     title: str = "Untitled chart",
     sort_field: str | None = None,
-    color: str = "#ff7f0e",
-    tick_color: str = "#ffffff",
+    color: str = _C["Tangerine"],
+    tick_color: str = _G["White"],
 ) -> alt.LayerChart:
     """Creates a boxplot (a.k.a. box-and-whisker plot).
 
@@ -720,14 +740,14 @@ def boxplot_chart(
         y=alt.Y("max:Q").axis(title=y_title),
         y2=alt.Y2("p75"),
         size=alt.value(2),
-        color=alt.value("#7f7f7f"),
+        color=alt.value(_G["MediumGray"]),
     )
     lower_whisker = base.mark_rule().encode(
         x=x,
         y=alt.Y("p25:Q"),
         y2=alt.Y2("min"),
         size=alt.value(2),
-        color=alt.value("#7f7f7f"),
+        color=alt.value(_G["MediumGray"]),
     )
     box = base.mark_bar(width={"band": 0.5}).encode(
         x=x,
@@ -761,7 +781,7 @@ def monthly_humidity_boxplot_chart(
         y_title="Rel. humidity (%)",
         sort_field="month_num",
         title=f"Rel. humidity (%) for each month in {year}",
-        color="#aec7e8",
+        color=_C["SkyBlue"],
     )
 
 
@@ -778,7 +798,7 @@ def monthly_sunshine_boxplot_chart(
         y_title="Sunshine (hours)",
         sort_field="month_num",
         title=f"Daily sunshine hours for each month in {year}",
-        color="#ffbb78",
+        color=_C["PaleGold"],
     )
 
 
@@ -795,7 +815,7 @@ def monthly_temp_boxplot_chart(
         y_title="Daily max. temp. (° C)",
         sort_field="month_num",
         title=f"Daily max. temperature for each month in {year}",
-        color="#ff9896",
+        color=_C["DustyRose"],
     )
 
 
@@ -897,15 +917,15 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
     # 1..4 = dry + sunshine bands; 5 = dry+very overcast OR light rain; 6..9 = rainy bands
 
     # Define reusable conditions
-    is_dry = precip <= 0.2
-    is_light_rain = (precip > 0.2) & (precip < 1.0)
+    is_dry = precip < 0.2
+    is_light_rain = (precip >= 0.2) & (precip < 1.0)
     is_rainy = precip >= 1.0
 
     very_overcast = sun_pct < 10
     mostly_cloudy = (sun_pct >= 10) & (sun_pct < 30)
     partly_sunny = (sun_pct >= 30) & (sun_pct < 60)
-    mostly_sunny = (sun_pct >= 60) & (sun_pct <= 90)
-    sunny = sun_pct > 90
+    mostly_sunny = (sun_pct >= 60) & (sun_pct < 90)
+    sunny = sun_pct >= 90
 
     # Classification rules: (class_id, condition)
     rules = [
@@ -933,8 +953,8 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
         2: "2 - Dry · mostly sunny",
         3: "3 - Dry · partly sunny",
         4: "4 - Dry · mostly cloudy",
-        5: "5 - Dry · very overcast or light rain",
-        6: "6 - Rain < 4 mm",
+        5: "5 - Very overcast / light rain",
+        6: "6 - Rain 1-4 mm",
         7: "7 - Rain 4-8 mm",
         8: "8 - Rain 8-12 mm",
         9: "9 - Rain ≥ 12 mm",
@@ -942,26 +962,6 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
     d["class_label"] = d["class_id"].map(class_labels)
 
     # Color scheme: Oranges (x4), Gray (x1), Blues (x4)
-    # You can tweak these if you have a preferred palette.
-
-    # Oranges from "yelloworangered"
-    # "#fd833a",
-    # "#fea045",
-    # "#feb855",
-    # "#fecf6d",
-
-    # Oranges from "blueorange"
-    # "#c5690d",
-    # "#e8932f",
-    # "#fbbf74",
-    # "#fce0ba",
-
-    # Oranges from "redyellowblue"
-    # "#f16e43",
-    # "#fcac64",
-    # "#fedd90",
-    # "#faf8c1",
-
     colors = [
         # 1..4 (oranges, dark to light)
         "#e07000",

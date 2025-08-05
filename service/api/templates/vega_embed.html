@@ -1,24 +1,3 @@
-{{if eq .ChartType "temperature"}}
-<h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Average Temperature</h2>
-<p class="text-sm text-gray-600 leading-relaxed mb-4">
-    Average temperatures for each year during the selected period
-    (e.g. a specific month or season), highlighting how absolute values have evolved over time.
-    The three lines shown represent average daily min/mean/max temperatures, respectively.
-</p>
-{{else if eq .ChartType "temperature_deviation"}}
-<h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Temperature Deviations</h2>
-<p class="text-sm text-gray-600 leading-relaxed mb-4">
-    Yearly deviations from the long‑term mean of the <strong>average daily mean temperatures</strong>
-    for the entire period. Red bars indicate years warmer than this overall mean, while blue bars show cooler years.
-</p>
-{{else if eq .ChartType "precipitation"}}
-<h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Total Precipitation</h2>
-<p class="text-sm text-gray-600 leading-relaxed mb-4">
-    Total precipitation (in millimeters) for the selected period each year,
-    illustrating changes in rainfall over time.
-</p>
-{{end}}
-
 <script id="{{.ChartType}}-chart-script">
     vegaEmbed("#{{.ChartType}}-chart", {{.Response.VegaSpec }}, { actions: false });
 </script>

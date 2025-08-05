@@ -79,6 +79,12 @@
 
         <!-- Charts -->
         <div>
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Average Temperature</h2>
+            <p class="text-sm text-gray-600 leading-relaxed mb-4">
+                Average temperatures for each year during the selected period
+                (e.g. a specific month or season), highlighting how absolute values have evolved over time.
+                The three lines shown represent average daily min/mean/max temperatures, respectively.
+            </p>
             <div class="mb-8">
                 <div id="temperature-chart-script-container" hx-ext="path-params"
                     hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/temperature"
@@ -88,6 +94,12 @@
                 <div id="temperature-chart" class="w-full overflow-hidden"></div>
             </div>
 
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Temperature Deviations</h2>
+            <p class="text-sm text-gray-600 leading-relaxed mb-4">
+                Yearly deviations from the long‑term mean of the <strong>average daily mean temperatures</strong>
+                for the entire period. Red bars indicate years warmer than this overall mean, while blue bars show
+                cooler years.
+            </p>
             <div class="mb-8">
                 <div id="temperature-deviation-chart-script-container" hx-ext="path-params"
                     hx-trigger="change from:#chart-controls"
@@ -98,6 +110,11 @@
                 <div id="temperature_deviation-chart" class="w-full overflow-hidden"></div>
             </div>
 
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Total Precipitation</h2>
+            <p class="text-sm text-gray-600 leading-relaxed mb-4">
+                Total precipitation (in millimeters) for the selected period each year,
+                illustrating changes in rainfall over time.
+            </p>
             <div class="mb-8">
                 <div id="precipitation-chart-script-container" hx-ext="path-params"
                     hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/precipitation"
