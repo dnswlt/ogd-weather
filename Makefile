@@ -56,7 +56,7 @@ down: ## Stop all running containers (but keep images & volumes)
 	$(COMPOSE) down
 
 restart: ## Restart api + charts containers without rebuild
-	$(COMPOSE) restart api charts
+	$(COMPOSE) down && $(COMPOSE) up -d
 
 update-db: ## Run db-updater batch job WITHOUT rebuilding
 	$(COMPOSE) run --rm db-updater

@@ -142,6 +142,15 @@ def _verify_monthly_boxplot_data(df: pd.DataFrame, station_abbr: str, year: int)
         raise ValueError(f"Not all rows are for year {year}")
 
 
+def _verify_annual_data(df: pd.DataFrame, station_abbr: str, year: int):
+    if df.empty:
+        raise NoDataError(f"No data for {station_abbr}")
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if not (df.index.year == year).all():
+        raise ValueError(f"Not all rows are for year {year}")
+
+
 _SEASONS = {
     "spring": [3, 4, 5],
     "summer": [6, 7, 8],
@@ -857,33 +866,139 @@ def monthly_precipitation_bar_chart(
     )
 
 
-def find_spells(runs: pd.Series, min_days=3):
+def find_spells(runs: pd.Series, min_days=1):
     """Returns a DataFrame with all spells of length min_days or more.
 
+    Returns:
+        A DataFrame with columns ["category", "duration_days"] of all
+        spells in runs of at least min_days duration.
+
     Args:
-        runs: Series of categorical values. Must have a datetime index.
-        min_days: min length of a run (i.e. subsequent equal values in runs).
+        runs: Series of categorical **float** values. Must have a datetime index.
+        min_days: min length of a run (i.e. subsequent equal values in runs), in days.
     """
-    nz = np.nonzero(np.convolve(runs, [-1, 1], mode="same"))
-    edges = runs.iloc[nz]
-    if edges.empty:
-        return edges
 
-    # Days until the next change for each edge
-    diff = -edges.index.to_series().diff(periods=-1)
-    spans = diff.ge(pd.Timedelta(days=min_days))
+    if not isinstance(runs.index, pd.DatetimeIndex):
+        raise ValueError(f"index must be a DatetimeIndex, got {type(runs.index)}")
 
-    return pd.DataFrame(
+    if runs.empty or len(runs) == 1 and min_days > 1:
+        df = pd.DataFrame(
+            columns=["category", "duration_days"], index=pd.DatetimeIndex([])
+        )
+        df.index.name = runs.index.name
+        return df
+    if len(runs) == 1:
+        return pd.DataFrame(
+            [{"category": runs.iloc[0], "duration_days": 1}], index=runs.index
+        )
+
+    # Ensure we have rows for all dates and
+    # add one day at the end (NaN) to have an end marker for the last sequence.
+    full_index = pd.date_range(
+        start=runs.index.min(), end=runs.index.max() + pd.Timedelta(days=1), freq="D"
+    )
+    index_name = runs.index.name
+    runs = runs.reindex(full_index)
+    runs.index.name = index_name
+    runs.index.freq = None  # remove freq='3D' introduced by pd.date_range.
+
+    diff = runs.diff()
+    diff.iloc[0] = 1  # Always count first signal as an edge.
+    edges = runs[diff != 0]
+    durations = -edges.index.to_series().diff(-1)
+    # Drop the dummy last entry that has NaT duration.
+    df = pd.DataFrame(
         {
-            "duration_days": diff[spans].dt.days,
-            "category": edges[spans],
-        }
+            "category": edges.iloc[:-1],
+            "duration_days": durations.dt.days[:-1].astype(int),
+        },
+        index=edges.index[:-1],
+    )
+    print(df.index)
+    # Filter down to rows with at least min_days duration.
+    return df[df["duration_days"] >= min_days]
+
+
+def drywet_spells_bar_chart_data(
+    df: pd.DataFrame, station_abbr: str, year: int, min_days=3, top_n=3
+) -> pd.DataFrame:
+    """Prepares the data for displaying a dry/wet spells"""
+    _verify_annual_data(df, station_abbr, year)
+
+    # Ensure dates are contiguous, fill with nan.
+    # Add one day at the end to include the last spell:
+    df = df[[db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX]]
+
+    # Classification follows the drywet_grid_chart rules, but can be simpler:
+    precip = df[db.PRECIP_DAILY_MM]
+    sun_pct = df[db.SUNSHINE_DAILY_PCT_OF_MAX]
+
+    is_dry = precip < 0.2
+    is_rainy = precip >= 1.0
+    very_overcast = sun_pct < 10
+
+    dry = is_dry & ~very_overcast
+    wet = is_rainy
+
+    # Use float values for dry/wet classification for simpler run-length detection.
+    cats = {
+        1.0: "dry",
+        2.0: "wet",
+    }
+    runs = pd.Series(np.nan, index=df.index, dtype=float)
+    runs[dry] = 1.0
+    runs[wet] = 2.0
+
+    spells = find_spells(runs, min_days=min_days)
+
+    # Take the top 3 spells of dry and wet periods. Exclude NaN spells.
+    top_spells = (
+        spells[spells["category"].isin(cats)]
+        .sort_values(["category", "duration_days"], ascending=[True, False])
+        .groupby("category", group_keys=False)
+        .head(top_n)
+    ).sort_index()
+
+    # Map "category" floats back to strings.
+    top_spells["category"] = top_spells["category"].map(cats)
+
+    return top_spells
+
+
+def drywet_spells_bar_chart(
+    df: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+
+    # Calculate "spells", i.e. periods of uninterrupted rain or drought.
+    top_spells = drywet_spells_bar_chart_data(df, station_abbr, year)
+    top_spells = top_spells.reset_index(names="date")
+
+    return (
+        alt.Chart(top_spells)
+        .mark_bar()
+        .encode(
+            x=alt.X("duration_days:Q", title="# days").scale(
+                domain=(0, 0.5 + max(30, top_spells["duration_days"].max()))
+            ),
+            y=alt.Y("monthdate(date):O", title=None).axis(format="%-d %b"),
+            color=alt.Color(
+                "category:N",
+                legend=alt.Legend(title="Cat."),
+                scale=alt.Scale(
+                    domain=["dry", "wet"],
+                    range=["#f18e1c", "#2f78b3"],
+                ),
+            ),
+        )
+        .properties(
+            title=f"Longest dry / wet spells (top 3 · {year})",
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+        )
     )
 
 
-def drywet_grid_chart(
-    df: pd.DataFrame, station_abbr: str, year: int
-) -> tuple[AltairChart, AltairChart]:
+def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairChart:
     """Returns two charts: a grid chart indicating dry and wet spells for the given year,
     and a horizontal bar chart showing the N longest dry and wet spells.
 
@@ -923,12 +1038,7 @@ def drywet_grid_chart(
     9 = (rainy day, >= 12 mm of rain)
 
     """
-    if df.empty:
-        raise NoDataError(f"No data for {station_abbr}")
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if not (df.index.year == year).all():
-        raise ValueError(f"Not all rows are for year {year}")
+    _verify_annual_data(df, station_abbr, year)
 
     # Copy columns we need. We'll add more below.
     precip = df[db.PRECIP_DAILY_MM]
@@ -973,6 +1083,7 @@ def drywet_grid_chart(
     # Drop days we couldn't classify (e.g., missing values)
     d = d.dropna(subset=["class_id"]).copy()
     d["class_id"] = d["class_id"].astype(int)
+    d = d.reset_index(names="date")
 
     # Human-friendly labels for the legend (and fixed domain order)
     class_labels = {
@@ -987,25 +1098,6 @@ def drywet_grid_chart(
         9: "9 - Rain ≥ 12 mm",
     }
     d["class_label"] = d["class_id"].map(class_labels)
-
-    # Calculate "spells", i.e. periods of uninterrupted rain or drought.
-    bins = [0, 4, 5.5, 9]
-    codes = [1.0, 2.0, 3.0]  # dry=1, neutral=2, wet=3 (arbitrary choice)
-    runs = pd.cut(d["class_id"], bins=bins, labels=codes).astype(float)
-    spells = find_spells(runs)
-    # Take the top 3 spells of dry and wet periods.
-    top_spells = (
-        spells[spells["category"].isin([1.0, 3.0])]
-        .sort_values(["category", "duration_days"], ascending=[True, False])
-        .groupby("category", group_keys=False)
-        .head(3)
-    )
-    # Map "category" floats back to strings.
-    top_spells["category"] = top_spells["category"].map({1.0: "dry", 3.0: "wet"})
-    top_spells = top_spells.reset_index(names="date")
-
-    # Reset index after creating spells, which assumes a datetime index.
-    d = d.reset_index(names="date")
 
     # Color scheme: Oranges (x4), Gray (x1), Blues (x4)
     colors = [
@@ -1063,31 +1155,7 @@ def drywet_grid_chart(
         )
     )
 
-    spell_bars = (
-        alt.Chart(top_spells)
-        .mark_bar()
-        .encode(
-            x=alt.X("duration_days:Q", title="# days").scale(
-                domain=(0, 0.5 + max(30, top_spells["duration_days"].max()))
-            ),
-            y=alt.Y("monthdate(date):O", title=None).axis(format="%-d %b"),
-            color=alt.Color(
-                "category:N",
-                legend=alt.Legend(title="Cat."),
-                scale=alt.Scale(
-                    domain=["dry", "wet"],
-                    range=["#f18e1c", "#2f78b3"],
-                ),
-            ),
-        )
-        .properties(
-            title=f"Longest dry / wet spells (top 3 · {year})",
-            width="container",
-            autosize={"type": "fit", "contains": "padding"},
-        )
-    )
-
-    return (chart, spell_bars)
+    return chart
 
 
 def _hex_to_rgb(color: str) -> tuple[float, float, float]:
