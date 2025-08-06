@@ -31,8 +31,40 @@ function initPage() {
 
 }
 
-const page = document.body.dataset.page;
+// Initialization that applies to all pages.
+function commonInit() {
+    // Run vegaEmbed when receiving new snippets containing Vega-Lite JSON.
+    htmx.onLoad(function (content) {
+        content.querySelectorAll('script[type="application/json"][data-vega-target]')
+            .forEach(s => {
+                const targetId = s.dataset.vegaTarget;
+                let spec;
+                try {
+                    spec = JSON.parse(s.textContent);
+                } catch (e) {
+                    console.error('Invalid Vega JSON for', targetId, e);
+                    s.remove();
+                    return;
+                }
+                vegaEmbed(`#${targetId}`, spec, { actions: false })
+                // 
+                // .then(
+                //     res => {
+                //         res.view.addEventListener("click", function (event, item) {
+                //             if (!item?.datum) {
+                //                 return;
+                //             }
+                //             console.log(`Clicked on something in ${targetId}`, event, item.datum);
+                //         });
+                //     })
+                s.remove(); // avoid reprocessing and cluttering the DOM.
+            });
+    });
+}
 
+commonInit();
+
+const page = document.body.dataset.page;
 switch (page) {
     case 'timeline':
         initPage();

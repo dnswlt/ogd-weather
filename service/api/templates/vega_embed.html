@@ -1,8 +1,11 @@
-
-<script id="{{.ChartType}}-chart-script">
-    vegaEmbed("#{{.ChartType}}-chart", {{.Response.VegaSpec }}, { actions: false });
-    // {{ $chartType := .ChartType }}
-    // {{range $i, $spec := .Response.AdditionalSpecs }}
-    vegaEmbed("#{{$chartType}}-chart-{{ $i }}", {{ $spec }}, { actions: false });
-    // {{end}}
-</script>
+<div>
+    <!-- These script blocks contain JSON. vegaEmbed calls are in "main.js". -->
+    <script type="application/json" data-vega-target="{{.ChartType}}-chart">
+        {{.Response.VegaSpec}}
+    </script>
+    {{ range $i, $spec := .Response.AdditionalSpecs }}
+    <script type="application/json" data-vega-target="{{$.ChartType}}-chart-{{$i}}">
+        {{$spec}}
+    </script>
+    {{ end }}
+</div>
