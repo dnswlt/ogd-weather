@@ -112,38 +112,54 @@ def _daily_range(date: str) -> tuple[datetime.datetime, datetime.datetime]:
     return from_date, to_date
 
 
-def _vega_chart(request: Request, chart: charts.AltairChart) -> Response:
-    if "text/html" in request.headers.get("accept", ""):
-        # NOTE: Using chart.to_html() here fixes the vega versions
-        # (e.g. to "vega-lite@5.20.1") and you cannot override them.
-        # This cost me a dear few hours to debug: in the app we used
-        # 'latest' versions to load the JS (e.g. "vega-lite@5"), while this
-        # code used .to_html with older versions. Somewhere in between the
-        # versions, support for
-        #
-        #     base.mark_tick( width={"band": 0.8} )
-        #
-        # was added. The result was that the tick was not visible on
-        # this _vega_chart, but it showed up in the chart in our app,
-        # which used the newer Vega versions. Whaaaa!!!
-        #
-        # It gets better:
-        # Just saw that 3 weeks ago (i.e. after my last pip install),
-        # they bumped the versions way past what we have here, to v6:
-        # https://github.com/vega/altair/pull/3831 (not released yet)
-        html = spec_to_html(
-            chart.to_dict(),
-            mode="vega-lite",
-            vega_version=_VEGA_VERSION,
-            vegalite_version=_VEGA_LITE_VERSION,
-            vegaembed_version=_VEGA_EMBED_VERSION,
-            base_url="https://unpkg.com",
-        )
-        return HTMLResponse(content=html)
+def _render_html(request: Request, charts: dict[str, charts.AltairChart]) -> Response:
+    # NOTE: Using chart.to_html() here fixes the vega versions
+    # (e.g. to "vega-lite@5.20.1") and you cannot override them.
+    # This cost me a dear few hours to debug: in the app we used
+    # 'latest' versions to load the JS (e.g. "vega-lite@5"), while this
+    # code used .to_html with older versions. Somewhere in between the
+    # versions, support for
+    #
+    #     base.mark_tick( width={"band": 0.8} )
+    #
+    # was added. The result was that the tick was not visible on
+    # this HTML rendering, but it showed up in the chart in our app,
+    # which used the newer Vega versions. Whaaaa!!!
+    #
+    # It gets better:
+    # Just saw that 3 weeks ago (i.e. after my last pip install),
+    # they bumped the versions way past what we have here, to v6:
+    # https://github.com/vega/altair/pull/3831 (not released yet)
 
+    if c := request.query_params.get("chart"):
+        if c not in charts:
+            raise _bad_request(
+                f"Invalid chart= query param, must be {','.join(charts)}"
+            )
+        chart = charts[c]
+    else:
+        # Arbitrarily pick the first chart
+        chart = next(iter(charts.values()))
+
+    html = spec_to_html(
+        chart.to_dict(),
+        mode="vega-lite",
+        vega_version=_VEGA_VERSION,
+        vegalite_version=_VEGA_LITE_VERSION,
+        vegaembed_version=_VEGA_EMBED_VERSION,
+        base_url="https://unpkg.com",
+    )
+    return HTMLResponse(content=html)
+
+
+def _vega_chart(request: Request, charts: dict[str, charts.AltairChart]) -> Response:
+    if "text/html" in request.headers.get("accept", ""):
+        return _render_html(request, charts)
+
+    specs = {name: chart.to_dict() for name, chart in charts.items()}
     return JSONResponse(
         content={
-            "vega_spec": chart.to_dict(),
+            "vega_specs": specs,
         }
     )
 
@@ -220,7 +236,7 @@ async def get_annual_chart(
     chart = charts.create_annual_chart(
         chart_type, df, station_abbr, period=period, window=window_int
     )
-    return _vega_chart(request, chart)
+    return _vega_chart(request, {chart_type: chart})
 
 
 @app.get("/stations/{station_abbr}/charts/year/{year}/{chart_type}")
@@ -244,19 +260,20 @@ async def get_year_chart(
                 to_year=year,
             )
 
+    # drywet returns multiple charts:
     if chart_type == "drywet":
         df = _read_data([db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX])
         grid_chart = charts.drywet_grid_chart(df, station_abbr, year)
         spell_chart = charts.drywet_spells_bar_chart(df, station_abbr, year)
-        return JSONResponse(
-            content={
-                "vega_spec": grid_chart.to_dict(),
-                "additional_specs": [
-                    spell_chart.to_dict(),
-                ],
-            }
+        return _vega_chart(
+            request,
+            {
+                "drywet": grid_chart,
+                "drywet-spells": spell_chart,
+            },
         )
-    elif chart_type == "temperature:month":
+    # Single chart cases.
+    if chart_type == "temperature:month":
         df = _read_data([db.TEMP_DAILY_MAX])
         chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year)
     elif chart_type == "sunshine:month":
@@ -279,7 +296,7 @@ async def get_year_chart(
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
 
-    return _vega_chart(request, chart)
+    return _vega_chart(request, {chart_type: chart})
 
 
 @app.get("/stations/{station_abbr}/charts/day/{date}/{chart_type}")
@@ -308,7 +325,7 @@ async def get_daily_chart(
         )
     chart = charts.daily_temp_precip_chart(df, from_date, station_abbr)
 
-    return _vega_chart(request, chart)
+    return _vega_chart(request, {chart_type: chart})
 
 
 @app.get("/stations/{station_abbr}/stats/day/{date}/measurements")

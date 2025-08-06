@@ -15,11 +15,12 @@ var (
 	zurichLoc = mustLoadLocation("Europe/Zurich")
 
 	AllFuncs = map[string]any{
-		"datefmt":    DateFmt,
-		"wgs84tosvg": WGS84ToSVG,
-		"min2hours":  MinutesToHours,
-		"ms2kmh":     MetersPerSecondToKilometersPerHour,
-		"float":      PrintfFloat64,
+		"datefmt":      DateFmt,
+		"wgs84tosvg":   WGS84ToSVG,
+		"min2hours":    MinutesToHours,
+		"ms2kmh":       MetersPerSecondToKilometersPerHour,
+		"float":        PrintfFloat64,
+		"vegaTargetID": VegaTargetID,
 	}
 )
 
@@ -276,4 +277,13 @@ func FormatBytesIEC(n int64) string {
 	}
 	value := float64(n) / float64(div)
 	return fmt.Sprintf("%.2f %ciB", value, "KMGTPE"[exp])
+}
+
+// VegaTargetID translates a Vega spec name into its corresponding
+// HTML element ID.
+// For now, the only character allowed in chart types that is not
+// convenient to use in element IDs is the ":" character, so
+// replace it by "-".
+func VegaTargetID(specName string) string {
+	return strings.ReplaceAll(specName, ":", "-")
 }

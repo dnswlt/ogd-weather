@@ -528,7 +528,7 @@ class TestFindSpells(PandasTestCase):
 
     def test_find_spells_gaps(self):
 
-        # All values identical
+        # Gaps in the date index.
         r = self._input(
             [
                 ("2025-01-01", 0),

@@ -154,9 +154,13 @@ type StationInfoResponse struct {
 	Info *StationInfo `json:"info"`
 }
 
+// VegaSpecJSON holds the JSON representation of a Vega-Lite chart.
+// The chart's actual structure does not matter to this server, so
+// we represent it as a generic map.
+type VegaSpecJSON map[string]any
+
 type VegaSpecResponse struct {
-	VegaSpec        map[string]any   `json:"vega_spec"`
-	AdditionalSpecs []map[string]any `json:"additional_specs"`
+	VegaSpecs map[string]VegaSpecJSON `json:"vega_specs"`
 }
 
 type MeasurementsRow struct {
