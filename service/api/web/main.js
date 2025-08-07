@@ -31,33 +31,37 @@ function initPage() {
 
 }
 
+function embedVegaScript(script) {
+    const parent = script.closest("div[hx-get]");
+    // Determine ID of element (<div>) to embed Vega chart.
+    let targetId;
+    if (parent.dataset.vegaTargets) {
+        const targets = JSON.parse(parent.dataset.vegaTargets);
+        targetId = targets[script.dataset.vegaSpec];
+    } else if (parent.dataset.vegaTarget) {
+        targetId = parent.dataset.vegaTarget;
+    } else {
+        // Default behaviour: Use data-vega-spec attribute to find target.
+        targetId = `${script.dataset.vegaSpec}-chart`;
+    }
+    const spec = JSON.parse(script.textContent);
+    vegaEmbed(`#${targetId}`, spec, { actions: false });
+}
+
 // Initialization that applies to all pages.
 function commonInit() {
     // Run vegaEmbed when receiving new snippets containing Vega-Lite JSON.
     htmx.onLoad(function (content) {
-        content.querySelectorAll('script[type="application/json"][data-vega-target]')
-            .forEach(s => {
-                const targetId = s.dataset.vegaTarget;
-                let spec;
+        content.querySelectorAll('script[type="application/json"]')
+            .forEach(script => {
                 try {
-                    spec = JSON.parse(s.textContent);
+                    embedVegaScript(script);
                 } catch (e) {
-                    console.error('Invalid Vega JSON for', targetId, e);
-                    s.remove();
-                    return;
+                    console.error('Failed to embed Vega script:', e);
+                } finally {
+                    // avoid reprocessing and cluttering the DOM.
+                    script.remove();
                 }
-                vegaEmbed(`#${targetId}`, spec, { actions: false })
-                // 
-                // .then(
-                //     res => {
-                //         res.view.addEventListener("click", function (event, item) {
-                //             if (!item?.datum) {
-                //                 return;
-                //             }
-                //             console.log(`Clicked on something in ${targetId}`, event, item.datum);
-                //         });
-                //     })
-                s.remove(); // avoid reprocessing and cluttering the DOM.
             });
     });
 }

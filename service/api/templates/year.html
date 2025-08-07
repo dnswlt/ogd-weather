@@ -158,7 +158,8 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/year/{year}/drywet" hx-include="#chart-controls" hx-target="this"
-                    hx-swap="innerHTML">
+                    hx-swap="innerHTML"
+                    data-vega-targets='{"drywet":"drywet-chart","drywet-spells":"drywet-spells-chart"}'>
                     <!-- Vega script goes here -->
                 </div>
                 <!-- Two charts, stacked: one for the dry/wet grid and one for the dry/wet spell bars. -->
@@ -182,8 +183,7 @@
 
         <!-- Tabs -- Click events are registered in "year.js" -->
         <div class="tab-widget mb-12">
-            <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200"
-                data-widget-tabs>
+            <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
                 <!-- Min temp -->
                 <button data-facet="min" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                    hover:text-gray-800 focus:outline-none
@@ -205,32 +205,13 @@
             </div>
 
             <!-- Loader: carries station+year from the global form + its own hx-vals facet -->
-            <div class="vega-spec-loader" id="temperature-month-spec" hx-get="/stations/{station}/charts/year/{year}/temperature:month" hx-ext="path-params"
-                hx-trigger="load, change from:#chart-controls, refresh" hx-include="#chart-controls"
+            <div class="vega-spec-loader" hx-get="/stations/{station}/charts/year/{year}/temperature:month"
+                hx-ext="path-params" hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
                 hx-vals='{"facet":"max"}' hx-target="this" hx-swap="innerHTML"></div>
             <div id="temperature-month-chart" class="w-full overflow-hidden"></div>
         </div>
 
-        <!-- Monthly humidity distribution -->
-        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Daily relative humidity</h2>
-        <p class="text-sm text-gray-600 leading-relaxed mb-4">
-            Distribution of daily average relative humidity by month.
-            Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
-                target="_blank">box plot</a> shows the middle 50% (IQR) of daily relative humidity
-            for that month. The whiskers indicate the minimum and maximum values.
-        </p>
-        <div>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
-                    hx-get="/stations/{station}/charts/year/{year}/humidity:month" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML">
-                    <!-- Vega script goes here -->
-                </div>
-                <div id="humidity-month-chart" class="w-full overflow-hidden"></div>
-            </div>
-        </div>
-
-        <!-- Monthly humidity distribution -->
+        <!-- Monthly sunshine hours -->
         <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Daily sunshine hours</h2>
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
             Distribution of daily sunshine hours by month.
@@ -258,18 +239,51 @@
                 Climate Normals</a> period
             1991&ndash;2020.
         </p>
+        <div class="tab-widget mb-12">
+            <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
+                <!-- Total precipitation -->
+                <button data-facet="precipitation" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                    Precipitation
+                </button>
+                <!-- Rain rays -->
+                <button data-facet="raindays" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                    Rain days
+                </button>
+            </div>
+
+            <!-- Loader: carries station+year from the global form + its own hx-vals facet -->
+            <div class="vega-spec-loader" data-vega-target="precipitation-vega-chart"
+                hx-get="/stations/{station}/charts/year/{year}/{facet}:month" hx-ext="path-params"
+                hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
+                hx-vals='{"facet":"precipitation"}' hx-target="this" hx-swap="innerHTML"></div>
+            <div id="precipitation-vega-chart" class="w-full overflow-hidden"></div>
+        </div>
+
+        <!-- Monthly humidity distribution -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Daily relative humidity</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Distribution of daily average relative humidity by month.
+            Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
+                target="_blank">box plot</a> shows the middle 50% (IQR) of daily relative humidity
+            for that month. The whiskers indicate the minimum and maximum values.
+        </p>
         <div>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
-                    hx-get="/stations/{station}/charts/year/{year}/precipitation:month" hx-include="#chart-controls"
+                    hx-get="/stations/{station}/charts/year/{year}/humidity:month" hx-include="#chart-controls"
                     hx-target="this" hx-swap="innerHTML">
                     <!-- Vega script goes here -->
                 </div>
-                <div id="precipitation-month-chart" class="w-full overflow-hidden"></div>
+                <div id="humidity-month-chart" class="w-full overflow-hidden"></div>
             </div>
         </div>
     </main>
 
+    
     <footer>
         {{template "disclaimer.html" .}}
     </footer>

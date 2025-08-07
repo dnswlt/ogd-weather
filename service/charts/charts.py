@@ -849,6 +849,35 @@ def _localize_tz(data: pd.DataFrame | pd.Series) -> pd.DataFrame:
     return data
 
 
+def monthly_raindays_bar_chart(
+    df: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+    ser = _localize_tz(df[db.PRECIP_DAILY_MM])
+    rainday = (ser >= 1.0).astype(float)
+
+    months = rainday.groupby(rainday.index.month).agg([("value", "sum")])
+
+    data = months.reset_index(names="month_num")
+    data["month_name"] = data["month_num"].map(lambda k: calendar.month_abbr[k])
+
+    return (
+        alt.Chart(data)
+        .mark_bar(width={"band": 0.5})
+        .encode(
+            x=alt.X("month_name:O")
+            .sort(alt.EncodingSortField(field="month_num", op="min", order="ascending"))
+            .title("Month"),
+            y=alt.Y("value:Q", title="# days"),
+            color=alt.value(_C["SkyBlue"]),
+        )
+        .properties(
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+            title=f"Number of rain days (≥ 1 mm precipitation) per month in {year}",
+        )
+    )
+
+
 def monthly_precipitation_bar_chart(
     df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
 ) -> AltairChart:

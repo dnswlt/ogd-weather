@@ -283,6 +283,9 @@ async def get_year_chart(
     elif chart_type == "humidity:month":
         df = _read_data([db.REL_HUMITIDY_DAILY_MEAN])
         chart = charts.monthly_humidity_boxplot_chart(df, station_abbr, year)
+    elif chart_type == "raindays:month":
+        df = _read_data([db.PRECIP_DAILY_MM])
+        chart = charts.monthly_raindays_bar_chart(df, station_abbr, year)
     elif chart_type == "precipitation:month":
         df = _read_data([db.PRECIP_DAILY_MM])
         with app.state.engine.begin() as conn:

@@ -1,7 +1,7 @@
 <div>
     <!-- These script blocks contain JSON. vegaEmbed calls are in "main.js". -->
     {{ range $name, $spec := .Response.VegaSpecs }}
-    <script type="application/json" data-vega-target="{{vegaTargetID $name}}-chart">
+    <script type="application/json" data-vega-spec="{{vegaSpecHTMLID $name}}">
         {{ $spec }}
     </script>
     {{ end }}
