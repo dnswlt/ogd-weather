@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -184,6 +185,21 @@ func (s *Server) withRequestLogging(next http.Handler) http.Handler {
 			duration.Milliseconds(),
 			r.RemoteAddr,
 		)
+	})
+}
+
+func (s *Server) withCacheControl(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set a max-age of 1 year for static resources that do not change.
+		// We use version numbers in file names for cache busting.
+		ext := filepath.Ext(r.URL.Path)
+		switch ext {
+		case ".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".ico", ".map",
+			".woff", ".woff2", ".ttf", ".eot", ".otf",
+			".webp", ".avif":
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		h.ServeHTTP(w, r)
 	})
 }
 
@@ -492,8 +508,13 @@ func (s *Server) Serve() error {
 
 	// Static resources (JavaScript, CSS, etc.)
 	staticDir := path.Join(s.opts.BaseDir, "static")
-	mux.Handle("GET /static/", http.StripPrefix("/static/",
-		http.FileServer(http.Dir(staticDir))))
+	mux.Handle("GET /static/",
+		http.StripPrefix("/static/",
+			s.withCacheControl(
+				http.FileServer(http.Dir(staticDir)),
+			),
+		),
+	)
 
 	// Health check. Useful for cloud deployments.
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
