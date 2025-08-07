@@ -277,6 +277,9 @@ async def get_year_chart(
     if chart_type == "temperature:month":
         df = _read_data([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
         chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year, facet)
+    elif chart_type == "sunny_days:month":
+        df = _read_data([db.SUNSHINE_DAILY_PCT_OF_MAX])
+        chart = charts.monthly_sunny_days_bar_chart(df, station_abbr, year)
     elif chart_type == "sunshine:month":
         df = _read_data([db.SUNSHINE_DAILY_MINUTES])
         chart = charts.monthly_sunshine_boxplot_chart(df, station_abbr, year)

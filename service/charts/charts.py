@@ -794,6 +794,51 @@ def monthly_humidity_boxplot_chart(
     )
 
 
+def monthly_bar_chart(
+    df: pd.DataFrame,
+    color: str,
+    y_title: str,
+    title: str,
+):
+
+    df = df.reset_index(names="month_num")
+    df["month_name"] = df["month_num"].map(lambda k: calendar.month_abbr[k])
+
+    return (
+        alt.Chart(df)
+        .mark_bar(width={"band": 0.5})
+        .encode(
+            x=alt.X("month_name:O")
+            .sort(alt.EncodingSortField(field="month_num", op="min", order="ascending"))
+            .title("Month"),
+            y=alt.Y("value:Q", title=y_title),
+            color=alt.value(color),
+        )
+        .properties(
+            width="container",
+            autosize={"type": "fit", "contains": "padding"},
+            title=title,
+        )
+    )
+
+
+def monthly_sunny_days_bar_chart(
+    df: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+
+    ser = _localize_tz(df[db.SUNSHINE_DAILY_PCT_OF_MAX])
+    sunny_day = (ser >= 80).astype(float)
+
+    months = sunny_day.groupby(sunny_day.index.month).agg([("value", "sum")])
+
+    return monthly_bar_chart(
+        months,
+        color=_C["Apricot"],
+        y_title="# days",
+        title=f"Number of sunny days (≥ 80% rel. sunshine duration) per month in {year}",
+    )
+
+
 def monthly_sunshine_boxplot_chart(
     df: pd.DataFrame, station_abbr: str, year: int
 ) -> AltairChart:
@@ -857,24 +902,11 @@ def monthly_raindays_bar_chart(
 
     months = rainday.groupby(rainday.index.month).agg([("value", "sum")])
 
-    data = months.reset_index(names="month_num")
-    data["month_name"] = data["month_num"].map(lambda k: calendar.month_abbr[k])
-
-    return (
-        alt.Chart(data)
-        .mark_bar(width={"band": 0.5})
-        .encode(
-            x=alt.X("month_name:O")
-            .sort(alt.EncodingSortField(field="month_num", op="min", order="ascending"))
-            .title("Month"),
-            y=alt.Y("value:Q", title="# days"),
-            color=alt.value(_C["SkyBlue"]),
-        )
-        .properties(
-            width="container",
-            autosize={"type": "fit", "contains": "padding"},
-            title=f"Number of rain days (≥ 1 mm precipitation) per month in {year}",
-        )
+    return monthly_bar_chart(
+        months,
+        color=_C["SkyBlue"],
+        y_title="# days",
+        title=f"Number of rain days (≥ 1 mm precipitation) per month in {year}",
     )
 
 

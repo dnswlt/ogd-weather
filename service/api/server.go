@@ -145,7 +145,7 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 	nav := ui.NewNavBar(
 		ui.NavItem("/ui/timeline", "Trends").Params("station", "from_year", "to_year", "period", "window"),
 		ui.NavItem("/ui/sun_rain", "Sun & Rain").Params("station", "from_year", "to_year", "period"),
-		ui.NavItem("/ui/day", "Daily").Params("station", "date"),
+		ui.NavItem("/ui/day", "Day").Params("station", "date"),
 		ui.NavItem("/ui/year", "Year").Params("station", "year"),
 		ui.NavItem("/ui/map", "Map").Params("station"),
 	).SetActive(r.URL.Path).SetParams(q)
