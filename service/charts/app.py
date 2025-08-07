@@ -245,6 +245,7 @@ async def get_year_chart(
     station_abbr: str,
     year: int,
     chart_type: str,
+    facet: str = "max",
 ):
 
     station_abbr = station_abbr.upper()
@@ -274,8 +275,8 @@ async def get_year_chart(
         )
     # Single chart cases.
     if chart_type == "temperature:month":
-        df = _read_data([db.TEMP_DAILY_MAX])
-        chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year)
+        df = _read_data([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
+        chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year, facet)
     elif chart_type == "sunshine:month":
         df = _read_data([db.SUNSHINE_DAILY_MINUTES])
         chart = charts.monthly_sunshine_boxplot_chart(df, station_abbr, year)

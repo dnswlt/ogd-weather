@@ -812,19 +812,32 @@ def monthly_sunshine_boxplot_chart(
 
 
 def monthly_temp_boxplot_chart(
-    df: pd.DataFrame, station_abbr: str, year: int
+    df: pd.DataFrame, station_abbr: str, year: int, facet="max"
 ) -> AltairChart:
 
+    if facet == "min":
+        col = db.TEMP_DAILY_MIN
+        color = _C["SkyBlue"]
+    elif facet == "max":
+        col = db.TEMP_DAILY_MAX
+        color = _C["CoralRed"]
+    elif facet in ("mean", "avg"):
+        facet = "avg"
+        col = db.TEMP_DAILY_MEAN
+        color = _C["Apricot"]
+    else:
+        raise ValueError(f"Invalid facet: {facet} (should be min/mean/max)")
+
     _verify_monthly_boxplot_data(df, station_abbr, year)
-    months = monthly_boxplot_chart_data(df[db.TEMP_DAILY_MAX])
+    months = monthly_boxplot_chart_data(df[col])
     return boxplot_chart(
         months,
         x_col="month_name",
         x_title="Month",
-        y_title="Daily max. temp. (° C)",
+        y_title=f"Daily {facet}. temp. (° C)",
         sort_field="month_num",
-        title=f"Daily max. temperature for each month in {year}",
-        color=_C["DustyRose"],
+        title=f"Daily {facet}. temperature for each month in {year}",
+        color=color,
     )
 
 
@@ -914,7 +927,6 @@ def find_spells(runs: pd.Series, min_days=1):
         },
         index=edges.index[:-1],
     )
-    print(df.index)
     # Filter down to rows with at least min_days duration.
     return df[df["duration_days"] >= min_days]
 

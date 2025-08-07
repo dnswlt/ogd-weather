@@ -52,5 +52,26 @@ export function initYearPage() {
         document.getElementById("drywet-legend-toggle")?.addEventListener("click", (e) =>
             toggleLegend(e.target, "drywet-legend-content")
         );
+
+        // Event handling for tabbed container widgets.
+        document.querySelectorAll('div[role="tablist"]').forEach(tablist => {
+            tablist.addEventListener("click", e => {
+                const btn = e.target.closest('button[role="tab"]');
+                if (!btn || !tablist.contains(btn)) return;
+
+                // Update aria-selected for highlighting selected button.
+                tablist.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', 'false'));
+                btn.setAttribute('aria-selected', 'true');
+
+                // Update hx-vals on this widget's loader div.
+                // Its values ("facet") are used as query parameters by the spec loader.
+                const widget = tablist.closest('.tab-widget');
+                const loader = widget.querySelector('.vega-spec-loader');
+                loader.setAttribute('hx-vals', JSON.stringify({ facet: btn.dataset.facet }));
+
+                // Tell HTMX to refresh the loader.
+                htmx.trigger(loader, 'refresh');
+            });
+        });
     });
 }

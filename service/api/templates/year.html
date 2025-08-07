@@ -172,22 +172,43 @@
         <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Daily maximum temperature</h2>
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
 
-            Distribution of daily maximum temperatures by month.
+            Distribution of daily min/avg/max temperatures by month.
             Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
                 target="_blank">box plot</a> shows the middle 50% (the interquartile range; IQR) of temperatures for
             that
             month. The whiskers
             indicate the minimum and maximum values.
         </p>
-        <div>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
-                    hx-get="/stations/{station}/charts/year/{year}/temperature:month" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML">
-                    <!-- Vega script goes here -->
-                </div>
-                <div id="temperature-month-chart" class="w-full overflow-hidden"></div>
+
+        <!-- Tabs -- Click events are registered in "year.js" -->
+        <div class="tab-widget mb-12">
+            <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200"
+                data-widget-tabs>
+                <!-- Min temp -->
+                <button data-facet="min" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                    Min.&nbsp;temp
+                </button>
+                <!-- Mean temp -->
+                <button data-facet="mean" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                    Avg.&nbsp;temp
+                </button>
+                <!-- Max temp -->
+                <button data-facet="max" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                    Max.&nbsp;temp
+                </button>
             </div>
+
+            <!-- Loader: carries station+year from the global form + its own hx-vals facet -->
+            <div class="vega-spec-loader" id="temperature-month-spec" hx-get="/stations/{station}/charts/year/{year}/temperature:month" hx-ext="path-params"
+                hx-trigger="load, change from:#chart-controls, refresh" hx-include="#chart-controls"
+                hx-vals='{"facet":"max"}' hx-target="this" hx-swap="innerHTML"></div>
+            <div id="temperature-month-chart" class="w-full overflow-hidden"></div>
         </div>
 
         <!-- Monthly humidity distribution -->
