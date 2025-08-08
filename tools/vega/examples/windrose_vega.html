@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        .vis {
+            width: 100%;
+            height: 300px;
+            border: 1px solid black;
+            display: flex;
+        }
+
+        body {
+            font-family: sans-serif;
+        }
+    </style>
+    <script type="text/javascript" src="https://unpkg.com/vega@6"></script>
+    <script type="text/javascript" src="https://unpkg.com/vega-lite@5.20.1"></script>
+    <script type="text/javascript" src="https://unpkg.com/vega-embed@6"></script>
+</head>
+
+<body>
+
+    <h1>Vega Wind Rose</h1>
+
+    <p>
+        This is Vega, not Vega-Lite!
+    </p>
+    
+    <div class="vis" id="vis"></div>
+
+    <script>
+        (function (vegaEmbed) {
+            var spec = {
+                "$schema": "https://vega.github.io/schema/vega/v6.json",
+                "description": "A fully responsive, layered wind rose chart where radii scale with the container size.",
+                "autosize": { "type": "pad", "contains": "padding" },
+
+                "signals": [
+                    {
+                        "name": "width",
+                        "init": "warn('init_width_container size', containerSize()[0])",
+                        "on": [{ "events": "window:resize", "update": "warn('update', containerSize()[0])" }]
+                    },
+                    {
+                        "name": "height",
+                        "init": "containerSize()[1]",
+                        "on": [{ "events": "window:resize", "update": "containerSize()[1]" }]
+                    },
+                    {
+                        "name": "max_pixel_radius",
+                        "update": "min(width, height) / 2 * 0.95"
+                    }
+                ],
+
+                "data": [
+                    {
+                        "name": "wind_data",
+                        "values": [
+                            { "deg": 0, "speed_cat1": 30, "speed_cat2": 20, "speed_cat3": 5 },
+                            { "deg": 10, "speed_cat1": 35, "speed_cat2": 25, "speed_cat3": 10 },
+                            { "deg": 20, "speed_cat1": 40, "speed_cat2": 30, "speed_cat3": 12 },
+                            { "deg": 30, "speed_cat1": 38, "speed_cat2": 28, "speed_cat3": 8 },
+                            { "deg": 40, "speed_cat1": 32, "speed_cat2": 22, "speed_cat3": 6 },
+                            { "deg": 50, "speed_cat1": 25, "speed_cat2": 15, "speed_cat3": 4 },
+                            { "deg": 60, "speed_cat1": 20, "speed_cat2": 10, "speed_cat3": 2 },
+                            { "deg": 70, "speed_cat1": 15, "speed_cat2": 8, "speed_cat3": 1 },
+                            { "deg": 80, "speed_cat1": 12, "speed_cat2": 5, "speed_cat3": 1 },
+                            { "deg": 90, "speed_cat1": 10, "speed_cat2": 4, "speed_cat3": 0 },
+                            { "deg": 100, "speed_cat1": 8, "speed_cat2": 3, "speed_cat3": 0 },
+                            { "deg": 110, "speed_cat1": 10, "speed_cat2": 4, "speed_cat3": 1 },
+                            { "deg": 120, "speed_cat1": 12, "speed_cat2": 6, "speed_cat3": 2 },
+                            { "deg": 130, "speed_cat1": 15, "speed_cat2": 8, "speed_cat3": 3 },
+                            { "deg": 140, "speed_cat1": 18, "speed_cat2": 10, "speed_cat3": 4 },
+                            { "deg": 150, "speed_cat1": 22, "speed_cat2": 14, "speed_cat3": 5 },
+                            { "deg": 160, "speed_cat1": 28, "speed_cat2": 18, "speed_cat3": 8 },
+                            { "deg": 170, "speed_cat1": 35, "speed_cat2": 25, "speed_cat3": 12 },
+                            { "deg": 180, "speed_cat1": 40, "speed_cat2": 30, "speed_cat3": 15 },
+                            { "deg": 190, "speed_cat1": 38, "speed_cat2": 28, "speed_cat3": 13 },
+                            { "deg": 200, "speed_cat1": 35, "speed_cat2": 25, "speed_cat3": 10 },
+                            { "deg": 210, "speed_cat1": 30, "speed_cat2": 20, "speed_cat3": 8 },
+                            { "deg": 220, "speed_cat1": 25, "speed_cat2": 15, "speed_cat3": 6 },
+                            { "deg": 230, "speed_cat1": 20, "speed_cat2": 10, "speed_cat3": 4 },
+                            { "deg": 240, "speed_cat1": 15, "speed_cat2": 8, "speed_cat3": 2 },
+                            { "deg": 250, "speed_cat1": 12, "speed_cat2": 6, "speed_cat3": 1 },
+                            { "deg": 260, "speed_cat1": 10, "speed_cat2": 4, "speed_cat3": 1 },
+                            { "deg": 270, "speed_cat1": 8, "speed_cat2": 3, "speed_cat3": 0 },
+                            { "deg": 280, "speed_cat1": 10, "speed_cat2": 5, "speed_cat3": 1 },
+                            { "deg": 290, "speed_cat1": 12, "speed_cat2": 8, "speed_cat3": 2 },
+                            { "deg": 300, "speed_cat1": 15, "speed_cat2": 10, "speed_cat3": 4 },
+                            { "deg": 310, "speed_cat1": 18, "speed_cat2": 12, "speed_cat3": 5 },
+                            { "deg": 320, "speed_cat1": 22, "speed_cat2": 15, "speed_cat3": 6 },
+                            { "deg": 330, "speed_cat1": 25, "speed_cat2": 18, "speed_cat3": 8 },
+                            { "deg": 340, "speed_cat1": 28, "speed_cat2": 22, "speed_cat3": 10 },
+                            { "deg": 350, "speed_cat1": 29, "speed_cat2": 21, "speed_cat3": 8 }
+                        ],
+                        "transform": [
+                            { "type": "formula", "as": "r1", "expr": "datum.speed_cat1" },
+                            { "type": "formula", "as": "r2", "expr": "datum.speed_cat1 + datum.speed_cat2" },
+                            { "type": "formula", "as": "r3", "expr": "datum.speed_cat1 + datum.speed_cat2 + datum.speed_cat3" },
+                            {
+                                "type": "joinaggregate",
+                                "ops": ["max"],
+                                "fields": ["r3"],
+                                "as": ["max_total_radius"]
+                            }
+                        ]
+                    }
+                ],
+
+                "marks": [
+                    {
+                        "type": "arc",
+                        "from": { "data": "wind_data" },
+                        "encode": {
+                            "update": {
+                                "x": { "signal": "width / 2" },
+                                "y": { "signal": "height / 2" },
+                                "startAngle": { "signal": "(datum.deg - 5) * PI / 180 " },
+                                "endAngle": { "signal": "(datum.deg + 5) * PI / 180" },
+                                "innerRadius": { "signal": "(datum.r2 / datum.max_total_radius) * max_pixel_radius" },
+                                "outerRadius": { "signal": "(datum.r3 / datum.max_total_radius) * max_pixel_radius" },
+                                "fill": { "value": "#666666" },
+                                "tooltip": { "signal": "{'Direction': datum.deg + '°', 'High Speed Freq.': datum.speed_cat3}" }
+                            }
+                        }
+                    },
+                    {
+                        "type": "arc",
+                        "from": { "data": "wind_data" },
+                        "encode": {
+                            "update": {
+                                "x": { "signal": "width / 2" },
+                                "y": { "signal": "height / 2" },
+                                "startAngle": { "signal": "(datum.deg - 5) * PI / 180 " },
+                                "endAngle": { "signal": "(datum.deg + 5) * PI / 180" },
+                                "innerRadius": { "signal": "(datum.r1 / datum.max_total_radius) * max_pixel_radius" },
+                                "outerRadius": { "signal": "(datum.r2 / datum.max_total_radius) * max_pixel_radius" },
+                                "fill": { "value": "#aaaaaa" },
+                                "tooltip": { "signal": "{'Direction': datum.deg + '°', 'Medium Speed Freq.': datum.speed_cat2}" }
+                            }
+                        }
+                    },
+                    {
+                        "type": "arc",
+                        "from": { "data": "wind_data" },
+                        "encode": {
+                            "update": {
+                                "x": { "signal": "width / 2" },
+                                "y": { "signal": "height / 2" },
+                                "startAngle": { "signal": "(datum.deg - 5) * PI / 180 " },
+                                "endAngle": { "signal": "(datum.deg + 5) * PI / 180" },
+                                "innerRadius": { "value": 0 },
+                                "outerRadius": { "signal": "(datum.r1 / datum.max_total_radius) * max_pixel_radius" },
+                                "fill": { "value": "#dddddd" },
+                                "tooltip": { "signal": "{'Direction': datum.deg + '°', 'Low Speed Freq.': datum.speed_cat1}" }
+                            }
+                        }
+                    }
+                ]
+            };
+
+            function showError(el, error) {
+                el.innerHTML = ('<div style="color:red;">'
+                    + '<p>JavaScript Error: ' + error.message + '</p>'
+                    + "<p>This usually means there's a typo in your chart specification. "
+                    + "See the javascript console for the full traceback.</p>"
+                    + '</div>');
+                throw error;
+            }
+            const el = document.getElementById('vis');
+            vegaEmbed(`#${vis.id}`, spec, { "mode": "vega", "actions": false })
+                .catch(error => showError(el, error));
+        })(vegaEmbed);
+
+    </script>
+</body>
+
+</html>
