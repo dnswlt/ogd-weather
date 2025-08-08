@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        .vis.vega-embed {
+            width: 100%;
+            display: flex;
+        }
+
+        .vis.vega-embed details,
+        .vis.vega-embed details summary {
+            position: relative;
+        }
+        body {
+            font-family: sans-serif;
+        }
+    </style>
+    <script type="text/javascript" src="https://unpkg.com/vega@5"></script>
+    <script type="text/javascript" src="https://unpkg.com/vega-lite@5.20.1"></script>
+    <script type="text/javascript" src="https://unpkg.com/vega-embed@6"></script>
+</head>
+
+<body>
+    <h1>Arcs with varying radii</h1>
+
+    <h2>Radius as a mark property</h2>
+    <p>
+        This "works", but it's not what we want: specifying the radius as a mark property
+        defines a specific pixel size of the chart, not a relative size of one radius
+        compared to others. **Not responsive**.
+    </p>
+    <div class="vis" id="vis1"></div>
+    <script>
+        (function (vegaEmbed) {
+            var spec = {
+                "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+                "description": "A simple radial chart with embedded data.",
+                "width": 600,
+                "height": 400,
+                "data": {
+                    "values": [
+                        { "n": 0, "n2": 0.3, "r": 20 },
+                        { "n": 0.3, "n2": 0.6, "r": 12 },
+                        { "n": 0.6, "n2": 2, "r": 23 },
+                        { "n": 2, "n2": 2.5, "r": 47 },
+                        { "n": 2.5, "n2": 2.9, "r": 6 },
+                        { "n": 2.8, "n2": 6.28318, "r": 2 }
+                    ]
+                },
+                "layer": [{
+                    "mark": {
+                        "type": "arc",
+                        "innerRadius": 0,
+                        "stroke": "#000",
+                        "radius": { "expr": "sqrt(datum.r) * 20" }
+                    }
+                }],
+                "encoding": {
+                    "theta": { "field": "n", "type": "quantitative" },
+                    "color": { "field": "r", "type": "nominal" },
+                    "order": { "field": "r", "sort": "descending" }
+                }
+            }
+                ;
+            var embedOpt = { "mode": "vega-lite" };
+
+            function showError(el, error) {
+                el.innerHTML = ('<div style="color:red;">'
+                    + '<p>JavaScript Error: ' + error.message + '</p>'
+                    + "<p>This usually means there's a typo in your chart specification. "
+                    + "See the javascript console for the full traceback.</p>"
+                    + '</div>');
+                throw error;
+            }
+            const el = document.getElementById('vis');
+            vegaEmbed("#vis1", spec, embedOpt)
+                .catch(error => showError(el, error));
+        })(vegaEmbed);
+
+    </script>
+
+
+
+    <h2>Radius as an encoding property</h2>
+    <p>
+        This is what we want, but it doesn't work due to 
+        
+        https://github.com/vega/vega-lite/issues/7957
+        
+    </p>
+    <div class="vis" id="vis2"></div>
+    <script>
+        (function (vegaEmbed) {
+            var spec = {
+                "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+                "description": "A simple radial chart with embedded data.",
+                "width": 600,
+                "height": 400,
+                "data": {
+                    "values": [
+                        { "n": 0, "n2": 0.3, "r": 20 },
+                        { "n": 0.3, "n2": 0.6, "r": 12 },
+                        { "n": 0.6, "n2": 2, "r": 23 },
+                        { "n": 2, "n2": 2.5, "r": 47 },
+                        { "n": 2.5, "n2": 2.9, "r": 6 },
+                        { "n": 2.8, "n2": 6.28318, "r": 2 }
+                    ]
+                },
+                "layer": [{
+                    "mark": {
+                        "type": "arc",
+                        "innerRadius": 0,
+                        "stroke": "#000",
+                    }
+                }],
+                "encoding": {
+                    "theta": { "field": "n", "type": "quantitative", "stacked": true },
+                    "color": { "field": "r", "type": "nominal" },
+                    "radius": { "field": "r" },
+                    "order": { "field": "r", "sort": "descending" }
+                }
+            }
+                ;
+            var embedOpt = { "mode": "vega-lite" };
+
+            function showError(el, error) {
+                el.innerHTML = ('<div style="color:red;">'
+                    + '<p>JavaScript Error: ' + error.message + '</p>'
+                    + "<p>This usually means there's a typo in your chart specification. "
+                    + "See the javascript console for the full traceback.</p>"
+                    + '</div>');
+                throw error;
+            }
+            const el = document.getElementById('vis');
+            vegaEmbed("#vis2", spec, embedOpt)
+                .catch(error => showError(el, error));
+        })(vegaEmbed);
+
+    </script>
+</body>
+
+</html>
