@@ -190,6 +190,12 @@ func (s *Server) withRequestLogging(next http.Handler) http.Handler {
 
 func (s *Server) withCacheControl(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Never cache our own files in /static/dist.
+		if strings.HasPrefix(r.URL.Path, "/static/dist/") {
+			h.ServeHTTP(w, r)
+			return
+		}
+
 		// Set a max-age of 1 year for static resources that do not change.
 		// We use version numbers in file names for cache busting.
 		ext := filepath.Ext(r.URL.Path)
