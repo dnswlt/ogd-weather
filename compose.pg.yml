@@ -1,0 +1,14 @@
+services:
+  charts:
+    environment:
+      OGD_POSTGRES_URL: postgresql+psycopg://ogd_weather@host.docker.internal:5432/ogd_weather
+      PGPASSWORD: "${PGPASSWORD}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  db-updater:
+    environment:
+      OGD_POSTGRES_URL: postgresql+psycopg://ogd_weather@host.docker.internal:5432/ogd_weather
+      PGPASSWORD: "${PGPASSWORD}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

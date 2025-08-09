@@ -8,12 +8,8 @@ services:
       - "8082:8080"
     environment:
       OGD_BASE_DIR: "/app/efs"
-      OGD_POSTGRES_URL: postgresql+psycopg://ogd_weather@host.docker.internal:5432/ogd_weather
-      PGPASSWORD: "${PGPASSWORD}"
     volumes:
       - ./data:/app/efs:ro # local SQLite folder → /app/efs in container
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
   api:
     build:
       context: ./service/api
@@ -33,9 +29,5 @@ services:
     container_name: db-updater
     environment:
       OGD_BASE_DIR: "/app/efs"
-      OGD_POSTGRES_URL: postgresql+psycopg://ogd_weather@host.docker.internal:5432/ogd_weather
-      PGPASSWORD: "${PGPASSWORD}"
     volumes:
-      - ./data:/app/efs:rw # updater writes new SQLite DB here
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - ./data:/app/efs:rw # updater writes CSV files and SQLite DB here

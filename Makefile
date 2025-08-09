@@ -5,7 +5,12 @@ VERSION    ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILDTIME  ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
-COMPOSE = docker compose
+# Default DB is postgres. Switch with: `make <command> DB=sqlite`
+ifeq ($(DB),sqlite)
+  COMPOSE := docker compose -f compose.yml
+else
+  COMPOSE := docker compose -f compose.yml -f compose.pg.yml --env-file .env
+endif
 
 # AWS settings (must be provided via environment or .env file)
 AWS_ACCOUNT_ID ?= ACCOUNT_ID_NOT_SET
