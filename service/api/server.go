@@ -191,7 +191,8 @@ func (s *Server) withRequestLogging(next http.Handler) http.Handler {
 func (s *Server) withCacheControl(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Never cache our own files in /static/dist.
-		if strings.HasPrefix(r.URL.Path, "/static/dist/") {
+		// Since we're using StripPrefix, the path appears as "dist/"here.
+		if strings.HasPrefix(r.URL.Path, "dist/") {
 			h.ServeHTTP(w, r)
 			return
 		}
