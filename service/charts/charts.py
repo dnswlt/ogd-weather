@@ -715,6 +715,7 @@ def boxplot_chart(
     x_col: str,
     x_title: str,
     y_title: str,
+    y_domain: tuple[float, float] | None = None,
     title: str = "Untitled chart",
     sort_field: str | None = None,
     color: str = _C["Tangerine"],
@@ -744,9 +745,12 @@ def boxplot_chart(
             field=sort_field, op="min", order="ascending"
         )
     x = alt.X(f"{x_col}:O").sort(sort_order).title(x_title)
+    y = alt.Y("max:Q").axis(title=y_title)
+    if y_domain:
+        y = y.scale(domain=y_domain)
     upper_whisker = base.mark_rule().encode(
         x=x,
-        y=alt.Y("max:Q").axis(title=y_title),
+        y=y,
         y2=alt.Y2("p75"),
         size=alt.value(2),
         color=alt.value(_G["MediumGray"]),
@@ -859,6 +863,14 @@ def monthly_sunshine_boxplot_chart(
 def monthly_temp_boxplot_chart(
     df: pd.DataFrame, station_abbr: str, year: int, facet="max"
 ) -> AltairChart:
+    """Returns a monthly temperature chart with one box plot per month.
+
+    Args:
+        df: Input data. Index: datetime. Required columns: "station_abbr"
+            and all three temperature columns TEMP_DAILY_MIN/MEAN/MAX.
+        year: the year for which df contains data.
+        facet: the facet to create a chart for: ("min", "mean", "max").
+    """
 
     if facet == "min":
         col = db.TEMP_DAILY_MIN
@@ -874,6 +886,12 @@ def monthly_temp_boxplot_chart(
         raise ValueError(f"Invalid facet: {facet} (should be min/mean/max)")
 
     _verify_monthly_boxplot_data(df, station_abbr, year)
+
+    # Calculate min/max across min/mean/max temperatures to have equal y-scales.
+    temps = df[[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]]
+    y_min = temps.to_numpy().min()
+    y_max = temps.to_numpy().max()
+
     months = monthly_boxplot_chart_data(df[col])
     return boxplot_chart(
         months,
@@ -883,6 +901,7 @@ def monthly_temp_boxplot_chart(
         sort_field="month_num",
         title=f"Daily {facet}. temperature for each month in {year}",
         color=color,
+        y_domain=[y_min, y_max],
     )
 
 
