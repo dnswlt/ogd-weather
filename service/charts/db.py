@@ -3,7 +3,7 @@ import io
 import logging
 import os
 import time
-from typing import Any, Collection
+from typing import Any, Callable, Collection
 from urllib.parse import urlparse
 import uuid
 import numpy as np
@@ -332,29 +332,41 @@ sa_table_x_station_data_summary = sa.Table(
 )
 
 
-sa_table_x_station_var_summary_stats = sa.Table(
-    "x_station_var_summary_stats",
-    metadata,
-    sa.Column("agg_name", sa.Text, primary_key=True),
-    sa.Column("station_abbr", sa.Text, primary_key=True),
-    sa.Column("variable", sa.Text, primary_key=True),
-    sa.Column("source_granularity", sa.Text),
-    # Min/max including date of occurrence
-    sa.Column("min_value", sa.REAL),
-    sa.Column("min_value_date", sa.Text),
-    sa.Column("mean_value", sa.REAL),
-    sa.Column("max_value", sa.REAL),
-    sa.Column("max_value_date", sa.Text),
-    # Percentiles (10, 25, 50, 75, 90)
-    sa.Column("p10_value", sa.REAL),
-    sa.Column("p25_value", sa.REAL),
-    sa.Column("median_value", sa.REAL),
-    sa.Column("p75_value", sa.REAL),
-    sa.Column("p90_value", sa.REAL),
-    # Sum
-    sa.Column("value_sum", sa.REAL),
-    # Count
-    sa.Column("value_count", sa.Integer),
+def define_station_var_summary_stats_table(table_name: str) -> sa.Table:
+    return sa.Table(
+        table_name,
+        metadata,
+        sa.Column("agg_name", sa.Text, primary_key=True),
+        sa.Column("station_abbr", sa.Text, primary_key=True),
+        sa.Column("variable", sa.Text, primary_key=True),
+        sa.Column("time_slice", sa.Text, primary_key=True),
+        sa.Column("source_granularity", sa.Text),
+        # Min/max including date of occurrence
+        sa.Column("min_value", sa.REAL),
+        sa.Column("min_value_date", sa.Text),
+        sa.Column("mean_value", sa.REAL),
+        sa.Column("max_value", sa.REAL),
+        sa.Column("max_value_date", sa.Text),
+        # Percentiles (10, 25, 50, 75, 90)
+        sa.Column("p10_value", sa.REAL),
+        sa.Column("p25_value", sa.REAL),
+        sa.Column("median_value", sa.REAL),
+        sa.Column("p75_value", sa.REAL),
+        sa.Column("p90_value", sa.REAL),
+        # Sum
+        sa.Column("value_sum", sa.REAL),
+        # Count
+        sa.Column("value_count", sa.Integer),
+    )
+
+
+sa_table_x_station_var_summary_stats = define_station_var_summary_stats_table(
+    "x_station_var_summary_stats"
+)
+
+
+sa_table_x_station_var_summary_stats_month = define_station_var_summary_stats_table(
+    "x_station_var_summary_stats_month"
 )
 
 
@@ -695,12 +707,49 @@ def recreate_station_var_summary_stats(engine: sa.Engine) -> None:
         # Recreate table
         sa_table_x_station_var_summary_stats.drop(conn, checkfirst=True)
         sa_table_x_station_var_summary_stats.create(conn)
-        # Insert data for aggregations (for now, just one).
+
+        sa_table_x_station_var_summary_stats_month.drop(conn, checkfirst=True)
+        sa_table_x_station_var_summary_stats_month.create(conn)
+
+        # Insert data for aggregations.
         insert_ref_1991_2020_summary_stats(conn)
+        insert_ref_1991_2020_summary_stats_month(conn)
 
 
 def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
-    """Inserts the 1991-2020 reference period into sa_table_x_station_var_summary_stats."""
+    insert_summary_stats_from_daily_measurements(
+        conn,
+        dest_table=sa_table_x_station_var_summary_stats,
+        time_slicer=lambda d: "*",
+        agg_name=AGG_NAME_REF_1991_2020,
+        from_date=datetime.datetime(1991, 1, 1),
+        to_date=datetime.datetime(2021, 1, 1),
+    )
+
+
+def insert_ref_1991_2020_summary_stats_month(conn: sa.Connection) -> None:
+    def _month_str(d: pd.DataFrame):
+        return pd.to_datetime(d["reference_timestamp"]).dt.strftime("%m")
+
+    insert_summary_stats_from_daily_measurements(
+        conn,
+        dest_table=sa_table_x_station_var_summary_stats_month,
+        time_slicer=_month_str,
+        agg_name=AGG_NAME_REF_1991_2020,
+        from_date=datetime.datetime(1991, 1, 1),
+        to_date=datetime.datetime(2021, 1, 1),
+    )
+
+
+def insert_summary_stats_from_daily_measurements(
+    conn: sa.Connection,
+    dest_table: sa.Table,
+    time_slicer: Callable[[pd.DataFrame], pd.Series],
+    agg_name: str,
+    from_date: datetime.datetime,
+    to_date: datetime.datetime,
+) -> None:
+    """Inserts summary stats for the given reference period into sa_table_x_station_var_summary_stats."""
     # All daily measurement variables for which to build summary stats.
     daily_vars = [
         TEMP_DAILY_MIN,
@@ -719,7 +768,9 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
         """Returns summary stats for all vars in var_cols as an SQL INSERT tuple."""
         params = []
 
-        for station_abbr, grp in df.groupby("station_abbr"):
+        for (station_abbr, time_slice), grp in df.groupby(
+            ["station_abbr", "time_slice"]
+        ):
             for var in var_cols:
                 if grp[var].isna().all():
                     continue  # No data for this variable
@@ -728,14 +779,14 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
                     + [pctl(10), pctl(25), pctl(50), pctl(75), pctl(90)]
                 )
                 # Get reference_timestamp value at the index of the min/max value.
-                # Convert to Python datetime, which conn.execute understands.
                 min_date = grp.loc[a["idxmin"], date_col]
                 max_date = grp.loc[a["idxmax"], date_col]
                 params.append(
                     {
-                        "agg_name": AGG_NAME_REF_1991_2020,
+                        "agg_name": agg_name,
                         "station_abbr": station_abbr,
                         "variable": var,
+                        "time_slice": time_slice,
                         "source_granularity": granularity,
                         "min_value": a["min"],
                         "min_value_date": min_date,
@@ -752,7 +803,6 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
                         "value_count": int(a["count"]),
                     }
                 )
-
         return params
 
     sql = f"""
@@ -761,7 +811,8 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
             reference_timestamp,
             {', '.join(daily_vars)}
         FROM {TABLE_DAILY_MEASUREMENTS.name}
-        WHERE reference_timestamp >= '1991-01-01' AND reference_timestamp < '2021-01-01'
+        WHERE reference_timestamp >= '{utc_datestr(from_date)}' 
+            AND reference_timestamp < '{utc_datestr(to_date)}'
     """
     df = pd.read_sql_query(
         sql,
@@ -773,7 +824,12 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
         },
     )
 
+    # Apply time_slicer to get time slice dimension.
+    df["time_slice"] = time_slicer(df)
+
     # Add DX_SOURCE_DATE_RANGE column containing epoch seconds.
+    # This derived variable can be used to determine the overall time range
+    # over which data was aggregated.
     delta_days = pd.to_datetime(df["reference_timestamp"]) - pd.Timestamp("1970-01-01")
     df[DX_SOURCE_DATE_RANGE] = delta_days / pd.Timedelta(days=1)
 
@@ -785,7 +841,8 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
         granularity="daily",
     )
 
-    def _day_count(series, condition):
+    def _day_count(series: pd.Series, condition: pd.Series):
+        # Select condition where series had a value, else propagate NaN.
         return condition.where(series.notna()).astype(float)
 
     # Summary stats for generated annual metrics based on daily values.
@@ -797,6 +854,7 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
     dc = pd.DataFrame(
         {
             "station_abbr": df["station_abbr"],
+            "time_slice": df["time_slice"],
             "year": df["reference_timestamp"].str[:4] + "-01-01",
             # Day count metrics
             DX_SUMMER_DAYS_ANNUAL_COUNT: _day_count(
@@ -817,14 +875,15 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
             ),
         }
     )
+    key_columns = ["station_abbr", "year", "time_slice"]
     # All variables defined in dc:
-    dc_vars = [c for c in dc.columns if c not in ("station_abbr", "year")]
+    dc_vars = [c for c in dc.columns if c not in key_columns]
 
     # Sum the 0/1 daily values to get day counts by year, retaining NaNs.
     def _nan_safe_sum(s):
         return s.sum() if s.notna().any() else float("nan")
 
-    dcy = dc.groupby(["station_abbr", "year"])[dc_vars].agg(_nan_safe_sum).reset_index()
+    dcy = dc.groupby(key_columns)[dc_vars].agg(_nan_safe_sum).reset_index()
     # Now aggregate away the year (for each station) to compute summary stats
     # (same as above for plain daily variables).
     params.extend(
@@ -832,10 +891,8 @@ def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
     )
 
     if params:
-        insert_stmt = sa.insert(sa_table_x_station_var_summary_stats)
+        insert_stmt = sa.insert(dest_table)
         conn.execute(insert_stmt, params)
-
-    conn.commit()
 
 
 def recreate_station_data_summary(engine: sa.Engine) -> None:
@@ -1292,7 +1349,7 @@ def read_station_var_summary_stats(
             params[p] = var
         filters.append(f"variable IN ({', '.join(placeholders)})")
 
-    excluded_col_names = set(["agg_name"])
+    excluded_col_names = set(["agg_name", "time_slice"])
     columns = [
         c
         for c in sa_table_x_station_var_summary_stats.columns

@@ -73,7 +73,7 @@ to (HTML-sanitized) div ID ("-chart" appended to the chart type; e.g. `humidity-
     </div>
 ```
 
-Alternatively, we can specify the target div ID explicitly using `data-vega-target`, as explained below.
+Alternatively, specify the target div ID explicitly using `data-vega-target`, as explained below.
 
 #### Case 2: Tabbed charts
 
@@ -104,7 +104,7 @@ chart, and the target div itself:
     </div>
 ```
 
-The Vega spec name is irrelevant in this case.
+Since `data-vega-target` identifies the target div, the Vega spec name is irrelevant in this case.
 
 #### Case 3: Multiple charts
 
