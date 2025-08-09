@@ -62,7 +62,7 @@ There are three cases to consider:
 
 For the simplest case of single charts, you can use the implicit mapping from
 the chart type (as specified in the URL path, e.g. `humidity:month`)
-to (HTML-sanitized) div ID (here: `humidity-month-chart`).
+to (HTML-sanitized) div ID ("-chart" appended to the chart type; e.g. `humidity-month-chart`).
 
 ```html
     <div>
