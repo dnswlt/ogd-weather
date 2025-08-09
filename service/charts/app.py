@@ -1,3 +1,4 @@
+from altair.utils import spec_to_html
 from contextlib import asynccontextmanager
 import datetime
 from io import StringIO
@@ -7,20 +8,15 @@ from urllib.parse import urlparse, urlunparse
 import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException, Request, status, Response
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
 from zoneinfo import ZoneInfo
+
 from . import charts
 from . import db
-from . import models
-from . import logging_config as _  # configure logging
 from .errors import NoDataError, StationNotFoundError
-from altair.utils import spec_to_html
+from . import logging_config as _  # configure logging
+from . import models
+from . import vega
 
-# Used for HTML exports
-# Keep in sync with versions in the "head.html" template!
-_VEGA_LITE_VERSION = "5.23.0"
-_VEGA_VERSION = "5.33.0"
-_VEGA_EMBED_VERSION = "6.29.0"
 
 logger = logging.getLogger("app")
 
@@ -144,9 +140,9 @@ def _render_html(request: Request, charts: dict[str, charts.AltairChart]) -> Res
     html = spec_to_html(
         chart.to_dict(),
         mode="vega-lite",
-        vega_version=_VEGA_VERSION,
-        vegalite_version=_VEGA_LITE_VERSION,
-        vegaembed_version=_VEGA_EMBED_VERSION,
+        vega_version=vega.VEGA_VERSION,
+        vegalite_version=vega.VEGA_LITE_VERSION,
+        vegaembed_version=vega.VEGA_EMBED_VERSION,
         base_url="https://unpkg.com",
     )
     return HTMLResponse(content=html)
@@ -300,6 +296,21 @@ async def get_year_chart(
                 columns=[db.PRECIP_MONTHLY_MM],
             )
         chart = charts.monthly_precipitation_bar_chart(df, df_ref, station_abbr, year)
+    elif chart_type == "windrose":
+        # This is a vanilla Vega chart, not a Vega-Lite chart.
+        with app.state.engine.begin() as conn:
+            df = db.read_hourly_measurements(
+                conn,
+                station_abbr,
+                from_date=datetime.datetime(year, 1, 1),
+                to_date=datetime.datetime(year + 1, 1, 1),
+                columns=[db.WIND_DIRECTION_HOURLY_MEAN, db.WIND_SPEED_HOURLY_MEAN],
+            )
+        return {
+            "vega_specs": {
+                "windrose": vega.windrose_chart(df),
+            }
+        }
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
 

@@ -27,33 +27,32 @@
     <p>
         This is Vega, not Vega-Lite!
     </p>
-    
+
     <div class="vis" id="vis"></div>
 
     <script>
         (function (vegaEmbed) {
             var spec = {
                 "$schema": "https://vega.github.io/schema/vega/v6.json",
-                "description": "A fully responsive, layered wind rose chart where radii scale with the container size.",
+                "description": "A fully responsive, layered wind rose chart where radii scale with the container size, with added cross-hairs and compass labels.",
                 "autosize": { "type": "pad", "contains": "padding" },
-
                 "signals": [
                     {
                         "name": "width",
-                        "init": "warn('init_width_container size', containerSize()[0])",
-                        "on": [{ "events": "window:resize", "update": "warn('update', containerSize()[0])" }]
+                        "init": "containerSize()[0]",
+                        "on": [{ "events": "window:resize", "update": "containerSize()[0]" }]
                     },
                     {
                         "name": "height",
                         "init": "containerSize()[1]",
                         "on": [{ "events": "window:resize", "update": "containerSize()[1]" }]
                     },
+                    { "name": "max_pixel_radius", "update": "min(width, height) / 2 * 0.9" },
                     {
-                        "name": "max_pixel_radius",
-                        "update": "min(width, height) / 2 * 0.95"
+                        "name": "chart_radius",
+                        "update": "max(100, data('wind_data')[0].max_total_radius)"
                     }
                 ],
-
                 "data": [
                     {
                         "name": "wind_data",
@@ -93,12 +92,20 @@
                             { "deg": 320, "speed_cat1": 22, "speed_cat2": 15, "speed_cat3": 6 },
                             { "deg": 330, "speed_cat1": 25, "speed_cat2": 18, "speed_cat3": 8 },
                             { "deg": 340, "speed_cat1": 28, "speed_cat2": 22, "speed_cat3": 10 },
-                            { "deg": 350, "speed_cat1": 29, "speed_cat2": 21, "speed_cat3": 8 }
+                            { "deg": 350, "speed_cat1": 5, "speed_cat2": 21, "speed_cat3": 8 }
                         ],
                         "transform": [
                             { "type": "formula", "as": "r1", "expr": "datum.speed_cat1" },
-                            { "type": "formula", "as": "r2", "expr": "datum.speed_cat1 + datum.speed_cat2" },
-                            { "type": "formula", "as": "r3", "expr": "datum.speed_cat1 + datum.speed_cat2 + datum.speed_cat3" },
+                            {
+                                "type": "formula",
+                                "as": "r2",
+                                "expr": "datum.speed_cat1 + datum.speed_cat2"
+                            },
+                            {
+                                "type": "formula",
+                                "as": "r3",
+                                "expr": "datum.speed_cat1 + datum.speed_cat2 + datum.speed_cat3"
+                            },
                             {
                                 "type": "joinaggregate",
                                 "ops": ["max"],
@@ -106,9 +113,22 @@
                                 "as": ["max_total_radius"]
                             }
                         ]
+                    },
+                    { "name": "grid_circles", "values": [{ "value": 90 }, { "value": 50 }] },
+                    {
+                        "name": "radial_lines",
+                        "transform": [{ "type": "sequence", "start": 0, "stop": 360, "step": 22.5 }]
+                    },
+                    {
+                        "name": "compass_labels",
+                        "values": [
+                            { "angle": 0, "label": "N" },
+                            { "angle": 90, "label": "E" },
+                            { "angle": 180, "label": "S" },
+                            { "angle": 270, "label": "W" }
+                        ]
                     }
                 ],
-
                 "marks": [
                     {
                         "type": "arc",
@@ -119,10 +139,16 @@
                                 "y": { "signal": "height / 2" },
                                 "startAngle": { "signal": "(datum.deg - 5) * PI / 180 " },
                                 "endAngle": { "signal": "(datum.deg + 5) * PI / 180" },
-                                "innerRadius": { "signal": "(datum.r2 / datum.max_total_radius) * max_pixel_radius" },
-                                "outerRadius": { "signal": "(datum.r3 / datum.max_total_radius) * max_pixel_radius" },
+                                "innerRadius": {
+                                    "signal": "(datum.r2 / chart_radius) * max_pixel_radius"
+                                },
+                                "outerRadius": {
+                                    "signal": "(datum.r3 / chart_radius) * max_pixel_radius"
+                                },
                                 "fill": { "value": "#666666" },
-                                "tooltip": { "signal": "{'Direction': datum.deg + '°', 'High Speed Freq.': datum.speed_cat3}" }
+                                "tooltip": {
+                                    "signal": "{'Direction': datum.deg + '°', 'High Speed Freq.': datum.speed_cat3}"
+                                }
                             }
                         }
                     },
@@ -135,10 +161,16 @@
                                 "y": { "signal": "height / 2" },
                                 "startAngle": { "signal": "(datum.deg - 5) * PI / 180 " },
                                 "endAngle": { "signal": "(datum.deg + 5) * PI / 180" },
-                                "innerRadius": { "signal": "(datum.r1 / datum.max_total_radius) * max_pixel_radius" },
-                                "outerRadius": { "signal": "(datum.r2 / datum.max_total_radius) * max_pixel_radius" },
+                                "innerRadius": {
+                                    "signal": "(datum.r1 / chart_radius) * max_pixel_radius"
+                                },
+                                "outerRadius": {
+                                    "signal": "(datum.r2 / chart_radius) * max_pixel_radius"
+                                },
                                 "fill": { "value": "#aaaaaa" },
-                                "tooltip": { "signal": "{'Direction': datum.deg + '°', 'Medium Speed Freq.': datum.speed_cat2}" }
+                                "tooltip": {
+                                    "signal": "{'Direction': datum.deg + '°', 'Medium Speed Freq.': datum.speed_cat2}"
+                                }
                             }
                         }
                     },
@@ -152,9 +184,74 @@
                                 "startAngle": { "signal": "(datum.deg - 5) * PI / 180 " },
                                 "endAngle": { "signal": "(datum.deg + 5) * PI / 180" },
                                 "innerRadius": { "value": 0 },
-                                "outerRadius": { "signal": "(datum.r1 / datum.max_total_radius) * max_pixel_radius" },
+                                "outerRadius": {
+                                    "signal": "(datum.r1 / chart_radius) * max_pixel_radius"
+                                },
                                 "fill": { "value": "#dddddd" },
-                                "tooltip": { "signal": "{'Direction': datum.deg + '°', 'Low Speed Freq.': datum.speed_cat1}" }
+                                "tooltip": {
+                                    "signal": "{'Direction': datum.deg + '°', 'Low Speed Freq.': datum.speed_cat1}"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "type": "rule",
+                        "from": { "data": "radial_lines" },
+                        "encode": {
+                            "update": {
+                                "x": { "signal": "width / 2" },
+                                "y": { "signal": "height / 2" },
+                                "x2": {
+                                    "signal": "width / 2 + max_pixel_radius * sin(datum.data * PI / 180)"
+                                },
+                                "y2": {
+                                    "signal": "height / 2 - max_pixel_radius * cos(datum.data * PI / 180)"
+                                },
+                                "stroke": { "value": "#ccc" },
+                                "strokeWidth": { "value": 1 },
+                                "strokeDash": { "value": [1, 1] }
+                            }
+                        }
+                    },
+                    {
+                        "type": "arc",
+                        "from": { "data": "grid_circles" },
+                        "encode": {
+                            "update": {
+                                "x": { "signal": "width / 2" },
+                                "y": { "signal": "height / 2" },
+                                "startAngle": { "value": 0 },
+                                "endAngle": { "signal": "2 * PI" },
+                                "innerRadius": {
+                                    "signal": "(datum.value / chart_radius) * max_pixel_radius"
+                                },
+                                "outerRadius": {
+                                    "signal": "(datum.value / chart_radius) * max_pixel_radius"
+                                },
+                                "stroke": { "value": "#ccc" },
+                                "strokeDash": { "value": [3, 3] },
+                                "strokeWidth": { "value": 1 },
+                                "fill": { "value": null }
+                            }
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "from": { "data": "compass_labels" },
+                        "encode": {
+                            "update": {
+                                "x": {
+                                    "signal": "width / 2 + (max_pixel_radius + 12) * sin(datum.angle * PI / 180)"
+                                },
+                                "y": {
+                                    "signal": "height / 2 - (max_pixel_radius + 12) * cos(datum.angle * PI / 180)"
+                                },
+                                "text": { "field": "label" },
+                                "align": { "value": "center" },
+                                "baseline": { "value": "middle" },
+                                "fontSize": { "value": 12 },
+                                "fontWeight": { "value": "normal" },
+                                "fill": { "value": "#888" },
                             }
                         }
                     }

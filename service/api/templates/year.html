@@ -294,6 +294,27 @@
                 <div id="humidity-month-chart" class="w-full overflow-hidden"></div>
             </div>
         </div>
+
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Wind</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Annual distribution of hourly average wind directions and speeds
+            (<a href="https://en.wikipedia.org/wiki/Wind_rose" class="text-blue-600 hover:underline">Wind rose</a>).
+        </p>
+        <div>
+            <div class="mb-8">
+                <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/year/{year}/windrose" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML">
+                    <!-- Vega script goes here -->
+                </div>
+                <!-- This is a Vega chart created without Altair, so we must set the (min-) height
+                     explicitly. Re: consistency with other charts shown on this page:
+                     Altair uses config.view.continuousHeight: 300 in its default theme:
+                     https://altair-viz.github.io/user_guide/customization.html#chart-themes
+                -->
+                <div id="windrose-chart" class="min-h-[400px] w-full overflow-hidden"></div>
+            </div>
+        </div>
     </main>
 
 
