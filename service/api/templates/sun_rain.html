@@ -65,21 +65,6 @@
 
         <!-- Charts -->
         <div>
-            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Rain days</h2>
-            <p class="text-sm text-gray-600 leading-relaxed mb-4">
-                Number of rain days, i.e. days with &geq; 1 mm total precipitation,
-                for each year during the selected period.
-            </p>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/raindays">
-                    <!-- <script> element with Vega from the backend goes here. -->
-                </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="raindays-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                </div>
-            </div>
 
             <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Sunny days</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
@@ -144,7 +129,23 @@
                 </div>
             </div>
 
-            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Daily rain</h2>
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Rain days</h2>
+            <p class="text-sm text-gray-600 leading-relaxed mb-4">
+                Number of rain days, i.e. days with &geq; 1 mm total precipitation,
+                for each year during the selected period.
+            </p>
+            <div class="mb-8">
+                <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/raindays">
+                    <!-- <script> element with Vega from the backend goes here. -->
+                </div>
+                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
+                <div id="raindays-chart" class="w-full overflow-hidden">
+                    <!-- Under Vega's control. Chart goes here. -->
+                </div>
+            </div>
+            
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Max. daily rain</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
                 Maximum rainfall on any given day of the selected period, by year.
             </p>

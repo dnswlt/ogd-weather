@@ -450,7 +450,7 @@ def frost_days_chart(
         predicate=df[db.TEMP_DAILY_MIN] < 0,
         period=period,
         title="Number of frost days (min. < 0 °C)",
-        palette=colors.Tab20("SkyBlue"),
+        palette=colors.Tab20("AshGray"),
     )
 
 
@@ -534,7 +534,7 @@ def rainiest_day_chart(
         typ="bar",
         title=title,
         y_label="mm",
-        palette=colors.Tab20("Aqua"),
+        palette=colors.Tab20("SteelBlue"),
     )
 
 
