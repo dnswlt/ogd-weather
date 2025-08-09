@@ -108,3 +108,8 @@ This starts:
 - **Go API service** on <http://localhost:8081>  
 
 The Go backend is automatically configured to call the charts service via the internal Docker network.
+
+## References
+
+- [service/api/templates/README.md](./service/api/templates/README.md) explains how Vega specs are embedded
+  in the UI.

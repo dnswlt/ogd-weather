@@ -2,8 +2,6 @@
 
 This directory contains the HTML templates for pages and snippets loaded via htmx.
 
-There's no magic here, but some aspects that are worth noting are documented below.
-
 ## Embedding Vega charts
 
 The frontend uses htmx to query individual charts from the backends.
