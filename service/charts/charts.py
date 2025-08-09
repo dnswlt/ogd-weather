@@ -1661,7 +1661,7 @@ def daily_measurements(
 
 def station_period_stats(s: pd.Series) -> models.StationPeriodStats:
     def _vstats(var: str):
-        v = s[var]
+        v = s.loc[var]
         return models.VariableStats(
             min_value=float(v["min_value"]),
             min_value_date=date.fromisoformat(v["min_value_date"]),

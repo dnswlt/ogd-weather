@@ -373,6 +373,14 @@ sa_table_x_station_var_summary_stats_month = define_station_var_summary_stats_ta
 # Aggregation names in STATION_VAR_SUMMARY_STATS_TABLE_NAME
 AGG_NAME_REF_1991_2020 = "ref_1991_2020"
 
+# Time slice value for aggregations that have no actual time slice.
+TS_ALL = "*"
+
+
+def ts_month(month: int) -> str:
+    """Returns the time_slice string for the given month."""
+    return f"{month:02d}"
+
 
 def agg_none(func, items):
     """Apply func (e.g. min or max) to items, ignoring None.
@@ -698,10 +706,11 @@ def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
 
 def recreate_views(engine: sa.Engine) -> None:
     recreate_station_data_summary(engine)
-    recreate_station_var_summary_stats(engine)
+    recreate_reference_period_stats(engine)
+    recreate_monthly_reference_period_stats(engine)
 
 
-def recreate_station_var_summary_stats(engine: sa.Engine) -> None:
+def recreate_reference_period_stats(engine: sa.Engine) -> None:
     """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020."""
     with engine.begin() as conn:
         # Recreate table
@@ -712,33 +721,29 @@ def recreate_station_var_summary_stats(engine: sa.Engine) -> None:
         sa_table_x_station_var_summary_stats_month.create(conn)
 
         # Insert data for aggregations.
-        insert_ref_1991_2020_summary_stats(conn)
-        insert_ref_1991_2020_summary_stats_month(conn)
+        insert_summary_stats_from_daily_measurements(
+            conn,
+            dest_table=sa_table_x_station_var_summary_stats,
+            time_slicer=lambda d: TS_ALL,
+            agg_name=AGG_NAME_REF_1991_2020,
+            from_date=datetime.datetime(1991, 1, 1),
+            to_date=datetime.datetime(2021, 1, 1),
+        )
 
 
-def insert_ref_1991_2020_summary_stats(conn: sa.Connection) -> None:
-    insert_summary_stats_from_daily_measurements(
-        conn,
-        dest_table=sa_table_x_station_var_summary_stats,
-        time_slicer=lambda d: "*",
-        agg_name=AGG_NAME_REF_1991_2020,
-        from_date=datetime.datetime(1991, 1, 1),
-        to_date=datetime.datetime(2021, 1, 1),
-    )
+def recreate_monthly_reference_period_stats(engine: sa.Engine) -> None:
+    def _ts_month(d: pd.DataFrame):
+        return pd.to_datetime(d["reference_timestamp"]).dt.month.map(ts_month)
 
-
-def insert_ref_1991_2020_summary_stats_month(conn: sa.Connection) -> None:
-    def _month_str(d: pd.DataFrame):
-        return pd.to_datetime(d["reference_timestamp"]).dt.strftime("%m")
-
-    insert_summary_stats_from_daily_measurements(
-        conn,
-        dest_table=sa_table_x_station_var_summary_stats_month,
-        time_slicer=_month_str,
-        agg_name=AGG_NAME_REF_1991_2020,
-        from_date=datetime.datetime(1991, 1, 1),
-        to_date=datetime.datetime(2021, 1, 1),
-    )
+    with engine.begin() as conn:
+        insert_summary_stats_from_daily_measurements(
+            conn,
+            dest_table=sa_table_x_station_var_summary_stats_month,
+            time_slicer=_ts_month,
+            agg_name=AGG_NAME_REF_1991_2020,
+            from_date=datetime.datetime(1991, 1, 1),
+            to_date=datetime.datetime(2021, 1, 1),
+        )
 
 
 def insert_summary_stats_from_daily_measurements(
@@ -771,13 +776,15 @@ def insert_summary_stats_from_daily_measurements(
         for (station_abbr, time_slice), grp in df.groupby(
             ["station_abbr", "time_slice"]
         ):
-            for var in var_cols:
-                if grp[var].isna().all():
-                    continue  # No data for this variable
-                a = grp[var].agg(
-                    ["min", "max", "idxmin", "idxmax", "mean", "sum", "count"]
-                    + [pctl(10), pctl(25), pctl(50), pctl(75), pctl(90)]
-                )
+            non_null_cols = [v for v in var_cols if not grp[v].isna().all()]
+            if not non_null_cols:
+                continue  # No variables have any data.
+            agg = grp[non_null_cols].agg(
+                ["min", "max", "idxmin", "idxmax", "mean", "sum", "count"]
+                + [pctl(10), pctl(25), pctl(50), pctl(75), pctl(90)]
+            )
+            for var in non_null_cols:
+                a = agg[var]
                 # Get reference_timestamp value at the index of the min/max value.
                 min_date = grp.loc[a["idxmin"], date_col]
                 max_date = grp.loc[a["idxmax"], date_col]
@@ -1315,26 +1322,74 @@ def read_station_var_summary_stats(
     station_abbr: str | None = None,
     variables: Collection[str] | None = None,
 ) -> pd.DataFrame:
+    """Convenience wrapper for read_station_var_summary_stats_generic discarding the time_slice dimension."""
+    df = read_summary_stats(
+        conn,
+        table=sa_table_x_station_var_summary_stats,
+        agg_name=agg_name,
+        station_abbr=station_abbr,
+        variables=variables,
+    )
+    if df.empty:
+        return df
+    # Drop the constant '*' time_slice dimension.
+    return df.xs(TS_ALL, level="time_slice")
+
+
+def read_per_month_summary_stats(
+    conn: sa.Connection,
+    agg_name: str,
+    station_abbr: str | None = None,
+    months: list[int] | None = None,
+    variables: Collection[str] | None = None,
+) -> pd.DataFrame:
+    return read_summary_stats(
+        conn,
+        table=sa_table_x_station_var_summary_stats_month,
+        agg_name=agg_name,
+        time_slices=[ts_month(m) for m in months],
+        station_abbr=station_abbr,
+        variables=variables,
+    )
+
+
+def read_summary_stats(
+    conn: sa.Connection,
+    table: sa.Table,
+    agg_name: str,
+    time_slices: list[str] | None = None,
+    station_abbr: str | None = None,
+    variables: Collection[str] | None = None,
+) -> pd.DataFrame:
     """
     Reads summary stats for variables for the aggregation with the given `agg_name`.
 
     Usage examples:
 
-        # Get summary values of a variable for a given station:
-        df = read_station_var_summary_stats(conn, AGG_NAME_REF_1991_2020, "BER")
-        p = df.loc["BER", "rre150dn"]
+        # Get summary values of variable rre150dn for station BER and the TS_ALL time slice:
+        df = read_station_var_summary_stats_generic(
+            conn,
+            sa_table_x_station_var_summary_stats,
+            AGG_NAME_REF_1991_2020,
+            "BER"
+        )
+        p = df.loc[("BER", "rre150dn", TS_ALL)]
         print("Min precipitation level was", p["min_value"], "on", p["min_value_date"])
 
     Args:
         conn: An active SQLAlchemy database connection.
+        table: The table to read from.
         agg_name: The name of the aggregataion to read data for.
+        time_slices: Time slices to read. Returns all time slices if None.
         station_abbr: Optional abbreviation of the station to filter by.
         variables: Optional collection of variable names to filter by.
 
     Returns:
-        A pandas DataFrame in wide format (rows indexed by 'station_abbr',
-        columns as (variable, measurement_type)).
-        Returns an empty DataFrame if no data matches the filters.
+        A pandas DataFrame with a 3-layer MultiIndex:
+        ['station_abbr', 'variable', 'time_slice']
+        and columns the summary statistics (p10, p25, mean, etc.).
+
+        Returns a generic empty DataFrame if no data matches the filters.
     """
     filters = ["agg_name = :agg_name"]
     params = {"agg_name": agg_name}
@@ -1348,17 +1403,20 @@ def read_station_var_summary_stats(
             placeholders.append(f":{p}")
             params[p] = var
         filters.append(f"variable IN ({', '.join(placeholders)})")
+    if time_slices:
+        placeholders = []
+        for i, var in enumerate(time_slices):
+            p = f"ts{i}"
+            placeholders.append(f":{p}")
+            params[p] = var
+        filters.append(f"time_slice IN ({', '.join(placeholders)})")
 
-    excluded_col_names = set(["agg_name", "time_slice"])
-    columns = [
-        c
-        for c in sa_table_x_station_var_summary_stats.columns
-        if c.name not in excluded_col_names
-    ]
+    excluded_col_names = set(["agg_name"])
+    columns = [c for c in table.columns if c.name not in excluded_col_names]
     sql = f"""
         SELECT
             {', '.join(c.name for c in columns)}
-        FROM {sa_table_x_station_var_summary_stats.name}
+        FROM {table.name}
         """
     if filters:
         sql += f"WHERE {' AND '.join(filters)}"
@@ -1370,9 +1428,9 @@ def read_station_var_summary_stats(
         dtype={c.name: _column_to_dtype(c) for c in columns},
     )
     if df_long.empty:
-        return pd.DataFrame(index=pd.Index([], name="station_abbr"), dtype=str)
+        return pd.DataFrame()
 
-    return df_long.set_index(["station_abbr", "variable"]).unstack().swaplevel(axis=1)
+    return df_long.set_index(["station_abbr", "variable", "time_slice"])
 
 
 def table_stats(engine: sa.Engine, user: str) -> list[models.DBTableStats]:

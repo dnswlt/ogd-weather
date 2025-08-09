@@ -610,7 +610,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.metadata.create_all(self.engine)
 
     def test_recreate_empty(self):
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
 
     def test_create_select(self):
         # Insert daily data.
@@ -634,7 +634,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         )
         conn.commit()
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         # Read data
         df = db.read_station_var_summary_stats(
             conn,
@@ -643,9 +643,9 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             variables=[db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
         )
 
-        self.assertEqual(len(df), 1)
+        self.assertEqual(len(df), 2)
         self.assertEqual(
-            df.columns.levels[1].tolist(),
+            df.columns.to_list(),
             [
                 "source_granularity",
                 "min_value",
@@ -710,14 +710,14 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
 
-        self.assertEqual(len(df), 1)
+        self.assertGreaterEqual(len(df), 1)
 
-        s = df.loc["BER", db.DX_SUMMER_DAYS_ANNUAL_COUNT]
+        s = df.loc[("BER", db.DX_SUMMER_DAYS_ANNUAL_COUNT)]
         self.assertAlmostEqual(
             s["mean_value"], 2.0, msg="2 years with data, 4 summer days."
         )
@@ -740,7 +740,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
@@ -761,7 +761,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
@@ -784,7 +784,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
@@ -815,7 +815,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
@@ -848,7 +848,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
@@ -865,7 +865,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
 
     def test_create_select_agg_not_exist(self):
         self._insert_var(db.TEMP_DAILY_MIN, [("BER", "1991-01-01", -3)])
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         with self.engine.begin() as conn:
             df = db.read_station_var_summary_stats(
                 conn, "AGG_DOES_NOT_EXIST", station_abbr="BER"
@@ -883,20 +883,80 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_station_var_summary_stats(self.engine)
+        db.recreate_reference_period_stats(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_station_var_summary_stats(
                 conn, db.AGG_NAME_REF_1991_2020, station_abbr="BER"
             )
 
-        # Should return data only for TEMP_DAILY_MIN.
-        self.assertEqual(len(df), 1)
+        # Should return data for TEMP_DAILY_MIN and derived metrics.
+        self.assertGreaterEqual(len(df), 1)
 
-        # Defined vars should only be TEMP_DAILY_MIN or those derived from it.
         vars = df.loc["BER"].index.get_level_values(0).unique().to_list()
         self.assertIn(db.TEMP_DAILY_MIN, vars)
         self.assertNotIn(db.PRECIP_DAILY_MM, vars)
+
+    def test_create_select_single_month(self):
+        self._insert_vars(
+            [db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
+            [
+                ("BER", "1991-01-01", 10, None),
+                ("BER", "1991-01-02", 11, None),
+                ("BER", "1999-01-31", 12, None),
+                ("BER", "2001-06-03", 17, None),
+            ],
+        )
+        # Recreate derived table.
+        db.recreate_monthly_reference_period_stats(self.engine)
+
+        with self.engine.begin() as conn:
+            df = db.read_summary_stats(
+                conn,
+                table=db.sa_table_x_station_var_summary_stats_month,
+                agg_name=db.AGG_NAME_REF_1991_2020,
+                station_abbr="BER",
+                variables=[db.TEMP_DAILY_MIN],
+                time_slices=["01"],
+            )
+        self.assertEqual(len(df), 1)
+        var = df.loc[("BER", db.TEMP_DAILY_MIN, db.ts_month(1))]
+        self.assertEqual(var["min_value"], 10)
+        self.assertEqual(var["max_value"], 12)
+        self.assertEqual(var["value_count"], 3)
+
+    def test_create_select_all_months(self):
+        self._insert_vars(
+            [db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
+            [
+                ("BER", "1980-01-01", 10, None),
+                ("ABO", "1991-12-31", 10, 100),
+                ("BER", "1991-01-01", 10, None),
+                ("BER", "1991-01-02", 11, None),
+                ("BER", "1999-01-31", 12, None),
+                ("BER", "2001-06-03", 17, None),
+                ("BER", "2025-01-01", None, 100),
+            ],
+        )
+        # Recreate derived table.
+        db.recreate_monthly_reference_period_stats(self.engine)
+
+        with self.engine.begin() as conn:
+            df = db.read_summary_stats(
+                conn,
+                table=db.sa_table_x_station_var_summary_stats_month,
+                agg_name=db.AGG_NAME_REF_1991_2020,
+                variables=[db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
+            )
+        self.assertEqual(len(df), 4)
+        var = df.loc[("ABO", db.PRECIP_DAILY_MM, db.ts_month(12))]
+        self.assertEqual(var["min_value"], 100)
+        self.assertEqual(var["max_value"], 100)
+        self.assertEqual(var["value_count"], 1)
+        # The three other results are (choosing min_value arbitrarily):
+        self.assertIn("min_value", df.loc[("BER", db.TEMP_DAILY_MIN, db.ts_month(1))])
+        self.assertIn("min_value", df.loc[("BER", db.TEMP_DAILY_MIN, db.ts_month(6))])
+        self.assertIn("min_value", df.loc[("ABO", db.TEMP_DAILY_MIN, db.ts_month(12))])
 
 
 class TestHelpers(unittest.TestCase):
