@@ -23,10 +23,16 @@ def _tooltip(params):
     return {"signal": f"{{ {', '.join(ks)} }}"}
 
 
+def annual_windrose_chart(df: pd.DataFrame, year: int):
+    title = f"Wind rose • {year} • hourly avg. wind directions and speeds"
+    return windrose_chart(df, title=title)
+
+
 def windrose_chart(
     df: pd.DataFrame,
     step_angle=360 / 32,
     font_size=12,
+    title: str = "Untitled chart",
 ):
     """Returns a Vega wind rose chart for the given wind directions and speeds.
 
@@ -85,6 +91,12 @@ def windrose_chart(
 
     return {
         "$schema": f"https://vega.github.io/schema/vega/v{VEGA_VERSION}.json",
+        "title": {
+            "text": title,
+            "anchor": "middle",
+            "frame": "group",
+            "offset": 20,
+        },
         "autosize": {"type": "pad", "contains": "padding"},
         "signals": [
             {
@@ -150,6 +162,31 @@ def windrose_chart(
                     {"angle": 270, "label": "W"},
                 ],
             },
+            {
+                "name": "legend_data",
+                "values": [
+                    {
+                        "label": "Light (< 3 m/s)",
+                        "color": "#a3d6d2",
+                    },
+                    {
+                        "label": "Gentle (3 ≤ x < 6 m/s)",
+                        "color": "#45a2b9",
+                    },
+                    {
+                        "label": "Stronger (≥ 6 m/s)",
+                        "color": "#347da0",
+                    },
+                ],
+            },
+        ],
+        "scales": [
+            {
+                "name": "color_scale",
+                "type": "ordinal",
+                "domain": {"data": "legend_data", "field": "label"},
+                "range": {"data": "legend_data", "field": "color"},
+            }
         ],
         "marks": [
             {
@@ -171,11 +208,11 @@ def windrose_chart(
                         "outerRadius": {
                             "signal": "(datum.r3 / datum.max_total_radius) * max_pixel_radius"
                         },
-                        "fill": {"value": "#347da0"},
+                        "fill": {"scale": "color_scale", "value": "Stronger (≥ 6 m/s)"},
                         "tooltip": _tooltip(
                             {
                                 "Wind direction": "datum.deg + '°'",
-                                "Wind ≥ 6 m/s": "format(datum.speed_cat3 * 100, '.1f') + '%'",
+                                "Stronger (≥ 6 m/s)": "format(datum.speed_cat3 * 100, '.1f') + '%'",
                             }
                         ),
                     }
@@ -200,11 +237,14 @@ def windrose_chart(
                         "outerRadius": {
                             "signal": "(datum.r2 / datum.max_total_radius) * max_pixel_radius"
                         },
-                        "fill": {"value": "#45a2b9"},
+                        "fill": {
+                            "scale": "color_scale",
+                            "value": "Gentle (3 ≤ x < 6 m/s)",
+                        },
                         "tooltip": _tooltip(
                             {
                                 "Wind direction": "datum.deg + '°'",
-                                "Gentle (≥ 3 and < 6 m/s)": "format(datum.speed_cat2 * 100, '.1f') + '%'",
+                                "Gentle (3 ≤ x < 6 m/s)": "format(datum.speed_cat2 * 100, '.1f') + '%'",
                             }
                         ),
                     }
@@ -227,7 +267,7 @@ def windrose_chart(
                         "outerRadius": {
                             "signal": "(datum.r1 / datum.max_total_radius) * max_pixel_radius"
                         },
-                        "fill": {"value": "#a3d6d2"},
+                        "fill": {"scale": "color_scale", "value": "Light (< 3 m/s)"},
                         "tooltip": _tooltip(
                             {
                                 "Wind direction": "datum.deg + '°'",
@@ -298,5 +338,18 @@ def windrose_chart(
                     }
                 },
             },
+        ],
+        "legends": [
+            {
+                "fill": "color_scale",
+                "title": "Wind Speed",
+                "labelFont": "sans-serif",
+                "titleFont": "sans-serif",
+                "symbolStrokeWidth": 1,
+                "symbolSize": 100,
+                "symbolType": "square",
+                "direction": "vertical",
+                "orient": "top-right",
+            }
         ],
     }

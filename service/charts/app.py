@@ -308,7 +308,7 @@ async def get_year_chart(
             )
         return {
             "vega_specs": {
-                "windrose": vega.windrose_chart(df),
+                "windrose": vega.annual_windrose_chart(df, year),
             }
         }
     else:
