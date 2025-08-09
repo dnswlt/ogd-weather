@@ -38,6 +38,7 @@ type Server struct {
 	cache               cache.Cache
 	startTime           time.Time
 	bearerToken         string // Used for pages requiring simple Authorization
+	hashedFilenames     map[string]string
 }
 
 type ServerOptions struct {
@@ -53,9 +54,38 @@ func (s *Server) uptime() time.Duration {
 	return time.Since(s.startTime)
 }
 
+// assetHash returns the hashed filename for the given hrefPath.
+// Example: "/static/dist/main.js" => "/static/dist/main.<hash>.js".
+// This is used for Vite-generated assets which include the build hash
+// in their filename for cache busting.
+// If no Vite manifest.json was scanned at server startup, hrefPath is returned unchanged.
+func (s *Server) assetHash(hrefPath string) (string, error) {
+	if !strings.HasPrefix(hrefPath, "/static/dist/") {
+		return "", fmt.Errorf("assetHash must only be used for /static/dist/ resources")
+	}
+	if strings.Contains(hrefPath, "..") {
+		return "", fmt.Errorf("path must not contain \"..\"")
+	}
+	// Not running with Vite config => return hrefPath unchanged.
+	if s.hashedFilenames == nil {
+		return hrefPath, nil
+	}
+
+	// Split "/static/dist/main.js" into ("/static/dist/", "main.js"):
+	hrefDir, name := path.Split(hrefPath)
+	if hash, ok := s.hashedFilenames[name]; ok {
+		return hrefDir + hash, nil
+	}
+	// no hashed version known
+	return hrefPath, nil
+}
+
 func (s *Server) reloadTemplates() error {
 	tmpl := template.New("root")
 	tmpl = tmpl.Funcs(ui.AllFuncs)
+	tmpl = tmpl.Funcs(map[string]any{
+		"assetHash": s.assetHash,
+	})
 	var err error
 	s.template, err = tmpl.ParseGlob(path.Join(s.opts.BaseDir, "templates/*.html"))
 	return err
@@ -66,6 +96,46 @@ type ServerOption func(s *Server) error
 func WithBearerToken(token string) ServerOption {
 	return func(s *Server) error {
 		s.bearerToken = token
+		return nil
+	}
+}
+
+func WithViteManifest() ServerOption {
+	unhashed := func(file string) string {
+		parts := strings.Split(file, ".")
+		// A valid Vite filename will have at least 3 parts: "base", "hash", "extension".
+		if len(parts) < 3 {
+			return file
+		}
+		// Remove the second-to-last element (the hash)
+		hashIndex := len(parts) - 2
+		parts = append(parts[:hashIndex], parts[hashIndex+1:]...)
+		return strings.Join(parts, ".")
+	}
+	return func(s *Server) error {
+		manifestFile := filepath.Join(s.opts.BaseDir, "static", "dist", ".vite", "manifest.json")
+		f, err := os.Open(manifestFile)
+		if err != nil {
+			return fmt.Errorf("no Vite manifest.json found: %v", err)
+		}
+		var manifest map[string]struct {
+			File string
+			CSS  []string
+		}
+		if err := json.NewDecoder(f).Decode(&manifest); err != nil {
+			return fmt.Errorf("could not parse manifest.json: %v", err)
+		}
+		hashedFiles := make(map[string]string)
+		for _, info := range manifest {
+			// .js
+			hashedFiles[unhashed(info.File)] = info.File
+			// .css
+			for _, css := range info.CSS {
+				hashedFiles[unhashed(css)] = css
+			}
+		}
+		log.Printf("Processed %d files in Vite manifest %s", len(hashedFiles), manifestFile)
+		s.hashedFilenames = hashedFiles
 		return nil
 	}
 }
@@ -191,15 +261,15 @@ func (s *Server) withRequestLogging(next http.Handler) http.Handler {
 func (s *Server) withCacheControl(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Never cache our own files in /static/dist.
-		// Since we're using StripPrefix, the path appears as "dist/"here.
-		if strings.HasPrefix(r.URL.Path, "dist/") {
+		// When using StripPrefix("/static/", ...), the path appears as "dist/"here.
+		if strings.HasPrefix(r.URL.Path, "dist/") || strings.HasPrefix(r.URL.Path, "/static/dist/") {
 			h.ServeHTTP(w, r)
 			return
 		}
 
 		// Set a max-age of 1 year for static resources that do not change.
 		// We use version numbers in file names for cache busting.
-		ext := filepath.Ext(r.URL.Path)
+		ext := path.Ext(r.URL.Path)
 		switch ext {
 		case ".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".ico", ".map",
 			".woff", ".woff2", ".ttf", ".eot", ".otf",

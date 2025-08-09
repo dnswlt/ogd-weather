@@ -1,6 +1,8 @@
 # ogd-weather
 
-Fun with Open Data from MeteoSwiss.
+Visualizing historical weather data using the excellent
+[Open Data](https://www.meteoswiss.admin.ch/services-and-publications/service/open-data.html)
+from [MeteoSwiss](https://www.meteoswiss.admin.ch/about-us/portrait.html).
 
 ## Services
 

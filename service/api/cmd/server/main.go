@@ -31,12 +31,16 @@ func main() {
 	flag.BoolVar(&opts.DebugMode, "debug", false, "If specified, the server runs in debug mode.")
 	flag.BoolVar(&opts.LogRequests, "log-requests", false, "If true, the server write request logs.")
 	flag.IntVar(&opts.CacheSize, "cache-size", cacheSize, "Approximate size of the response cache in bytes. (0 = disabled, -1 = unlimited)")
+	useViteManifest := flag.Bool("vite-manifest", true, "Use Vite manifest.json for hashed filename mapping")
 	flag.Parse()
 
 	var moreOpts []api.ServerOption
 
 	if token := os.Getenv("OGD_BEARER_TOKEN"); token != "" {
 		moreOpts = append(moreOpts, api.WithBearerToken(token))
+	}
+	if *useViteManifest {
+		moreOpts = append(moreOpts, api.WithViteManifest())
 	}
 	server, err := api.NewServer(opts, moreOpts...)
 	if err != nil {
