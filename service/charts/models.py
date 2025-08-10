@@ -97,6 +97,8 @@ class StationInfo(BaseModel):
     # Summary statistics for the 1991-2020 period.
     ref_1991_2020_stats: StationPeriodStats
 
+    nearby_stations: list[NearbyStation]
+
 
 class MeasurementsRow(BaseModel):
     reference_timestamp: datetime.datetime

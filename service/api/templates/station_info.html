@@ -80,6 +80,20 @@
                 .Station.PrecipitationMaxDate}}
             </td>
         </tr>
+        <!-- Nearby stations -->
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Nearby stations
+            </td>
+            <td class="py-2 text-gray-800">
+                {{range $i, $s := first 3 .NearbyStations}}
+                    {{if gt $i 0}}• {{end}}
+
+                    <a href="/ui/map?station={{$s.Abbr}}" class="text-blue-600 hover:underline">
+                        {{$s.Name}} {{$s.Canton}}</a> ({{printf "%.1f" $s.DistanceKm}} km)
+                {{end}}
+            </td>
+        </tr>
         <!-- MeteoSwiss URL -->
         {{if .Station.URL.EN}}
         <tr class="border-b">

@@ -1206,6 +1206,7 @@ def read_nearby_stations(
             height_diff
         FROM {sa_table_x_nearby_stations.name}
         WHERE from_station_abbr = :station_abbr
+        ORDER BY distance_km, to_station_abbr
     """
 
     result = conn.execute(sa.text(sql), {"station_abbr": station_abbr}).mappings().all()

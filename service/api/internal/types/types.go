@@ -86,6 +86,14 @@ type Station struct {
 	PrecipitationMaxDate NullDate        `json:"precipitation_max_date"`
 }
 
+type NearbyStation struct {
+	Abbr       string  `json:"abbr"`
+	Name       string  `json:"name"`
+	Canton     string  `json:"canton"`
+	DistanceKm float64 `json:"distance_km"`
+	HeightDiff float64 `json:"height_diff"`
+}
+
 type StationsResponse struct {
 	Stations []*Station `json:"stations"`
 }
@@ -148,6 +156,7 @@ func (s *StationPeriodStats) Vars() map[string]*VariableStats {
 type StationInfo struct {
 	Station            *Station            `json:"station"`
 	Ref1991To2020Stats *StationPeriodStats `json:"ref_1991_2020_stats"`
+	NearbyStations     []*NearbyStation    `json:"nearby_stations"`
 }
 
 type StationInfoResponse struct {

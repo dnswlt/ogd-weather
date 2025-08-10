@@ -506,6 +506,8 @@ async def get_info(
             agg_name=db.AGG_NAME_REF_1991_2020,
             station_abbr=station_abbr,
         )
+        nearby_stations = db.read_nearby_stations(conn, station_abbr)
+
     ref_period_stats = (
         charts.station_period_stats(vars.loc[station_abbr]) if not vars.empty else None
     )
@@ -516,6 +518,7 @@ async def get_info(
         "info": models.StationInfo(
             station=station,
             ref_1991_2020_stats=ref_period_stats,
+            nearby_stations=nearby_stations,
         ),
     }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ var (
 		"ms2kmh":         MetersPerSecondToKilometersPerHour,
 		"float":          PrintfFloat64,
 		"vegaSpecHTMLID": VegaSpecHTMLID,
+		"first":          PrefixSlice,
 	}
 )
 
@@ -286,4 +288,22 @@ func FormatBytesIEC(n int64) string {
 // replace it by "-".
 func VegaSpecHTMLID(specName string) string {
 	return strings.ReplaceAll(specName, ":", "-")
+}
+
+func PrefixSlice(k int, items any) (any, error) {
+	if items == nil {
+		return nil, nil
+	}
+	v := reflect.ValueOf(items)
+	if v.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("PrefixSlice: items is not a slice, but %T", items)
+	}
+	n := v.Len()
+	if k < 0 {
+		return nil, fmt.Errorf("PrefixSlice: k < 0")
+	}
+	if k > n {
+		k = n
+	}
+	return v.Slice(0, k).Interface(), nil
 }
