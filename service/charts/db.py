@@ -13,8 +13,8 @@ import re
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-
 from .pandas_funcs import pctl
+from . import geo
 from . import models
 from . import sql_queries
 
@@ -329,6 +329,19 @@ sa_table_x_station_data_summary = sa.Table(
     sa.Column("rre150d0_count", sa.Integer, nullable=False),
     sa.Column("rre150d0_min_date", sa.Text),
     sa.Column("rre150d0_max_date", sa.Text),
+)
+
+sa_table_x_nearby_stations = sa.Table(
+    "x_nearby_stations",
+    metadata,
+    sa.Column("from_station_abbr", sa.Text, primary_key=True),
+    sa.Column("from_station_name", sa.Text),
+    sa.Column("from_station_canton", sa.Text),
+    sa.Column("to_station_abbr", sa.Text, primary_key=True),
+    sa.Column("to_station_name", sa.Text),
+    sa.Column("to_station_canton", sa.Text),
+    sa.Column("distance_km", sa.REAL),
+    sa.Column("height_diff", sa.REAL),
 )
 
 
@@ -706,8 +719,88 @@ def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
 
 def recreate_views(engine: sa.Engine) -> None:
     recreate_station_data_summary(engine)
+    recreate_nearby_stations(engine)
+
     recreate_reference_period_stats(engine)
-    recreate_monthly_reference_period_stats(engine)
+    recreate_reference_period_stats_month(engine)
+
+
+def recreate_nearby_stations(
+    engine: sa.Engine,
+    max_distance_km: float = 80,
+    max_neighbors=8,
+    exclude_empty: bool = True,
+) -> None:
+    """Recreates the sa_table_x_nearby_stations table with nearby station info.
+
+    Args:
+        engine: the SQLAlchemy engine
+        exclude_empty: If True, nearby stations are only included if they have
+            measurement data.
+    """
+    with engine.begin() as conn:
+        # Drop old table if exists
+        sa_table_x_nearby_stations.drop(conn, checkfirst=True)
+        # Create table
+        sa_table_x_nearby_stations.create(conn)
+
+    with engine.begin() as conn:
+        stations = read_stations(conn, exclude_empty=exclude_empty)
+
+    nearby_stations = [[] for _ in range(len(stations))]
+    for i, s1 in enumerate(stations):
+        for j, s2 in enumerate(stations[i + 1 :], start=i + 1):
+            try:
+                dist_km = (
+                    geo.station_distance_meters(s1, s2, include_height=True) / 1000.0
+                )
+            except ValueError:
+                # Probably missing WGS or elevation data => skip
+                continue
+            if dist_km > max_distance_km:
+                continue
+            nearby_stations[i].append(
+                {
+                    "from_station_abbr": s1.abbr,
+                    "from_station_name": s1.name,
+                    "from_station_canton": s1.canton,
+                    "to_station_abbr": s2.abbr,
+                    "to_station_name": s2.name,
+                    "to_station_canton": s2.canton,
+                    "distance_km": dist_km,
+                    "height_diff": s2.height_masl - s1.height_masl,
+                }
+            )
+            nearby_stations[j].append(
+                {
+                    "from_station_abbr": s2.abbr,
+                    "from_station_name": s2.name,
+                    "from_station_canton": s2.canton,
+                    "to_station_abbr": s1.abbr,
+                    "to_station_name": s1.name,
+                    "to_station_canton": s1.canton,
+                    "distance_km": dist_km,
+                    "height_diff": s1.height_masl - s2.height_masl,
+                }
+            )
+
+    flat_records = []
+    for records in nearby_stations:
+        # Pick at most max_neighbors nearest nearby stations.
+        records.sort(key=lambda s: (s["distance_km"], s["to_station_abbr"]))
+        flat_records.extend(records[:max_neighbors])
+
+    logger.info(
+        "Determined %d nearby station pairs for %d stations",
+        len(flat_records),
+        len(stations),
+    )
+    if len(flat_records) == 0:
+        return
+
+    with engine.begin() as conn:
+        insert = sa.insert(sa_table_x_nearby_stations)
+        conn.execute(insert, flat_records)
 
 
 def recreate_reference_period_stats(engine: sa.Engine) -> None:
@@ -731,7 +824,7 @@ def recreate_reference_period_stats(engine: sa.Engine) -> None:
         )
 
 
-def recreate_monthly_reference_period_stats(engine: sa.Engine) -> None:
+def recreate_reference_period_stats_month(engine: sa.Engine) -> None:
     def _ts_month(d: pd.DataFrame):
         return pd.to_datetime(d["reference_timestamp"]).dt.month.map(ts_month)
 
@@ -1095,6 +1188,35 @@ def read_stations(
             height_masl=row["station_height_masl"],
             coordinates_wgs84_lat=row["station_coordinates_wgs84_lat"],
             coordinates_wgs84_lon=row["station_coordinates_wgs84_lon"],
+        )
+        for row in result
+    ]
+
+
+def read_nearby_stations(
+    conn: sa.Connection,
+    station_abbr: str,
+) -> list[models.NearbyStation]:
+    sql = f"""
+        SELECT
+            to_station_abbr AS abbr,
+            to_station_name AS name,
+            to_station_canton AS canton,
+            distance_km,
+            height_diff
+        FROM {sa_table_x_nearby_stations.name}
+        WHERE from_station_abbr = :station_abbr
+    """
+
+    result = conn.execute(sa.text(sql), {"station_abbr": station_abbr}).mappings().all()
+
+    return [
+        models.NearbyStation(
+            abbr=row["abbr"],
+            name=row["name"],
+            canton=row["canton"],
+            distance_km=row["distance_km"],
+            height_diff=row["height_diff"],
         )
         for row in result
     ]

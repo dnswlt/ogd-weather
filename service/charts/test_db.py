@@ -601,6 +601,37 @@ class TestCreateDb(unittest.TestCase):
         self.assertEqual(u.resource_updated_time, now)
         self.assertEqual(u.table_updated_time, now)
 
+    def test_recreate_nearby_stations(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        db.insert_csv_metadata(
+            _testdata_dir(),
+            engine,
+            db.sa_table_meta_stations,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_meta_stations.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+        # Need this table to create nearby stations.
+        db.recreate_station_data_summary(engine)
+        # Now create nearby stations
+        db.recreate_nearby_stations(engine, max_neighbors=4, exclude_empty=False)
+
+        # Validate
+        with engine.begin() as conn:
+            ns = db.read_nearby_stations(conn, "BER")
+
+        self.assertEqual(len(ns), 4)
+        nsmap = {n.abbr: n for n in ns}
+        self.assertIn("GRE", nsmap)
+        gre = nsmap["GRE"]
+        self.assertAlmostEqual(gre.distance_km, 21.267, delta=0.01)
+        self.assertAlmostEqual(gre.height_diff, -125, delta=0.01)
+
 
 class TestDbRefPeriod1991_2020(unittest.TestCase):
     def setUp(self):
@@ -908,7 +939,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_monthly_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_month(self.engine)
 
         with self.engine.begin() as conn:
             df = db.read_summary_stats(
@@ -939,7 +970,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_monthly_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_month(self.engine)
 
         with self.engine.begin() as conn:
             df = db.read_summary_stats(

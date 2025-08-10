@@ -10,3 +10,4 @@ pytest-cov
 pydantic
 sqlalchemy==2.0.41
 psycopg[binary]==3.2.9
+pyproj==3.7.1

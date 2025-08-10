@@ -38,6 +38,14 @@ class Station(BaseModel):
     precipitation_max_date: date | None = None
 
 
+class NearbyStation(BaseModel):
+    abbr: str
+    name: str
+    canton: str
+    distance_km: float
+    height_diff: float
+
+
 class StationStats(BaseModel):
     """Weather data statistics for the requested period."""
 
