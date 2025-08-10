@@ -5,6 +5,7 @@ from typing import Any, Iterable, TypeAlias, Union
 import altair as alt
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 
 from .pandas_funcs import pctl
 from . import colors
@@ -639,6 +640,62 @@ def monthly_boxplot_chart_data(ser: pd.Series):
     return months
 
 
+def anomaly_chart(
+    df: pd.DataFrame,
+    x_col: str,
+    x_title: str,
+    y_title: str,
+    y_col: str = "value",
+    title: str = "Untitled chart",
+    color: str = _C["SteelBlue"],
+    sort_field: str | None = None,
+) -> alt.LayerChart:
+    base = alt.Chart(df)
+
+    required_cols = set(["p25_value", "mean_value", "p75_value"] + [x_col, y_col])
+    if sort_field:
+        required_cols.add(sort_field)
+    col_diff = required_cols - set(df.columns)
+    if len(col_diff) > 0:
+        raise ValueError(f"Not all required columns are present (missing: {col_diff})")
+
+    sort_order = "ascending"
+    if sort_field:
+        sort_order = alt.EncodingSortField(
+            field=sort_field, op="min", order="ascending"
+        )
+    x = (
+        alt.X(f"{x_col}:O")
+        .sort(sort_order)
+        .title(x_title)
+        .axis(labelAngle=0)
+        # .scale(type="band", paddingInner=0.5, paddingOuter=0.1)
+    )
+    normal_band = base.mark_area(interpolate="cardinal").encode(
+        x=x,
+        y=alt.Y(f"p25_value:Q"),
+        y2=alt.Y2(f"p75_value"),
+        color=alt.value(_C["AshGray"]),
+        opacity=alt.value(0.3),
+    )
+    mean_line = base.mark_line(interpolate="cardinal").encode(
+        x=x,
+        y=alt.Y(f"mean_value:Q"),
+        color=alt.value(_C["AshGray"]),
+        strokeDash=alt.value([4, 4]),
+    )
+    value_line = base.mark_line(interpolate="cardinal").encode(
+        x=x,
+        y=alt.Y(f"{y_col}:Q").axis(title=y_title),
+        color=alt.value(color),
+    )
+    return alt.layer(normal_band, mean_line, value_line).properties(
+        width="container",
+        autosize={"type": "fit", "contains": "padding"},
+        title=title,
+    )
+
+
 def bar_chart_with_reference(
     df: pd.DataFrame,
     x_col: str,
@@ -676,6 +733,7 @@ def bar_chart_with_reference(
         alt.X(f"{x_col}:O")
         .sort(sort_order)
         .title(x_title)
+        .axis(labelAngle=0)
         # .scale(type="band", paddingInner=0.5, paddingOuter=0.1)
     )
     ref_width = {"band": 0.75}
@@ -744,7 +802,7 @@ def boxplot_chart(
         sort_order = alt.EncodingSortField(
             field=sort_field, op="min", order="ascending"
         )
-    x = alt.X(f"{x_col}:O").sort(sort_order).title(x_title)
+    x = alt.X(f"{x_col}:O").sort(sort_order).title(x_title).axis(labelAngle=0)
     y = alt.Y("max:Q").axis(title=y_title)
     if y_domain:
         y = y.scale(domain=y_domain)
@@ -860,6 +918,23 @@ def monthly_sunshine_boxplot_chart(
     )
 
 
+class TempFacet(BaseModel):
+    column: str
+    color: str
+    facet: str
+
+    @classmethod
+    def from_name(cls, facet: str) -> "TempFacet":
+        if facet == "min":
+            return cls(column=db.TEMP_DAILY_MIN, color=_C["SkyBlue"], facet="min")
+        elif facet == "max":
+            return cls(column=db.TEMP_DAILY_MAX, color=_C["CoralRed"], facet="max")
+        elif facet in ("mean", "avg"):
+            return cls(column=db.TEMP_DAILY_MEAN, color=_C["Apricot"], facet="avg")
+        else:
+            raise ValueError(f"Invalid facet: {facet} (should be min/mean/avg/max)")
+
+
 def monthly_temp_boxplot_chart(
     df: pd.DataFrame, station_abbr: str, year: int, facet="max"
 ) -> AltairChart:
@@ -872,36 +947,64 @@ def monthly_temp_boxplot_chart(
         facet: the facet to create a chart for: ("min", "mean", "max").
     """
 
-    if facet == "min":
-        col = db.TEMP_DAILY_MIN
-        color = _C["SkyBlue"]
-    elif facet == "max":
-        col = db.TEMP_DAILY_MAX
-        color = _C["CoralRed"]
-    elif facet in ("mean", "avg"):
-        facet = "avg"
-        col = db.TEMP_DAILY_MEAN
-        color = _C["Apricot"]
-    else:
-        raise ValueError(f"Invalid facet: {facet} (should be min/mean/max)")
-
     _verify_monthly_boxplot_data(df, station_abbr, year)
 
+    tf = TempFacet.from_name(facet)
     # Calculate min/max across min/mean/max temperatures to have equal y-scales.
     temps = df[[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]]
     y_min = temps.to_numpy().min()
     y_max = temps.to_numpy().max()
 
-    months = monthly_boxplot_chart_data(df[col])
+    months = monthly_boxplot_chart_data(df[tf.column])
     return boxplot_chart(
         months,
         x_col="month_name",
         x_title="Month",
-        y_title=f"Daily {facet}. temp. (° C)",
+        y_title=f"Daily {tf.facet}. temp. (°C)",
         sort_field="month_num",
-        title=f"Daily {facet}. temperature for each month in {year}",
-        color=color,
+        title=f"Daily {tf.facet}. temperature for each month in {year}",
+        color=tf.color,
         y_domain=[y_min, y_max],
+    )
+
+
+def monthly_temp_anomaly_chart(
+    df: pd.DataFrame,
+    df_ref: pd.DataFrame,
+    station_abbr: str,
+    year: int,
+    facet="max",
+) -> AltairChart:
+
+    tf = TempFacet.from_name(facet)
+
+    ser = df[tf.column]
+
+    # Sum daily precipitation for each month.
+    months = ser.groupby(ser.index.month).agg([("value", "mean")])
+    # Conform the index to "%02d" format for joining with ref. data.
+    months.index = months.index.map(db.ts_month)
+
+    # Get percentiles for monthly precipitation from reference data.
+    ref_stats = df_ref.loc[(station_abbr, tf.column)][
+        ["p25_value", "mean_value", "p75_value"]
+    ]
+
+    # Join, keep data only for months where `months` has data (left join).
+    data = months.join(ref_stats, how="left")
+
+    data = data.reset_index(names="month_num")
+    data["month_name"] = data["month_num"].map(lambda k: calendar.month_abbr[int(k)])
+
+    return anomaly_chart(
+        data,
+        x_col="month_name",
+        y_col="value",
+        x_title="Month",
+        y_title=f"Temperature (°C)",
+        color=tf.color,
+        sort_field="month_num",
+        title=f"Monthly {tf.facet}. temperature in {year}",
     )
 
 

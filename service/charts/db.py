@@ -1132,6 +1132,10 @@ def read_daily_measurements(
     from_year: int | None = None,
     to_year: int | None = None,
 ) -> pd.DataFrame:
+    """Returns daily measurements matching the provided filters.
+
+    The returned DataFrame has a datetime (reference_timestamp) index.
+    """
     if columns is None:
         columns = [TEMP_DAILY_MEAN, TEMP_DAILY_MIN, TEMP_DAILY_MAX, PRECIP_DAILY_MM]
 
@@ -1347,7 +1351,7 @@ def read_per_month_summary_stats(
         conn,
         table=sa_table_x_station_var_summary_stats_month,
         agg_name=agg_name,
-        time_slices=[ts_month(m) for m in months],
+        time_slices=[ts_month(m) for m in months] if months else None,
         station_abbr=station_abbr,
         variables=variables,
     )
