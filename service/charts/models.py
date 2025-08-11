@@ -58,7 +58,9 @@ class StationStats(BaseModel):
     warmest_year: int | None = None
     warmest_year_temp: float | None = None
     driest_year: int | None = None
+    driest_year_precip_mm: float | None = None
     wettest_year: int | None = None
+    wettest_year_precip_mm: float | None = None
 
 
 class StationSummary(BaseModel):

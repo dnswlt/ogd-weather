@@ -52,17 +52,6 @@
             </div>
         </form>
 
-        <!-- Summary -->
-        <div>
-            <div id="station-summary-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                hx-trigger="change from:#station, change from:#period, change from:#from_year, change from:#to_year"
-                hx-get="/stations/{station}/summary">
-                <!-- <table> with station weather summary goes here -->
-                <!-- #include "../templates/station_summary.html" -->
-            </div>
-        </div>
-
-
         <!-- Charts -->
         <div>
 
@@ -73,11 +62,12 @@
             </p>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/sunny_days">
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/sunny_days"
+                    data-vega-target="sunny-days-chart">
                     <!-- <script> element with Vega from the backend goes here. -->
                 </div>
                 <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="sunny_days-chart" class="w-full overflow-hidden">
+                <div id="sunny-days-chart" class="w-full overflow-hidden">
                     <!-- Under Vega's control. Chart goes here. -->
                 </div>
             </div>
@@ -89,11 +79,12 @@
             </p>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/summer_days">
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/summer_days"
+                    data-vega-target="summer-days-chart">
                     <!-- <script> element with Vega from the backend goes here. -->
                 </div>
                 <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="summer_days-chart" class="w-full overflow-hidden">
+                <div id="summer-days-chart" class="w-full overflow-hidden">
                     <!-- Under Vega's control. Chart goes here. -->
                 </div>
             </div>
@@ -104,7 +95,8 @@
             </p>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/sunshine">
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/sunshine"
+                    data-vega-target="sunshine-chart">
                     <!-- <script> element with Vega from the backend goes here. -->
                 </div>
                 <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
@@ -120,11 +112,12 @@
             </p>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/frost_days">
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/frost_days"
+                    data-vega-target="frost-days-chart">
                     <!-- <script> element with Vega from the backend goes here. -->
                 </div>
                 <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="frost_days-chart" class="w-full overflow-hidden">
+                <div id="frost-days-chart" class="w-full overflow-hidden">
                     <!-- Under Vega's control. Chart goes here. -->
                 </div>
             </div>
@@ -136,7 +129,8 @@
             </p>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/raindays">
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/raindays"
+                    data-vega-target="raindays-chart">
                     <!-- <script> element with Vega from the backend goes here. -->
                 </div>
                 <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
@@ -151,11 +145,12 @@
             </p>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/rainiest_day">
+                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/rainiest_day"
+                    data-vega-target="rainiest-day-chart">
                     <!-- <script> element with Vega from the backend goes here. -->
                 </div>
                 <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="rainiest_day-chart" class="w-full overflow-hidden">
+                <div id="rainiest-day-chart" class="w-full overflow-hidden">
                     <!-- Under Vega's control. Chart goes here. -->
                 </div>
             </div>

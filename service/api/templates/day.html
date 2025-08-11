@@ -66,7 +66,8 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/day/{date}/overview" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML">
+                    hx-target="this" hx-swap="innerHTML"
+                    data-vega-target="overview-chart">
                     <!-- Vega script goes here -->
                 </div>
                 <div id="overview-chart" class="w-full overflow-hidden"></div>

@@ -63,11 +63,15 @@ export function initYearPage() {
                 tablist.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', 'false'));
                 btn.setAttribute('aria-selected', 'true');
 
-                // Update hx-vals on this widget's loader div.
-                // Its values ("facet") are used as query parameters by the spec loader.
+                // Update hx-vals on this widget's loader div with all data- attributes of the button.
+                // hx-vals  are used as query/path parameters by the spec loader.
                 const widget = tablist.closest('.tab-widget');
                 const loader = widget.querySelector('.vega-spec-loader');
-                loader.setAttribute('hx-vals', JSON.stringify({ facet: btn.dataset.facet }));
+                let hxVals = {};
+                for (const key in btn.dataset) {
+                    hxVals[key] = btn.dataset[key];
+                }
+                loader.setAttribute('hx-vals', JSON.stringify(hxVals));
 
                 // Tell HTMX to refresh the loader.
                 htmx.trigger(loader, 'refresh');

@@ -333,7 +333,9 @@ def dynamic_baseline_bars_chart(
     df["sign"] = df["anomaly"].apply(lambda x: "below mean" if x < 0 else "above mean")
 
     # Color scale for below/above baseline
-    color_scale = colors.Custom.tab20("SteelBlue", "CoralRed").scale(df["sign"])
+    color_scale = colors.Custom.tab20("SteelBlue", "CoralRed").scale(
+        ["below mean", "above mean"]
+    )
 
     # Bars for anomalies
     bars = (
@@ -360,8 +362,8 @@ def dynamic_baseline_bars_chart(
         .encode(y="y:Q")
     )
 
-    year_range = f"{values_long['year'].min()} - {values_long['year'].max()}"
-    chart_title = f"{title} (Baseline = {baseline:.2f} °C over {year_range})"
+    year_range = f"{values_long['year'].min()}-{values_long['year'].max()}"
+    chart_title = f"{title} (Baseline: {baseline:.2f} °C • {year_range})"
 
     return (
         (bars + zero_line).properties(
@@ -560,7 +562,7 @@ def temperature_chart(
     if data_long.empty:
         raise NoDataError(f"No aggregated temperature data for {station_abbr}")
 
-    window_info = f"({window}y rolling avg.)" if window else ""
+    window_info = f"({window}y rolling avg.)" if window > 1 else ""
     title = (
         f"Avg. temperatures in {period_to_title(period)}, by year {window_info}".strip()
     )
@@ -844,7 +846,7 @@ def monthly_humidity_boxplot_chart(
 ) -> AltairChart:
 
     _verify_monthly_boxplot_data(df, station_abbr, year)
-    months = monthly_boxplot_chart_data(df[db.REL_HUMITIDY_DAILY_MEAN])
+    months = monthly_boxplot_chart_data(df[db.REL_HUMIDITY_DAILY_MEAN])
     return boxplot_chart(
         months,
         x_col="month_name",
@@ -1741,35 +1743,38 @@ def station_stats(
     ]
     first_date = df.index.min().to_pydatetime().date()
     last_date = df.index.max().to_pydatetime().date()
-    df_m = annual_agg(df, "mean")
+
+    result = models.StationStats(
+        first_date=first_date, last_date=last_date, period=period_to_title(period)
+    )
+
+    # pydantic JSON serialization does not like numpy, so lots of conversions here.
+    df_m = annual_agg(df[[db.TEMP_DAILY_MEAN]], "mean")
     temp_dm = df_m[db.TEMP_DAILY_MEAN].dropna()
-    coldest_year = temp_dm.idxmin() if not temp_dm.empty else None
-    coldest_year_temp = temp_dm.min() if not temp_dm.empty else None
-    warmest_year = temp_dm.idxmax() if not temp_dm.empty else None
-    warmest_year_temp = temp_dm.max() if not temp_dm.empty else None
-    precip = df_m[db.PRECIP_DAILY_MM].dropna()
-    driest_year = precip.idxmin() if not precip.empty else None
-    wettest_year = precip.idxmax() if not precip.empty else None
+    if not temp_dm.empty:
+        result.coldest_year = int(temp_dm.idxmin())
+        result.coldest_year_temp = float(temp_dm.min())
+        result.warmest_year = int(temp_dm.idxmax())
+        result.warmest_year_temp = float(temp_dm.max())
+
+    df_s = annual_agg(df[[db.PRECIP_DAILY_MM]], "sum")
+    precip = df_s[db.PRECIP_DAILY_MM].dropna()
+    if not precip.empty:
+        result.driest_year = int(precip.idxmin())
+        result.driest_year_precip_mm = float(precip.min())
+        result.wettest_year = int(precip.idxmax())
+        result.wettest_year_precip_mm = float(precip.max())
 
     if not temp_dm.empty:
         try:
             coeffs, _ = polyfit_columns(df_m[[db.TEMP_DAILY_MEAN]], deg=1)
-            annual_temp_increase = coeffs[db.TEMP_DAILY_MEAN].iloc[1]
+            result.annual_temp_increase = float(coeffs[db.TEMP_DAILY_MEAN].iloc[1])
         except ValueError:
-            annual_temp_increase = None  # Could not fit a curve
+            # Could not fit a curve
+            pass
 
-    return models.StationStats(
-        first_date=first_date,
-        last_date=last_date,
-        period=period_to_title(period),
-        annual_temp_increase=annual_temp_increase,
-        coldest_year=coldest_year,
-        coldest_year_temp=coldest_year_temp,
-        warmest_year=warmest_year,
-        warmest_year_temp=warmest_year_temp,
-        driest_year=driest_year,
-        wettest_year=wettest_year,
-    )
+    print(result.model_dump())
+    return result
 
 
 def daily_measurements(

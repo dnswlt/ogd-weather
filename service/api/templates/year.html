@@ -176,45 +176,56 @@
             Distribution of daily min/avg/max temperatures by month.
             Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
                 target="_blank">box plot</a> shows the middle 50% (the interquartile range; IQR) of temperatures for
-            that
-            month. The whiskers
-            indicate the minimum and maximum values.
+            that month. The whiskers indicate the minimum and maximum values.
+            <em>Climate normals</em>: the band shows the middle 50% (IQR) of the daily mean temperature
+            in the 
+            <a class="text-blue-600 hover:underline" href="https://www.ncei.noaa.gov/products/wmo-climate-normals">WMO
+                Climate Normals</a> period
+            1991&ndash;2020, the orange line indicates its mean.
         </p>
 
         <!-- Tabs -- Click events are registered in "year.js" -->
         <div class="tab-widget mb-12">
             <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
                 <!-- Min temp -->
-                <button data-facet="min" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
-                   hover:text-gray-800 focus:outline-none
-                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                <button data-facet="min" data-chart-type="temperature:month" 
+                    role="tab" aria-selected="false" 
+                    class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                        hover:text-gray-800 focus:outline-none
+                        aria-selected:border-blue-600 aria-selected:text-blue-600">
                     Min.&nbsp;temp
                 </button>
                 <!-- Mean temp -->
-                <button data-facet="mean" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
-                   hover:text-gray-800 focus:outline-none
-                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                <button data-facet="mean" data-chart-type="temperature:month" 
+                    role="tab" aria-selected="false" 
+                    class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                        hover:text-gray-800 focus:outline-none
+                        aria-selected:border-blue-600 aria-selected:text-blue-600">
                     Avg.&nbsp;temp
                 </button>
                 <!-- Max temp -->
-                <button data-facet="max" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
-                   hover:text-gray-800 focus:outline-none
-                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                <button data-facet="max" data-chart-type="temperature:month" 
+                    role="tab" aria-selected="true"
+                    class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                        hover:text-gray-800 focus:outline-none
+                        aria-selected:border-blue-600 aria-selected:text-blue-600">
                     Max.&nbsp;temp
                 </button>
                 <!-- Vs. Climate Normals 1991-2020 ref. period -->
-                <button data-facet="mean:cn" role="tab" aria-selected="false"
-                     class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                <button data-facet="mean" data-chart-type="temperature_normals:month" 
+                    role="tab" aria-selected="false"
+                    class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                         hover:text-gray-800 focus:outline-none
                         aria-selected:border-blue-600 aria-selected:text-blue-600">
-                    Climate Normals
+                    Climate normals
                 </button>
             </div>
 
             <!-- Loader: carries station+year from the global form + its own hx-vals facet -->
-            <div class="vega-spec-loader" hx-get="/stations/{station}/charts/year/{year}/temperature:month"
+            <div class="vega-spec-loader" data-vega-target="temperature-month-chart"
+                hx-get="/stations/{station}/charts/year/{year}/{chartType}"
                 hx-ext="path-params" hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
-                hx-vals='{"facet":"max"}' hx-target="this" hx-swap="innerHTML"></div>
+                hx-vals='{"facet":"max","chartType":"temperature:month"}' hx-target="this" hx-swap="innerHTML"></div>
             <div id="temperature-month-chart" class="w-full overflow-hidden"></div>
         </div>
 
@@ -302,7 +313,8 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/year/{year}/humidity:month" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML">
+                    hx-target="this" hx-swap="innerHTML"
+                    data-vega-target="humidity-month-chart">
                     <!-- Vega script goes here -->
                 </div>
                 <div id="humidity-month-chart" class="w-full overflow-hidden"></div>
@@ -319,7 +331,8 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/year/{year}/windrose" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML">
+                    hx-target="this" hx-swap="innerHTML"
+                    data-vega-target="windrose-chart">
                     <!-- Vega script goes here -->
                 </div>
                 <!-- This is a Vega chart created without Altair, so we must set the (min-) height

@@ -456,7 +456,23 @@ func serveChartServiceURL[Response any](
 
 	backendURL := s.chartServiceURL(r.URL).String()
 	response, err := fetchBackendData[Response](r.Context(), s, backendURL)
+
+	var be *BackendError
+	if errors.As(err, &be) && be.StatusCode() == http.StatusNotFound {
+		// 404 Not Found typically means "No data". Return corresponding HTML snippet.
+		errorTemplate := "not_found.html"
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		err = s.template.ExecuteTemplate(w, errorTemplate, map[string]any{
+			"Error": be.Error(),
+		})
+		if err != nil {
+			log.Printf("Failed to render template %q: %v", errorTemplate, err)
+			http.Error(w, "Template rendering error", http.StatusInternalServerError)
+		}
+		return
+	}
 	if err != nil {
+		// Pass through any other error type.
 		s.backendError(w, err, "Failed to fetch data (%T) from backend", response)
 		return
 	}

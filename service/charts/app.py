@@ -245,16 +245,21 @@ async def get_year_chart(
 ):
 
     station_abbr = station_abbr.upper()
+    if year < 1800 or year > 2100:
+        raise _bad_request(f"year must be within [1800, 2100], was: {year}")
 
     def _read_daily(columns):
         with app.state.engine.begin() as conn:
-            return db.read_daily_measurements(
+            df = db.read_daily_measurements(
                 conn,
                 station_abbr,
                 columns=columns,
                 from_year=year,
                 to_year=year,
             )
+            if df.empty:
+                raise NoDataError(f"No data for {columns} in year {year}")
+            return df
 
     def _read_ref(variables):
         with app.state.engine.begin() as conn:
@@ -280,15 +285,12 @@ async def get_year_chart(
     # Single chart cases.
     if chart_type == "temperature:month":
         df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
-        if facet.endswith(":cn"):
-            df_ref = _read_ref(
-                [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]
-            )
-            chart = charts.monthly_temp_anomaly_chart(
-                df, df_ref, station_abbr, year, facet.removesuffix(":cn")
-            )
-        else:
-            chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year, facet)
+        chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year, facet)
+
+    elif chart_type == "temperature_normals:month":
+        df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
+        df_ref = _read_ref([db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX])
+        chart = charts.monthly_temp_anomaly_chart(df, df_ref, station_abbr, year, facet)
 
     elif chart_type == "sunny_days:month":
         df = _read_daily([db.SUNSHINE_DAILY_PCT_OF_MAX])
@@ -300,7 +302,7 @@ async def get_year_chart(
         chart = charts.monthly_sunshine_boxplot_chart(df, station_abbr, year)
 
     elif chart_type == "humidity:month":
-        df = _read_daily([db.REL_HUMITIDY_DAILY_MEAN])
+        df = _read_daily([db.REL_HUMIDITY_DAILY_MEAN])
         chart = charts.monthly_humidity_boxplot_chart(df, station_abbr, year)
 
     elif chart_type == "precipitation:month":
@@ -323,6 +325,8 @@ async def get_year_chart(
                 to_date=datetime.datetime(year + 1, 1, 1),
                 columns=[db.WIND_DIRECTION_HOURLY_MEAN, db.WIND_SPEED_HOURLY_MEAN],
             )
+        if df.empty:
+            raise NoDataError("No wind data for wind rose")
         return {
             "vega_specs": {
                 "windrose": vega.annual_windrose_chart(df, year),
@@ -343,10 +347,7 @@ async def get_daily_chart(
     chart_type: str,
 ):
     if chart_type not in ["overview"]:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invalid chart type: {chart_type}",
-        )
+        raise _bad_request(f"Invalid chart type: {chart_type}")
 
     from_date, to_date = _daily_range(date)
     station_abbr = station_abbr.upper()

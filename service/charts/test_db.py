@@ -561,7 +561,7 @@ class TestCreateDb(unittest.TestCase):
         columns = [
             db.TEMP_MONTHLY_MEAN,
             db.PRECIP_MONTHLY_MM,
-            db.REL_HUMITIDY_MONTHLY_MEAN,
+            db.REL_HUMIDITY_MONTHLY_MEAN,
         ]
         with engine.connect() as conn:
             df = db.read_monthly_measurements(

@@ -99,16 +99,18 @@ type StationsResponse struct {
 }
 
 type StationStats struct {
-	FirstDate          Date        `json:"first_date"`
-	LastDate           Date        `json:"last_date"`
-	Period             string      `json:"period"`
-	AnnualTempIncrease NullFloat64 `json:"annual_temp_increase"`
-	ColdestYear        int         `json:"coldest_year,omitempty"`
-	ColdestYearTemp    NullFloat64 `json:"coldest_year_temp,omitempty"`
-	WarmestYear        int         `json:"warmest_year,omitempty"`
-	WarmestYearTemp    NullFloat64 `json:"warmest_year_temp,omitempty"`
-	DriestYear         int         `json:"driest_year,omitempty"`
-	WettestYear        int         `json:"wettest_year,omitempty"`
+	FirstDate           Date        `json:"first_date"`
+	LastDate            Date        `json:"last_date"`
+	Period              string      `json:"period"`
+	AnnualTempIncrease  NullFloat64 `json:"annual_temp_increase"`
+	ColdestYear         int         `json:"coldest_year,omitempty"`
+	ColdestYearTemp     NullFloat64 `json:"coldest_year_temp,omitempty"`
+	WarmestYear         int         `json:"warmest_year,omitempty"`
+	WarmestYearTemp     NullFloat64 `json:"warmest_year_temp,omitempty"`
+	DriestYear          int         `json:"driest_year,omitempty"`
+	DriestYearPrecipMm  NullFloat64 `json:"driest_year_precip_mm,omitempty"`
+	WettestYear         int         `json:"wettest_year,omitempty"`
+	WettestYearPrecipMm NullFloat64 `json:"wettest_year_precip_mm,omitempty"`
 }
 
 type StationSummary struct {
@@ -221,6 +223,16 @@ func (s *Station) MaxDate() NullDate {
 		}
 	}
 	return m
+}
+
+func (s *StationStats) TempIncrease10Y() NullFloat64 {
+	if !s.AnnualTempIncrease.HasValue {
+		return NullFloat64{}
+	}
+	return NullFloat64{
+		Value:    10 * s.AnnualTempIncrease.Value,
+		HasValue: true,
+	}
 }
 
 // Date wraps time.Time but marshals/unmarshals as YYYY-MM-DD.

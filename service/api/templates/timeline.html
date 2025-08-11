@@ -88,7 +88,8 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/annual/temperature" hx-include="#chart-controls" hx-target="this"
-                    hx-swap="innerHTML">
+                    hx-swap="innerHTML"
+                    data-vega-target="temperature-chart">
                     <!-- Vega script goes here -->
                 </div>
                 <div id="temperature-chart" class="w-full overflow-hidden"></div>
@@ -103,10 +104,11 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/annual/temperature_deviation" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML">
+                    hx-target="this" hx-swap="innerHTML"
+                    data-vega-target="temperature-deviation-chart">
                     <!-- Vega script goes here -->
                 </div>
-                <div id="temperature_deviation-chart" class="w-full overflow-hidden"></div>
+                <div id="temperature-deviation-chart" class="w-full overflow-hidden"></div>
             </div>
 
             <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Total Precipitation</h2>
@@ -117,7 +119,8 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/annual/precipitation" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML">
+                    hx-target="this" hx-swap="innerHTML"
+                    data-vega-target="precipitation-chart">
                     <!-- Vega script goes here -->
                 </div>
                 <div id="precipitation-chart" class="w-full overflow-hidden"></div>

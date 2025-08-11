@@ -69,8 +69,11 @@ class Palette:
     def first_n(self, n: int) -> list[str]:
         return list(islice(cycle(self._get_colors()), n))
 
-    def scale(self, data: pd.Series):
-        domain = list(data.unique())
+    def scale(self, data: list[str] | pd.Series):
+        if isinstance(data, list):
+            domain = data
+        else:
+            domain = list(data.unique())
         range = self.first_n(len(domain))
         return alt.Scale(domain=domain, range=range)
 

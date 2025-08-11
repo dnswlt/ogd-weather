@@ -31,8 +31,18 @@ function initPage() {
 
 }
 
-function embedVegaScript(script) {
-    const parent = script.closest("div[hx-get]");
+function getVegaTargets(el) {
+    if (el.dataset.vegaTargets) {
+        const ts = JSON.parse(el.dataset.vegaTargets);
+        return Object.values(ts);
+    }
+    if (el.dataset.vegaTarget) {
+        return [el.dataset.vegaTarget];
+    }
+    return [];
+}
+
+function embedVegaScript(parent, script) {
     // Determine ID of element (<div>) to embed Vega chart.
     let targetId;
     if (parent.dataset.vegaTargets) {
@@ -50,19 +60,35 @@ function embedVegaScript(script) {
 
 // Initialization that applies to all pages.
 function commonInit() {
-    // Run vegaEmbed when receiving new snippets containing Vega-Lite JSON.
     htmx.onLoad(function (content) {
-        content.querySelectorAll('script[type="application/json"]')
-            .forEach(script => {
-                try {
-                    embedVegaScript(script);
-                } catch (e) {
-                    console.error('Failed to embed Vega script:', e);
-                } finally {
-                    // avoid reprocessing and cluttering the DOM.
-                    script.remove();
+        // Find <div hx-get> parent that loaded this content.
+        // NOTE: This assumes that snippets have "this" as the htmx target.
+        const hxParent = content.closest("div[hx-get]");
+        // Run embedVegaScript on all Vega-Lite JSON <script> elements.
+        const scripts = content.querySelectorAll('script[type="application/json"]');
+        scripts.forEach(script => {
+            try {
+                embedVegaScript(hxParent, script);
+            } catch (e) {
+                console.error('Failed to embed Vega script:', e);
+            } finally {
+                // avoid reprocessing and cluttering the DOM.
+                script.remove();
+            }
+        });
+        // Error handling: 
+        // Remove all vega-target(s) if no corresponding vega scripts were found.
+        if (hxParent) {
+            for (const tgt of getVegaTargets(hxParent)) {
+                const el = document.getElementById(tgt);
+                // Remove all content (charts in particular).
+                if (el) {
+                    while (el.firstChild) {
+                        el.removeChild(el.firstChild);
+                    }
                 }
-            });
+            }
+        }
     });
 }
 
