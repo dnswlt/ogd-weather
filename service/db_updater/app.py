@@ -56,7 +56,7 @@ def fetch_paginated(url, timeout=10):
         )
 
 
-def download_csv(url, output_dir, etag: str | None = None) -> str | None:
+def download_csv(url, output_dir, etag: str | None = None) -> tuple[str | None, bool]:
     """Downloads a CSV file from the given URL url and writes it to output_dir.
 
     Args:
@@ -67,7 +67,8 @@ def download_csv(url, output_dir, etag: str | None = None) -> str | None:
             no file will be downloaded.
 
     Returns:
-        The Etag header, if present.
+        A tuple of (ETag, is_modified).
+            is_modified is False if the server returned 304 Not Modified.
     """
     filename = os.path.basename(urlparse(url).path)
     output_path = os.path.join(output_dir, filename)
@@ -79,7 +80,7 @@ def download_csv(url, output_dir, etag: str | None = None) -> str | None:
     response.raise_for_status()
     if response.status_code == 304:
         logger.info("Skipping %s: 304 Not Modified", filename)
-        return etag
+        return (etag, False)
 
     etag = response.headers.get("Etag")
 
@@ -87,7 +88,7 @@ def download_csv(url, output_dir, etag: str | None = None) -> str | None:
         f.write(response.content)
 
     logger.info(f"Downloaded: {filename}")
-    return etag
+    return (etag, True)
 
 
 def fetch_data_csv_resources(filter_re: str | None = None) -> list[CsvResource]:
@@ -256,7 +257,7 @@ def fetch_latest_data(
     # Download CSV data files concurrently.
     def _download_and_queue(c: CsvResource) -> str | None:
         try:
-            etag = download_csv(
+            etag, is_modified = download_csv(
                 c.href,
                 weather_dir,
                 etag=c.status.etag if c.status and not force_update else None,
@@ -264,6 +265,10 @@ def fetch_latest_data(
         except Exception as e:
             logger.error("Failed to download %s: %s", c.href, str(e))
             import_queue.put(_NOOP_SENTINEL)  # Inform consumer that we're done.
+            return
+
+        if not is_modified:
+            import_queue.put(_NOOP_SENTINEL)
             return
 
         if c.status and c.status.id is not None:
