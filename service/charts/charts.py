@@ -956,17 +956,16 @@ def monthly_temp_anomaly_chart(
     df_ref: pd.DataFrame,
     station_abbr: str,
     year: int,
-    facet="max",
+    facet="mean",
 ) -> AltairChart:
 
     tf = TempFacet.from_name(facet)
 
     ser = df[tf.column]
 
-    # Sum daily precipitation for each month.
+    # Mean daily temperature for each month.
     months = ser.groupby(ser.index.month).agg([("value", "mean")])
-    # Conform the index to "%02d" format for joining with ref. data.
-    months.index = months.index.map(db.ts_month)
+    months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
 
     # Get percentiles for monthly precipitation from reference data.
     ref_stats = df_ref.loc[(station_abbr, tf.column)][
@@ -974,10 +973,10 @@ def monthly_temp_anomaly_chart(
     ]
 
     # Join, keep data only for months where `months` has data (left join).
-    data = months.join(ref_stats, how="left")
+    join_key = months.index.map(db.ts_month)
+    data = months.join(ref_stats, on=join_key, how="left")
 
     data = data.reset_index(names="month_num")
-    data["month_name"] = data["month_num"].map(lambda k: calendar.month_abbr[int(k)])
 
     return anomaly_chart(
         data,
@@ -987,7 +986,7 @@ def monthly_temp_anomaly_chart(
         y_title=f"Temperature (°C)",
         color=tf.color,
         sort_field="month_num",
-        title=f"Monthly {tf.facet}. temperature in {year}",
+        title=f"Daily {tf.facet}. temperature in {year} • compared to 1991-2020 Climate Normals",
     )
 
 

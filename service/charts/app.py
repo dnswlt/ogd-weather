@@ -280,12 +280,15 @@ async def get_year_chart(
     # Single chart cases.
     if chart_type == "temperature:month":
         df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
-        chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year, facet)
-
-    elif chart_type == "temperature:month:anomaly":
-        df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
-        df_ref = _read_ref([db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX])
-        chart = charts.monthly_temp_anomaly_chart(df, df_ref, station_abbr, year, facet)
+        if facet.endswith(":cn"):
+            df_ref = _read_ref(
+                [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]
+            )
+            chart = charts.monthly_temp_anomaly_chart(
+                df, df_ref, station_abbr, year, facet.removesuffix(":cn")
+            )
+        else:
+            chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year, facet)
 
     elif chart_type == "sunny_days:month":
         df = _read_daily([db.SUNSHINE_DAILY_PCT_OF_MAX])
