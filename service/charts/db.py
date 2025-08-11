@@ -4,7 +4,7 @@ import itertools
 import logging
 import os
 import time
-from typing import Any, Callable, Collection
+from typing import Any, Collection
 from urllib.parse import urlparse
 import uuid
 import numpy as np
@@ -160,6 +160,7 @@ VARIABLE_API_NAMES = {
 # Derived metric names (prefix DX_):
 DX_SUNNY_DAYS_ANNUAL_COUNT = "sunny_days_annual_count"
 DX_SUMMER_DAYS_ANNUAL_COUNT = "summer_days_annual_count"
+DX_RAIN_DAYS_ANNUAL_COUNT = "rain_days_annual_count"
 DX_FROST_DAYS_ANNUAL_COUNT = "frost_days_annual_count"
 DX_TROPICAL_NIGHTS_ANNUAL_COUNT = "tropical_nights_annual_count"
 DX_GROWING_DEGREE_DAYS_ANNUAL_SUM = "growing_degree_days_annual_sum"
@@ -169,6 +170,11 @@ DX_SUMMER_DAYS_MONTHLY_COUNT = "summer_days_monthly_count"
 DX_FROST_DAYS_MONTHLY_COUNT = "frost_days_monthly_count"
 DX_TROPICAL_NIGHTS_MONTHLY_COUNT = "tropical_nights_monthly_count"
 DX_GROWING_DEGREE_DAYS_MONTHLY_SUM = "growing_degree_days_monthly_sum"
+
+# Total precipitation per given time slice and year.
+# E.g., in monthly summary stats for the 1991-2020 reference
+# period, this derived metric holds the monthly precipitation.
+DX_PRECIP_TOTAL = "dx_precip_total"
 
 DX_SOURCE_DATE_RANGE = "source_date_range"
 
@@ -749,7 +755,9 @@ def recreate_views(engine: sa.Engine) -> None:
     recreate_station_data_summary(engine)
     recreate_nearby_stations(engine)
 
+    logger.info("Recreating reference period (1991-2020) 'all' stats...")
     recreate_reference_period_stats_all(engine)
+    logger.info("Recreating reference period (1991-2020) 'month' stats...")
     recreate_reference_period_stats_month(engine)
 
 
@@ -820,32 +828,36 @@ def recreate_nearby_stations(
         conn.execute(insert, flat_records)
 
 
-def recreate_reference_period_stats_all(engine: sa.Engine) -> None:
-    """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020."""
+def recreate_reference_period_stats(
+    engine: sa.Engine, stats_table: VarSummaryStatsTable
+) -> None:
+    """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020.
+
+    Args:
+        engine: The SQLAlchemy engine to use.
+        stats_table: the summary stats table to write to.
+    """
     with engine.begin() as conn:
         # Recreate table
-        var_summary_stats_all.sa_table.drop(conn, checkfirst=True)
-        var_summary_stats_all.sa_table.create(conn)
+        stats_table.sa_table.drop(conn, checkfirst=True)
+        stats_table.sa_table.create(conn)
 
         # Insert data for aggregations.
         insert_summary_stats_from_daily_measurements(
             conn,
-            stats_table=var_summary_stats_all,
+            stats_table=stats_table,
             agg_name=AGG_NAME_REF_1991_2020,
             from_date=datetime.datetime(1991, 1, 1),
             to_date=datetime.datetime(2021, 1, 1),
         )
+
+
+def recreate_reference_period_stats_all(engine: sa.Engine) -> None:
+    recreate_reference_period_stats(engine, var_summary_stats_all)
 
 
 def recreate_reference_period_stats_month(engine: sa.Engine) -> None:
-    with engine.begin() as conn:
-        insert_summary_stats_from_daily_measurements(
-            conn,
-            stats_table=var_summary_stats_month,
-            agg_name=AGG_NAME_REF_1991_2020,
-            from_date=datetime.datetime(1991, 1, 1),
-            to_date=datetime.datetime(2021, 1, 1),
-        )
+    recreate_reference_period_stats(engine, var_summary_stats_month)
 
 
 def insert_summary_stats_from_daily_measurements(
@@ -868,7 +880,7 @@ def insert_summary_stats_from_daily_measurements(
         ATM_PRESSURE_DAILY_MEAN,
     ]
 
-    def _station_summary(
+    def _var_summary_stats(
         df: pd.DataFrame, date_col: str, var_cols: list[str], granularity: str
     ) -> list[dict[str, Any]]:
         """Returns summary stats for all vars in var_cols as an SQL INSERT tuple."""
@@ -931,7 +943,7 @@ def insert_summary_stats_from_daily_measurements(
             **{v: float for v in daily_vars},
         },
     )
-
+    logger.info("Read %d rows from %s", len(df), TABLE_DAILY_MEASUREMENTS.name)
     # Apply time_slicer to get time slice dimension.
     df["time_slice"] = stats_table.time_slicer(df)
 
@@ -942,7 +954,7 @@ def insert_summary_stats_from_daily_measurements(
     df[DX_SOURCE_DATE_RANGE] = delta_days / pd.Timedelta(days=1)
 
     # Summary stats across the whole period for all daily vars.
-    params = _station_summary(
+    params = _var_summary_stats(
         df,
         date_col="reference_timestamp",
         var_cols=daily_vars + [DX_SOURCE_DATE_RANGE],
@@ -953,7 +965,7 @@ def insert_summary_stats_from_daily_measurements(
         # Select condition where series had a value, else propagate NaN.
         return condition.where(series.notna()).astype(float)
 
-    # Summary stats for generated annual metrics based on daily values.
+    # Summary stats for generated summary stats based on daily values.
     # For "day count" metrics, we calculate a true/false value per day
     # and interpret it as 1/0. Other metrics like Growing Degree Days
     # are derived from other daily variables and then summed up.
@@ -971,6 +983,9 @@ def insert_summary_stats_from_daily_measurements(
             DX_FROST_DAYS_ANNUAL_COUNT: _day_count(
                 df[TEMP_DAILY_MIN], df[TEMP_DAILY_MIN] < 0
             ),
+            DX_RAIN_DAYS_ANNUAL_COUNT: _day_count(
+                df[PRECIP_DAILY_MM], df[PRECIP_DAILY_MM] >= 1.0
+            ),
             DX_SUNNY_DAYS_ANNUAL_COUNT: _day_count(
                 df[SUNSHINE_DAILY_MINUTES], df[SUNSHINE_DAILY_MINUTES] >= 6 * 60
             ),
@@ -981,6 +996,7 @@ def insert_summary_stats_from_daily_measurements(
             DX_GROWING_DEGREE_DAYS_ANNUAL_SUM: (
                 0.5 * (df[TEMP_DAILY_MEAN].clip(upper=30) - 10).clip(lower=0)
             ),
+            DX_PRECIP_TOTAL: df[PRECIP_DAILY_MM],
         }
     )
     key_columns = ["station_abbr", "year", "time_slice"]
@@ -995,12 +1011,15 @@ def insert_summary_stats_from_daily_measurements(
     # Now aggregate away the year (for each station) to compute summary stats
     # (same as above for plain daily variables).
     params.extend(
-        _station_summary(dcy, date_col="year", var_cols=dc_vars, granularity="annual")
+        _var_summary_stats(dcy, date_col="year", var_cols=dc_vars, granularity="annual")
     )
 
     if params:
+        t_start = time.time()
+        logger.info("Inserting %d rows into %s", len(params), stats_table.sa_table.name)
         insert_stmt = sa.insert(stats_table.sa_table)
         conn.execute(insert_stmt, params)
+        logger.info("Insert done in %.1f seconds.", time.time() - t_start)
 
 
 def recreate_station_data_summary(engine: sa.Engine) -> None:

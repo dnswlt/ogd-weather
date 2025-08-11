@@ -763,7 +763,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
     def test_derived_frost_days(self):
         # Insert daily data.
         self._insert_var(
-            "tre200dn",
+            db.TEMP_DAILY_MIN,
             [
                 ("BER", "1991-01-01", 0.5),
                 ("BER", "1992-02-02", -1),
@@ -784,7 +784,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
     def test_derived_tropical_nights(self):
         # Insert daily data.
         self._insert_var(
-            "tre200dn",
+            db.TEMP_DAILY_MIN,
             [
                 ("LUG", "1991-07-01", 21),
                 ("LUG", "1992-07-01", 19),
@@ -807,7 +807,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         # Test that the "virtual" column "date_range" is included
         # and has the total min and max date as extremal points.
         self._insert_var(
-            "tre200dn",
+            db.TEMP_DAILY_MIN,
             [
                 ("LUG", "1991-01-01", 21),
                 ("LUG", "1992-07-01", 19),
@@ -830,7 +830,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
     def test_derived_sunny_days(self):
         # Insert daily data.
         self._insert_var(
-            "sre000d0",
+            db.SUNSHINE_DAILY_MINUTES,
             [
                 ("BER", "1991-06-01", 8 * 60),
                 ("BER", "1991-06-02", 5.8 * 60),
@@ -868,7 +868,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         # from which the derived metric is ... derived, then we
         # should not have 0, but NA.
         self._insert_var(
-            "sre000d0",
+            db.SUNSHINE_DAILY_MINUTES,
             [
                 # BER has zeros sunny days
                 ("BER", "1991-06-01", 0),
@@ -893,6 +893,36 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         self.assertEqual(ber["source_granularity"], "annual")
         # GES shouldn't even be there
         self.assertTrue("GET" not in df.index)
+
+    def test_derived_precipitation_total(self):
+        # Insert daily data.
+        self._insert_var(
+            db.PRECIP_DAILY_MM,
+            [
+                ("BER", "1991-06-01", 15),
+                ("BER", "1991-06-02", 0),
+                ("BER", "1991-06-03", 10),
+                ("BER", "1991-06-04", 100),
+                ("BER", "1992-06-01", 0),
+                ("BER", "1993-06-01", 0),
+                ("BER", "1994-06-01", 40),
+                ("BER", "1995-06-01", 30),
+                ("BER", "1996-06-01", 30),
+                ("BER", "1997-06-01", 30),
+            ],
+        )
+        # Recreate derived tables.
+        db.recreate_reference_period_stats_month(self.engine)
+        # Read data
+        with self.engine.begin() as conn:
+            df = db.read_var_summary_stats_month(conn, db.AGG_NAME_REF_1991_2020)
+
+        # Check summary stats
+        pt = df.loc["BER", db.DX_PRECIP_TOTAL, db.ts_month(6)]
+        self.assertEqual(pt["min_value"], 0.0)
+        # Sum of precipitation in given month, so should be 125 from 1991:
+        self.assertEqual(pt["max_value"], 125.0)
+        self.assertEqual(pt["max_value_date"], "1991-01-01")
 
     def test_create_select_agg_not_exist(self):
         self._insert_var(db.TEMP_DAILY_MIN, [("BER", "1991-01-01", -3)])

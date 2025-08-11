@@ -713,7 +713,7 @@ def bar_chart_with_reference(
     Prefer using `COLORS_TABLEAU20` values for `color` for consistency.
     """
     # df should have all required columns:
-    required_cols = set(["p25", "p50", "p75"] + [x_col, y_col])
+    required_cols = set(["p25_value", "mean_value", "p75_value"] + [x_col, y_col])
     if sort_field:
         required_cols.add(sort_field)
     col_diff = required_cols - set(df.columns)
@@ -744,24 +744,24 @@ def bar_chart_with_reference(
     )
     p25_tick = base.mark_tick(color=tick_color, thickness=2, width=ref_width).encode(
         x=x,
-        y=alt.Y("p25:Q"),
+        y=alt.Y("p25_value:Q"),
         opacity=alt.value(0.1),
     )
-    p50_tick = base.mark_tick(color=tick_color, thickness=2, width=ref_width).encode(
+    mean_tick = base.mark_tick(color=tick_color, thickness=2, width=ref_width).encode(
         x=x,
-        y=alt.Y("p50:Q"),
+        y=alt.Y("mean_value:Q"),
     )
     p75_tick = base.mark_tick(color=tick_color, thickness=2, width=ref_width).encode(
-        x=x, y=alt.Y("p75:Q"), opacity=alt.value(0.1)
+        x=x, y=alt.Y("p75_value:Q"), opacity=alt.value(0.1)
     )
     ref_bar = base.mark_bar(width=ref_width).encode(
         x=x,
-        y=alt.Y(f"p25:Q"),
-        y2=alt.Y2(f"p75:Q"),
+        y=alt.Y(f"p25_value:Q"),
+        y2=alt.Y2(f"p75_value:Q"),
         color=alt.value(color),
         opacity=alt.value(0.15),
     )
-    return alt.layer(ref_bar, bar, p25_tick, p50_tick, p75_tick).properties(
+    return alt.layer(ref_bar, bar, p25_tick, mean_tick, p75_tick).properties(
         width="container",
         autosize={"type": "fit", "contains": "padding"},
         title=title,
@@ -1017,17 +1017,35 @@ def _localize_tz(data: pd.DataFrame | pd.Series) -> pd.DataFrame:
 
 
 def monthly_raindays_bar_chart(
-    df: pd.DataFrame, station_abbr: str, year: int
+    df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
 ) -> AltairChart:
-    ser = _localize_tz(df[db.PRECIP_DAILY_MM])
+
+    ser = df[db.PRECIP_DAILY_MM]
     rainday = (ser >= 1.0).astype(float)
 
+    # Sum daily precipitation for each month.
     months = rainday.groupby(rainday.index.month).agg([("value", "sum")])
+    months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
 
-    return monthly_bar_chart(
-        months,
-        color=_C["SkyBlue"],
+    # Get percentiles for monthly precipitation from reference data.
+    ref_stats = df_ref.loc[(station_abbr, db.DX_RAIN_DAYS_ANNUAL_COUNT)][
+        ["p25_value", "mean_value", "p75_value"]
+    ]
+    # Join, keep data only for months where `months` has data (left join).
+    # Conform the index to the ("%02d") format used in ref_stats.
+    join_key = months.index.map(db.ts_month)
+    data = months.join(ref_stats, on=join_key, how="left")
+
+    data = data.reset_index(names="month_num")
+
+    return bar_chart_with_reference(
+        data,
+        x_col="month_name",
+        y_col="value",
+        x_title="Month",
         y_title="# days",
+        sort_field="month_num",
+        color=_C["SkyBlue"],
         title=f"Number of rain days (≥ 1 mm precipitation) per month in {year}",
     )
 
@@ -1036,20 +1054,22 @@ def monthly_precipitation_bar_chart(
     df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
 ) -> AltairChart:
 
-    ser = _localize_tz(df[db.PRECIP_DAILY_MM])
-    ref = _localize_tz(df_ref[db.PRECIP_MONTHLY_MM])
+    ser = df[db.PRECIP_DAILY_MM]
 
     # Sum daily precipitation for each month.
     months = ser.groupby(ser.index.month).agg([("value", "sum")])
+    months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
 
-    # Calculate percentiles for monthly precipitation over reference data.
-    ref_months = ref.groupby(ref.index.month).agg([pctl(25), pctl(50), pctl(75)])
-
+    # Get percentiles for monthly precipitation from reference data.
+    ref_stats = df_ref.loc[(station_abbr, db.DX_PRECIP_TOTAL)][
+        ["p25_value", "mean_value", "p75_value"]
+    ]
     # Join, keep data only for months where `months` has data (left join).
-    data = months.join(ref_months, how="left")
+    # Conform the index to the ("%02d") format used in ref_stats.
+    join_key = months.index.map(db.ts_month)
+    data = months.join(ref_stats, on=join_key, how="left")
 
     data = data.reset_index(names="month_num")
-    data["month_name"] = data["month_num"].map(lambda k: calendar.month_abbr[k])
 
     return bar_chart_with_reference(
         data,

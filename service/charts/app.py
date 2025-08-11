@@ -256,6 +256,15 @@ async def get_year_chart(
                 to_year=year,
             )
 
+    def _read_ref(variables):
+        with app.state.engine.begin() as conn:
+            return db.read_var_summary_stats_month(
+                conn,
+                agg_name=db.AGG_NAME_REF_1991_2020,
+                station_abbr=station_abbr,
+                variables=variables,
+            )
+
     # drywet returns multiple charts:
     if chart_type == "drywet":
         df = _read_daily([db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX])
@@ -272,29 +281,34 @@ async def get_year_chart(
     if chart_type == "temperature:month":
         df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
         chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year, facet)
+
+    elif chart_type == "temperature:month:anomaly":
+        df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
+        df_ref = _read_ref([db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX])
+        chart = charts.monthly_temp_anomaly_chart(df, df_ref, station_abbr, year, facet)
+
     elif chart_type == "sunny_days:month":
         df = _read_daily([db.SUNSHINE_DAILY_PCT_OF_MAX])
         chart = charts.monthly_sunny_days_bar_chart(df, station_abbr, year)
+
     elif chart_type == "sunshine:month":
         df = _read_daily([db.SUNSHINE_DAILY_MINUTES])
         chart = charts.monthly_sunshine_boxplot_chart(df, station_abbr, year)
+
     elif chart_type == "humidity:month":
         df = _read_daily([db.REL_HUMITIDY_DAILY_MEAN])
         chart = charts.monthly_humidity_boxplot_chart(df, station_abbr, year)
-    elif chart_type == "raindays:month":
-        df = _read_daily([db.PRECIP_DAILY_MM])
-        chart = charts.monthly_raindays_bar_chart(df, station_abbr, year)
+
     elif chart_type == "precipitation:month":
         df = _read_daily([db.PRECIP_DAILY_MM])
-        with app.state.engine.begin() as conn:
-            df_ref = db.read_monthly_measurements(
-                conn,
-                station_abbr,
-                from_date=datetime.datetime(1991, 1, 1),
-                to_date=datetime.datetime(2021, 1, 1),
-                columns=[db.PRECIP_MONTHLY_MM],
-            )
+        df_ref = _read_ref([db.DX_PRECIP_TOTAL])
         chart = charts.monthly_precipitation_bar_chart(df, df_ref, station_abbr, year)
+
+    elif chart_type == "raindays:month":
+        df = _read_daily([db.PRECIP_DAILY_MM])
+        df_ref = _read_ref([db.DX_RAIN_DAYS_ANNUAL_COUNT])
+        chart = charts.monthly_raindays_bar_chart(df, df_ref, station_abbr, year)
+
     elif chart_type == "windrose":
         # This is a vanilla Vega chart, not a Vega-Lite chart.
         with app.state.engine.begin() as conn:
@@ -310,16 +324,6 @@ async def get_year_chart(
                 "windrose": vega.annual_windrose_chart(df, year),
             }
         }
-    elif chart_type == "temperature:month:anomaly":
-        df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
-        with app.state.engine.begin() as conn:
-            df_ref = db.read_per_month_summary_stats(
-                conn,
-                agg_name=db.AGG_NAME_REF_1991_2020,
-                station_abbr=station_abbr,
-                variables=[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX],
-            )
-        chart = charts.monthly_temp_anomaly_chart(df, df_ref, station_abbr, year, facet)
 
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
