@@ -1,5 +1,6 @@
 import datetime
 import io
+import itertools
 import logging
 import os
 import time
@@ -161,8 +162,13 @@ DX_SUNNY_DAYS_ANNUAL_COUNT = "sunny_days_annual_count"
 DX_SUMMER_DAYS_ANNUAL_COUNT = "summer_days_annual_count"
 DX_FROST_DAYS_ANNUAL_COUNT = "frost_days_annual_count"
 DX_TROPICAL_NIGHTS_ANNUAL_COUNT = "tropical_nights_annual_count"
-
 DX_GROWING_DEGREE_DAYS_ANNUAL_SUM = "growing_degree_days_annual_sum"
+
+DX_SUNNY_DAYS_MONTHLY_COUNT = "sunny_days_monthly_count"
+DX_SUMMER_DAYS_MONTHLY_COUNT = "summer_days_monthly_count"
+DX_FROST_DAYS_MONTHLY_COUNT = "frost_days_monthly_count"
+DX_TROPICAL_NIGHTS_MONTHLY_COUNT = "tropical_nights_monthly_count"
+DX_GROWING_DEGREE_DAYS_MONTHLY_SUM = "growing_degree_days_monthly_sum"
 
 DX_SOURCE_DATE_RANGE = "source_date_range"
 
@@ -345,49 +351,71 @@ sa_table_x_nearby_stations = sa.Table(
 )
 
 
-def define_station_var_summary_stats_table(table_name: str) -> sa.Table:
-    return sa.Table(
-        table_name,
-        metadata,
-        sa.Column("agg_name", sa.Text, primary_key=True),
-        sa.Column("station_abbr", sa.Text, primary_key=True),
-        sa.Column("variable", sa.Text, primary_key=True),
-        sa.Column("time_slice", sa.Text, primary_key=True),
-        sa.Column("source_granularity", sa.Text),
-        # Min/max including date of occurrence
-        sa.Column("min_value", sa.REAL),
-        sa.Column("min_value_date", sa.Text),
-        sa.Column("mean_value", sa.REAL),
-        sa.Column("max_value", sa.REAL),
-        sa.Column("max_value_date", sa.Text),
-        # Percentiles (10, 25, 50, 75, 90)
-        sa.Column("p10_value", sa.REAL),
-        sa.Column("p25_value", sa.REAL),
-        sa.Column("median_value", sa.REAL),
-        sa.Column("p75_value", sa.REAL),
-        sa.Column("p90_value", sa.REAL),
-        # Sum
-        sa.Column("value_sum", sa.REAL),
-        # Count
-        sa.Column("value_count", sa.Integer),
-    )
-
-
-sa_table_x_station_var_summary_stats = define_station_var_summary_stats_table(
-    "x_station_var_summary_stats"
-)
-
-
-sa_table_x_station_var_summary_stats_month = define_station_var_summary_stats_table(
-    "x_station_var_summary_stats_month"
-)
-
-
 # Aggregation names in STATION_VAR_SUMMARY_STATS_TABLE_NAME
 AGG_NAME_REF_1991_2020 = "ref_1991_2020"
 
 # Time slice value for aggregations that have no actual time slice.
 TS_ALL = "*"
+
+
+class VarSummaryStatsTable:
+
+    def __init__(self, name: str, time_slice: str) -> None:
+        self.name = name
+        if time_slice == "all":
+            self.time_slicer = VarSummaryStatsTable._ts_all
+        elif time_slice == "month":
+            self.time_slicer = VarSummaryStatsTable._ts_month
+        else:
+            raise ValueError(f"invalid time slice: {time_slice}")
+        self.sa_table: sa.Table = self._define_station_var_summary_stats_table(name)
+
+    def _define_station_var_summary_stats_table(self, table_name: str) -> sa.Table:
+        return sa.Table(
+            table_name,
+            metadata,
+            sa.Column("agg_name", sa.Text, primary_key=True),
+            sa.Column("station_abbr", sa.Text, primary_key=True),
+            sa.Column("variable", sa.Text, primary_key=True),
+            sa.Column("time_slice", sa.Text, primary_key=True),
+            sa.Column("source_granularity", sa.Text),
+            # Min/max including date of occurrence
+            sa.Column("min_value", sa.REAL),
+            sa.Column("min_value_date", sa.Text),
+            sa.Column("mean_value", sa.REAL),
+            sa.Column("max_value", sa.REAL),
+            sa.Column("max_value_date", sa.Text),
+            # Percentiles (10, 25, 50, 75, 90)
+            sa.Column("p10_value", sa.REAL),
+            sa.Column("p25_value", sa.REAL),
+            sa.Column("median_value", sa.REAL),
+            sa.Column("p75_value", sa.REAL),
+            sa.Column("p90_value", sa.REAL),
+            # Sum
+            sa.Column("value_sum", sa.REAL),
+            # Count
+            sa.Column("value_count", sa.Integer),
+        )
+
+    @classmethod
+    def _ts_month(cls, d: pd.DataFrame) -> pd.Series:
+        return pd.to_datetime(d["reference_timestamp"]).dt.month.map(ts_month)
+
+    @classmethod
+    def _ts_all(cls, d: pd.DataFrame) -> pd.Series:
+        return pd.Series(["*"] * len(d.index), index=d.index)
+
+
+var_summary_stats_all = VarSummaryStatsTable(
+    name="x_station_var_summary_stats",
+    time_slice="all",
+)
+
+
+var_summary_stats_month = VarSummaryStatsTable(
+    name="x_station_var_summary_stats_month",
+    time_slice="month",
+)
 
 
 def ts_month(month: int) -> str:
@@ -721,7 +749,7 @@ def recreate_views(engine: sa.Engine) -> None:
     recreate_station_data_summary(engine)
     recreate_nearby_stations(engine)
 
-    recreate_reference_period_stats(engine)
+    recreate_reference_period_stats_all(engine)
     recreate_reference_period_stats_month(engine)
 
 
@@ -747,42 +775,31 @@ def recreate_nearby_stations(
     with engine.begin() as conn:
         stations = read_stations(conn, exclude_empty=exclude_empty)
 
+    def _mkrec(s1: models.Station, s2: models.Station, dist_km: float):
+        return {
+            "from_station_abbr": s1.abbr,
+            "from_station_name": s1.name,
+            "from_station_canton": s1.canton,
+            "to_station_abbr": s2.abbr,
+            "to_station_name": s2.name,
+            "to_station_canton": s2.canton,
+            "distance_km": dist_km,
+            "height_diff": s2.height_masl - s1.height_masl,
+        }
+
     nearby_stations = [[] for _ in range(len(stations))]
-    for i, s1 in enumerate(stations):
-        for j, s2 in enumerate(stations[i + 1 :], start=i + 1):
-            try:
-                dist_km = (
-                    geo.station_distance_meters(s1, s2, include_height=True) / 1000.0
-                )
-            except ValueError:
-                # Probably missing WGS or elevation data => skip
-                continue
-            if dist_km > max_distance_km:
-                continue
-            nearby_stations[i].append(
-                {
-                    "from_station_abbr": s1.abbr,
-                    "from_station_name": s1.name,
-                    "from_station_canton": s1.canton,
-                    "to_station_abbr": s2.abbr,
-                    "to_station_name": s2.name,
-                    "to_station_canton": s2.canton,
-                    "distance_km": dist_km,
-                    "height_diff": s2.height_masl - s1.height_masl,
-                }
-            )
-            nearby_stations[j].append(
-                {
-                    "from_station_abbr": s2.abbr,
-                    "from_station_name": s2.name,
-                    "from_station_canton": s2.canton,
-                    "to_station_abbr": s1.abbr,
-                    "to_station_name": s1.name,
-                    "to_station_canton": s1.canton,
-                    "distance_km": dist_km,
-                    "height_diff": s1.height_masl - s2.height_masl,
-                }
-            )
+    for i, j in itertools.combinations(range(len(stations)), 2):
+        s1 = stations[i]
+        s2 = stations[j]
+        try:
+            dist_km = geo.station_distance_meters(s1, s2, include_height=True) / 1000.0
+        except ValueError:
+            # Probably missing WGS or elevation data => skip
+            continue
+        if dist_km > max_distance_km:
+            continue
+        nearby_stations[i].append(_mkrec(s1, s2, dist_km))
+        nearby_stations[j].append(_mkrec(s2, s1, dist_km))
 
     flat_records = []
     for records in nearby_stations:
@@ -803,21 +820,17 @@ def recreate_nearby_stations(
         conn.execute(insert, flat_records)
 
 
-def recreate_reference_period_stats(engine: sa.Engine) -> None:
+def recreate_reference_period_stats_all(engine: sa.Engine) -> None:
     """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020."""
     with engine.begin() as conn:
         # Recreate table
-        sa_table_x_station_var_summary_stats.drop(conn, checkfirst=True)
-        sa_table_x_station_var_summary_stats.create(conn)
-
-        sa_table_x_station_var_summary_stats_month.drop(conn, checkfirst=True)
-        sa_table_x_station_var_summary_stats_month.create(conn)
+        var_summary_stats_all.sa_table.drop(conn, checkfirst=True)
+        var_summary_stats_all.sa_table.create(conn)
 
         # Insert data for aggregations.
         insert_summary_stats_from_daily_measurements(
             conn,
-            dest_table=sa_table_x_station_var_summary_stats,
-            time_slicer=lambda d: TS_ALL,
+            stats_table=var_summary_stats_all,
             agg_name=AGG_NAME_REF_1991_2020,
             from_date=datetime.datetime(1991, 1, 1),
             to_date=datetime.datetime(2021, 1, 1),
@@ -825,14 +838,10 @@ def recreate_reference_period_stats(engine: sa.Engine) -> None:
 
 
 def recreate_reference_period_stats_month(engine: sa.Engine) -> None:
-    def _ts_month(d: pd.DataFrame):
-        return pd.to_datetime(d["reference_timestamp"]).dt.month.map(ts_month)
-
     with engine.begin() as conn:
         insert_summary_stats_from_daily_measurements(
             conn,
-            dest_table=sa_table_x_station_var_summary_stats_month,
-            time_slicer=_ts_month,
+            stats_table=var_summary_stats_month,
             agg_name=AGG_NAME_REF_1991_2020,
             from_date=datetime.datetime(1991, 1, 1),
             to_date=datetime.datetime(2021, 1, 1),
@@ -841,8 +850,7 @@ def recreate_reference_period_stats_month(engine: sa.Engine) -> None:
 
 def insert_summary_stats_from_daily_measurements(
     conn: sa.Connection,
-    dest_table: sa.Table,
-    time_slicer: Callable[[pd.DataFrame], pd.Series],
+    stats_table: VarSummaryStatsTable,
     agg_name: str,
     from_date: datetime.datetime,
     to_date: datetime.datetime,
@@ -925,7 +933,7 @@ def insert_summary_stats_from_daily_measurements(
     )
 
     # Apply time_slicer to get time slice dimension.
-    df["time_slice"] = time_slicer(df)
+    df["time_slice"] = stats_table.time_slicer(df)
 
     # Add DX_SOURCE_DATE_RANGE column containing epoch seconds.
     # This derived variable can be used to determine the overall time range
@@ -991,7 +999,7 @@ def insert_summary_stats_from_daily_measurements(
     )
 
     if params:
-        insert_stmt = sa.insert(dest_table)
+        insert_stmt = sa.insert(stats_table.sa_table)
         conn.execute(insert_stmt, params)
 
 
@@ -1443,7 +1451,7 @@ def _column_to_dtype(col: sa.Column) -> Any:
     raise ValueError(f"Cannot determine dtype for {col.name} of type {col.type}")
 
 
-def read_station_var_summary_stats(
+def read_var_summary_stats_all(
     conn: sa.Connection,
     agg_name: str,
     station_abbr: str | None = None,
@@ -1452,7 +1460,7 @@ def read_station_var_summary_stats(
     """Convenience wrapper for read_station_var_summary_stats_generic discarding the time_slice dimension."""
     df = read_summary_stats(
         conn,
-        table=sa_table_x_station_var_summary_stats,
+        table=var_summary_stats_all.sa_table,
         agg_name=agg_name,
         station_abbr=station_abbr,
         variables=variables,
@@ -1463,7 +1471,7 @@ def read_station_var_summary_stats(
     return df.xs(TS_ALL, level="time_slice")
 
 
-def read_per_month_summary_stats(
+def read_var_summary_stats_month(
     conn: sa.Connection,
     agg_name: str,
     station_abbr: str | None = None,
@@ -1472,7 +1480,7 @@ def read_per_month_summary_stats(
 ) -> pd.DataFrame:
     return read_summary_stats(
         conn,
-        table=sa_table_x_station_var_summary_stats_month,
+        table=var_summary_stats_month.sa_table,
         agg_name=agg_name,
         time_slices=[ts_month(m) for m in months] if months else None,
         station_abbr=station_abbr,

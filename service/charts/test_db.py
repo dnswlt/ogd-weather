@@ -641,7 +641,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.metadata.create_all(self.engine)
 
     def test_recreate_empty(self):
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
 
     def test_create_select(self):
         # Insert daily data.
@@ -665,9 +665,9 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         )
         conn.commit()
         # Recreate derived table.
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         # Read data
-        df = db.read_station_var_summary_stats(
+        df = db.read_var_summary_stats_all(
             conn,
             db.AGG_NAME_REF_1991_2020,
             station_abbr="BER",
@@ -741,10 +741,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
 
         self.assertGreaterEqual(len(df), 1)
 
@@ -771,10 +771,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
         fd = df.loc["BER", db.DX_FROST_DAYS_ANNUAL_COUNT]
@@ -792,10 +792,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
         fd = df.loc["LUG", db.DX_TROPICAL_NIGHTS_ANNUAL_COUNT]
@@ -815,10 +815,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
         fd = df.loc["LUG", db.DX_SOURCE_DATE_RANGE]
@@ -846,10 +846,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
         fd = df.loc["BER", db.DX_SUNNY_DAYS_ANNUAL_COUNT]
@@ -879,10 +879,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_station_var_summary_stats(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
 
         # BER
         self.assertTrue("BER" in df.index)
@@ -896,9 +896,9 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
 
     def test_create_select_agg_not_exist(self):
         self._insert_var(db.TEMP_DAILY_MIN, [("BER", "1991-01-01", -3)])
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         with self.engine.begin() as conn:
-            df = db.read_station_var_summary_stats(
+            df = db.read_var_summary_stats_all(
                 conn, "AGG_DOES_NOT_EXIST", station_abbr="BER"
             )
         self.assertTrue(df.empty)
@@ -914,10 +914,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats(self.engine)
+        db.recreate_reference_period_stats_all(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_station_var_summary_stats(
+            df = db.read_var_summary_stats_all(
                 conn, db.AGG_NAME_REF_1991_2020, station_abbr="BER"
             )
 
@@ -944,7 +944,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         with self.engine.begin() as conn:
             df = db.read_summary_stats(
                 conn,
-                table=db.sa_table_x_station_var_summary_stats_month,
+                table=db.var_summary_stats_month.sa_table,
                 agg_name=db.AGG_NAME_REF_1991_2020,
                 station_abbr="BER",
                 variables=[db.TEMP_DAILY_MIN],
@@ -975,7 +975,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         with self.engine.begin() as conn:
             df = db.read_summary_stats(
                 conn,
-                table=db.sa_table_x_station_var_summary_stats_month,
+                table=db.var_summary_stats_month.sa_table,
                 agg_name=db.AGG_NAME_REF_1991_2020,
                 variables=[db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
             )

@@ -501,7 +501,7 @@ async def get_info(
     with app.state.engine.begin() as conn:
         station = db.read_station(conn, station_abbr)
 
-        vars = db.read_station_var_summary_stats(
+        vars = db.read_var_summary_stats_all(
             conn,
             agg_name=db.AGG_NAME_REF_1991_2020,
             station_abbr=station_abbr,
