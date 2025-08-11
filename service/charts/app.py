@@ -289,7 +289,8 @@ async def get_year_chart(
 
     elif chart_type == "sunny_days:month":
         df = _read_daily([db.SUNSHINE_DAILY_PCT_OF_MAX])
-        chart = charts.monthly_sunny_days_bar_chart(df, station_abbr, year)
+        df_ref = _read_ref([db.DX_SUNNY_DAYS_ANNUAL_COUNT])
+        chart = charts.monthly_sunny_days_bar_chart(df, df_ref, station_abbr, year)
 
     elif chart_type == "sunshine:month":
         df = _read_daily([db.SUNSHINE_DAILY_MINUTES])

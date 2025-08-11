@@ -884,23 +884,6 @@ def monthly_bar_chart(
     )
 
 
-def monthly_sunny_days_bar_chart(
-    df: pd.DataFrame, station_abbr: str, year: int
-) -> AltairChart:
-
-    ser = _localize_tz(df[db.SUNSHINE_DAILY_PCT_OF_MAX])
-    sunny_day = (ser >= 80).astype(float)
-
-    months = sunny_day.groupby(sunny_day.index.month).agg([("value", "sum")])
-
-    return monthly_bar_chart(
-        months,
-        color=_C["Apricot"],
-        y_title="# days",
-        title=f"Number of sunny days (≥ 80% rel. sunshine duration) per month in {year}",
-    )
-
-
 def monthly_sunshine_boxplot_chart(
     df: pd.DataFrame, station_abbr: str, year: int
 ) -> AltairChart:
@@ -1047,6 +1030,40 @@ def monthly_raindays_bar_chart(
         sort_field="month_num",
         color=_C["SkyBlue"],
         title=f"Number of rain days (≥ 1 mm precipitation) per month in {year}",
+    )
+
+
+def monthly_sunny_days_bar_chart(
+    df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
+) -> AltairChart:
+
+    ser = df[db.SUNSHINE_DAILY_PCT_OF_MAX]
+    sunny_day = (ser >= 80).astype(float)
+
+    # Sum daily precipitation for each month.
+    months = sunny_day.groupby(sunny_day.index.month).agg([("value", "sum")])
+    months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
+
+    # Get percentiles for monthly precipitation from reference data.
+    ref_stats = df_ref.loc[(station_abbr, db.DX_SUNNY_DAYS_ANNUAL_COUNT)][
+        ["p25_value", "mean_value", "p75_value"]
+    ]
+    # Join, keep data only for months where `months` has data (left join).
+    # Conform the index to the ("%02d") format used in ref_stats.
+    join_key = months.index.map(db.ts_month)
+    data = months.join(ref_stats, on=join_key, how="left")
+
+    data = data.reset_index(names="month_num")
+
+    return bar_chart_with_reference(
+        data,
+        x_col="month_name",
+        y_col="value",
+        x_title="Month",
+        y_title="# days",
+        sort_field="month_num",
+        color=_C["Apricot"],
+        title=f"Number of sunny days (≥ 80% rel. sunshine duration) per month in {year}",
     )
 
 
