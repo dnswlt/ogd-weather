@@ -643,7 +643,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.metadata.create_all(self.engine)
 
     def test_recreate_empty(self):
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
 
     def test_create_select(self):
         # Insert daily data.
@@ -667,7 +667,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         )
         conn.commit()
         # Recreate derived table.
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         df = db.read_var_summary_stats_all(
             conn,
@@ -743,7 +743,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
@@ -773,7 +773,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
@@ -794,7 +794,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
@@ -817,7 +817,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
@@ -848,7 +848,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
@@ -881,7 +881,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
@@ -914,7 +914,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived tables.
-        db.recreate_reference_period_stats_month(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_month(conn, db.AGG_NAME_REF_1991_2020)
@@ -928,7 +928,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
 
     def test_create_select_agg_not_exist(self):
         self._insert_var(db.TEMP_DAILY_MIN, [("BER", "1991-01-01", -3)])
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(
                 conn, "AGG_DOES_NOT_EXIST", station_abbr="BER"
@@ -946,7 +946,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_all(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(
@@ -971,7 +971,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_month(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
 
         with self.engine.begin() as conn:
             df = db.read_summary_stats(
@@ -1002,7 +1002,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             ],
         )
         # Recreate derived table.
-        db.recreate_reference_period_stats_month(self.engine)
+        db.recreate_climate_normals_stats_tables(self.engine)
 
         with self.engine.begin() as conn:
             df = db.read_summary_stats(

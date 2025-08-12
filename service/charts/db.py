@@ -14,7 +14,6 @@ import re
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-from .pandas_funcs import pctl
 from . import geo
 from . import models
 from . import sql_queries
@@ -754,11 +753,18 @@ def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
 def recreate_views(engine: sa.Engine) -> None:
     recreate_station_data_summary(engine)
     recreate_nearby_stations(engine)
+    recreate_climate_normals_stats_tables(engine)
 
+
+def recreate_climate_normals_stats_tables(engine: sa.Engine):
+    logger.info("Reading daily measurements (1991-2020) from DB...")
+    daily_measurements = _read_all_daily_measurements(
+        engine, datetime.datetime(1991, 1, 1), datetime.datetime(2021, 1, 1)
+    )
     logger.info("Recreating reference period (1991-2020) 'all' stats...")
-    recreate_reference_period_stats_all(engine)
+    recreate_reference_period_stats(engine, var_summary_stats_all, daily_measurements)
     logger.info("Recreating reference period (1991-2020) 'month' stats...")
-    recreate_reference_period_stats_month(engine)
+    recreate_reference_period_stats(engine, var_summary_stats_month, daily_measurements)
 
 
 def recreate_nearby_stations(
@@ -829,7 +835,9 @@ def recreate_nearby_stations(
 
 
 def recreate_reference_period_stats(
-    engine: sa.Engine, stats_table: VarSummaryStatsTable
+    engine: sa.Engine,
+    stats_table: VarSummaryStatsTable,
+    daily_measurements: pd.DataFrame | None = None,
 ) -> None:
     """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020.
 
@@ -849,15 +857,8 @@ def recreate_reference_period_stats(
             agg_name=AGG_NAME_REF_1991_2020,
             from_date=datetime.datetime(1991, 1, 1),
             to_date=datetime.datetime(2021, 1, 1),
+            daily_measurements=daily_measurements,
         )
-
-
-def recreate_reference_period_stats_all(engine: sa.Engine) -> None:
-    recreate_reference_period_stats(engine, var_summary_stats_all)
-
-
-def recreate_reference_period_stats_month(engine: sa.Engine) -> None:
-    recreate_reference_period_stats(engine, var_summary_stats_month)
 
 
 def _var_summary_stats(
@@ -868,19 +869,26 @@ def _var_summary_stats(
     granularity: str,
 ) -> list[dict[str, Any]]:
     """Returns summary stats for all vars in var_cols as a list of SQL INSERT records."""
+
+    # This code is optimized for speed, so only change it if you know what you're doing.
     id_cols = [date_col, "station_abbr", "time_slice"]
+    # Convert to long format for efficient groupby. Drop rows with NaN values.
     long = (
         df[id_cols + var_cols]
         .melt(id_vars=id_cols, var_name="variable", value_name="value")
         .dropna(subset="value")
     )
-    # Aggregate away the date and compute statistics:
+    # Aggregate away the date and compute statistics.
+    # Compute "standard" and quantile stats separately for maximum efficiency
+    # (avoid calling a Python UDF for each quantile separately), then join.
     grp = long.groupby(
         ["station_abbr", "time_slice", "variable"], sort=False, observed=True
     )
     std = grp["value"].agg(["min", "max", "idxmin", "idxmax", "mean", "sum", "count"])
     qs = grp["value"].quantile(q=[0.1, 0.25, 0.5, 0.75, 0.9]).unstack()
     res = pd.concat([std, qs], axis=1)
+
+    # Ensure field names match SQL column names.
     records = res.reset_index().rename(
         columns={
             "min": "min_value",
@@ -905,26 +913,13 @@ def _var_summary_stats(
     return records.to_dict(orient="records")
 
 
-def insert_summary_stats_from_daily_measurements(
-    conn: sa.Connection,
-    stats_table: VarSummaryStatsTable,
-    agg_name: str,
+def _read_all_daily_measurements(
+    engine: sa.Engine,
     from_date: datetime.datetime,
     to_date: datetime.datetime,
-) -> None:
-    """Inserts summary stats for the given reference period into sa_table_x_station_var_summary_stats."""
-    # All daily measurement variables for which to build summary stats.
-    daily_vars = [
-        TEMP_DAILY_MIN,
-        TEMP_DAILY_MAX,
-        TEMP_DAILY_MEAN,
-        PRECIP_DAILY_MM,
-        SUNSHINE_DAILY_MINUTES,
-        WIND_SPEED_DAILY_MEAN,
-        GUST_PEAK_DAILY_MAX,
-        ATM_PRESSURE_DAILY_MEAN,
-    ]
-
+):
+    """Reads ALL ROWS from TABLE_DAILY_MEASUREMENTS in the range [from_date, to_date) into memory."""
+    daily_vars = TABLE_DAILY_MEASUREMENTS.measurements
     sql = f"""
         SELECT
             station_abbr,
@@ -934,16 +929,37 @@ def insert_summary_stats_from_daily_measurements(
         WHERE reference_timestamp >= '{utc_datestr(from_date)}' 
             AND reference_timestamp < '{utc_datestr(to_date)}'
     """
-    df = pd.read_sql_query(
-        sql,
-        conn,
-        dtype={
-            "station_abbr": str,
-            "reference_timestamp": str,
-            **{v: float for v in daily_vars},
-        },
-    )
+    with engine.begin() as conn:
+        df = pd.read_sql_query(
+            sql,
+            conn,
+            dtype={
+                "station_abbr": str,
+                "reference_timestamp": str,
+                **{v: float for v in daily_vars},
+            },
+        )
     logger.info("Read %d rows from %s", len(df), TABLE_DAILY_MEASUREMENTS.name)
+    return df
+
+
+def insert_summary_stats_from_daily_measurements(
+    conn: sa.Connection,
+    stats_table: VarSummaryStatsTable,
+    agg_name: str,
+    from_date: datetime.datetime,
+    to_date: datetime.datetime,
+    daily_measurements: pd.DataFrame | None = None,
+) -> None:
+    """Inserts summary stats for the given reference period into the given stats_table."""
+    # All daily measurement variables for which to build summary stats.
+    daily_vars = TABLE_DAILY_MEASUREMENTS.measurements
+
+    if daily_measurements is None:
+        df = _read_all_daily_measurements(conn.engine, from_date, to_date)
+    else:
+        df = daily_measurements.copy()
+
     # Apply time_slicer to get time slice dimension.
     df["time_slice"] = stats_table.time_slicer(df)
 
@@ -1019,11 +1035,9 @@ def insert_summary_stats_from_daily_measurements(
     )
 
     if params:
-        t_start = time.time()
         logger.info("Inserting %d rows into %s", len(params), stats_table.sa_table.name)
         insert_stmt = sa.insert(stats_table.sa_table)
         conn.execute(insert_stmt, params)
-        logger.info("Insert done in %.1f seconds.", time.time() - t_start)
 
 
 def recreate_station_data_summary(engine: sa.Engine) -> None:
