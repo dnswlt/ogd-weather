@@ -1004,10 +1004,7 @@ def insert_summary_stats_from_daily_measurements(
     dc_vars = [c for c in dc.columns if c not in key_columns]
 
     # Sum the 0/1 daily values to get day counts by year, retaining NaNs.
-    def _nan_safe_sum(s):
-        return s.sum() if s.notna().any() else float("nan")
-
-    dcy = dc.groupby(key_columns)[dc_vars].agg(_nan_safe_sum).reset_index()
+    dcy = dc.groupby(key_columns)[dc_vars].sum(min_count=1).reset_index()
     # Now aggregate away the year (for each station) to compute summary stats
     # (same as above for plain daily variables).
     params.extend(
