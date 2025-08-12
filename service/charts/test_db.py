@@ -1,12 +1,14 @@
 import os
 import unittest
 import datetime
+import numpy as np
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from . import db
 from . import models
 from .errors import StationNotFoundError
+from .testhelpers import PandasTestCase
 
 
 def _testdata_dir():
@@ -1033,3 +1035,124 @@ class TestHelpers(unittest.TestCase):
         # Unsupported type should raise ValueError:
         with self.assertRaises(ValueError):
             db._column_to_dtype(sa.Column(name="test", type_=sa.DATE))
+
+
+class TestVarSummaryStats(PandasTestCase):
+
+    def test_simple(self):
+        df = pd.DataFrame(
+            [
+                ("2025-01-01", "BER", "01", 1.0, 2.0),
+                ("2025-01-01", "ABO", "01", 5.0, 6.0),
+                ("2025-01-02", "BER", "01", 3.0, 4.0),
+                ("2025-01-03", "BER", "01", 5.0, 6.0),
+            ],
+            columns=["date", "station_abbr", "time_slice", "x1", "x2"],
+        )
+        df["date"] = pd.to_datetime(df["date"])
+
+        result = db._var_summary_stats(
+            df,
+            agg_name="test_agg",
+            date_col="date",
+            var_cols=["x1", "x2"],
+            granularity="daily",
+        )
+
+        self.assertEqual(len(result), 4)
+        res_df = pd.DataFrame(result)
+
+        # Should have one row per "primary key"
+        pk_cols = ["station_abbr", "variable", "time_slice"]
+        counts = res_df[pk_cols].value_counts(pk_cols).reset_index()
+        self.assertFrameEqual(
+            counts,
+            pd.DataFrame(
+                [
+                    ("ABO", "x1", "01", 1),
+                    ("ABO", "x2", "01", 1),
+                    ("BER", "x1", "01", 1),
+                    ("BER", "x2", "01", 1),
+                ],
+                columns=pk_cols + ["count"],
+            ),
+        )
+
+        self.assertTrue((res_df["agg_name"] == "test_agg").all())
+
+    def test_all_nan(self):
+        df = pd.DataFrame(
+            [
+                ("2025-01-01", "BER", "01", np.nan, 2.0),
+                ("2025-01-01", "ABO", "01", 5.0, 6.0),
+                ("2025-01-02", "BER", "01", np.nan, 4.0),
+            ],
+            columns=["date", "station_abbr", "time_slice", "x1", "x2"],
+        )
+        df["date"] = pd.to_datetime(df["date"])
+
+        result = db._var_summary_stats(
+            df,
+            agg_name="test_agg",
+            date_col="date",
+            var_cols=["x1", "x2"],
+            granularity="daily",
+        )
+
+        res_df = pd.DataFrame(result)
+        self.assertEqual(len(res_df), 3)
+
+        # Should have one row per "primary key", but
+        # (BER, x1) should be missing, since it has all nan values
+        pk_cols = ["station_abbr", "variable", "time_slice"]
+        counts = res_df[pk_cols].value_counts(pk_cols).reset_index()
+        self.assertFrameEqual(
+            counts,
+            pd.DataFrame(
+                [
+                    ("ABO", "x1", "01", 1),
+                    ("ABO", "x2", "01", 1),
+                    ("BER", "x2", "01", 1),
+                ],
+                columns=pk_cols + ["count"],
+            ),
+        )
+
+        self.assertTrue((res_df["agg_name"] == "test_agg").all())
+
+    def test_partial_nan(self):
+        df = pd.DataFrame(
+            [
+                ("2025-01-01", "BER", "01", np.nan, 2.0),
+                ("2025-01-02", "BER", "01", 1.0, 6.0),
+                ("2025-01-03", "BER", "01", np.nan, 4.0),
+            ],
+            columns=["date", "station_abbr", "time_slice", "x1", "x2"],
+        )
+        df["date"] = pd.to_datetime(df["date"])
+
+        result = db._var_summary_stats(
+            df,
+            agg_name="test_agg",
+            date_col="date",
+            var_cols=["x1", "x2"],
+            granularity="daily",
+        )
+
+        self.assertEqual(len(result), 2)
+        res_df = pd.DataFrame(result)
+
+        # Should have one row per "primary key", but
+        # (BER, x1) should be missing, since it has all nan values
+        cols = ["station_abbr", "variable", "time_slice", "value_count", "mean_value"]
+        expected = res_df[cols]
+        self.assertFrameEqual(
+            expected,
+            pd.DataFrame(
+                [
+                    ("BER", "x1", "01", 1, 1.0),
+                    ("BER", "x2", "01", 3, 4.0),
+                ],
+                columns=cols,
+            ),
+        )

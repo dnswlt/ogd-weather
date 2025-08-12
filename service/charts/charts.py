@@ -1773,7 +1773,6 @@ def station_stats(
             # Could not fit a curve
             pass
 
-    print(result.model_dump())
     return result
 
 

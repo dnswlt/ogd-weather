@@ -860,6 +860,51 @@ def recreate_reference_period_stats_month(engine: sa.Engine) -> None:
     recreate_reference_period_stats(engine, var_summary_stats_month)
 
 
+def _var_summary_stats(
+    df: pd.DataFrame,
+    agg_name: str,
+    date_col: str,
+    var_cols: list[str],
+    granularity: str,
+) -> list[dict[str, Any]]:
+    """Returns summary stats for all vars in var_cols as a list of SQL INSERT records."""
+    id_cols = [date_col, "station_abbr", "time_slice"]
+    long = (
+        df[id_cols + var_cols]
+        .melt(id_vars=id_cols, var_name="variable", value_name="value")
+        .dropna(subset="value")
+    )
+    # Aggregate away the date and compute statistics:
+    grp = long.groupby(
+        ["station_abbr", "time_slice", "variable"], sort=False, observed=True
+    )
+    std = grp["value"].agg(["min", "max", "idxmin", "idxmax", "mean", "sum", "count"])
+    qs = grp["value"].quantile(q=[0.1, 0.25, 0.5, 0.75, 0.9]).unstack()
+    res = pd.concat([std, qs], axis=1)
+    records = res.reset_index().rename(
+        columns={
+            "min": "min_value",
+            "mean": "mean_value",
+            "max": "max_value",
+            0.1: "p10_value",
+            0.25: "p25_value",
+            0.5: "median_value",
+            0.75: "p75_value",
+            0.9: "p90_value",
+            "sum": "value_sum",
+            "count": "value_count",
+        }
+    )
+    # Look up min/max dates in the original long DataFrame.
+    records["min_value_date"] = records["idxmin"].map(long[date_col])
+    records["max_value_date"] = records["idxmax"].map(long[date_col])
+    # Constant fields.
+    records["agg_name"] = agg_name
+    records["source_granularity"] = granularity
+
+    return records.to_dict(orient="records")
+
+
 def insert_summary_stats_from_daily_measurements(
     conn: sa.Connection,
     stats_table: VarSummaryStatsTable,
@@ -879,51 +924,6 @@ def insert_summary_stats_from_daily_measurements(
         GUST_PEAK_DAILY_MAX,
         ATM_PRESSURE_DAILY_MEAN,
     ]
-
-    def _var_summary_stats(
-        df: pd.DataFrame, date_col: str, var_cols: list[str], granularity: str
-    ) -> list[dict[str, Any]]:
-        """Returns summary stats for all vars in var_cols as an SQL INSERT tuple."""
-        params = []
-
-        for (station_abbr, time_slice), grp in df.groupby(
-            ["station_abbr", "time_slice"]
-        ):
-            non_null_cols = [v for v in var_cols if not grp[v].isna().all()]
-            if not non_null_cols:
-                continue  # No variables have any data.
-            agg = grp[non_null_cols].agg(
-                ["min", "max", "idxmin", "idxmax", "mean", "sum", "count"]
-                + [pctl(10), pctl(25), pctl(50), pctl(75), pctl(90)]
-            )
-            for var in non_null_cols:
-                a = agg[var]
-                # Get reference_timestamp value at the index of the min/max value.
-                min_date = grp.loc[a["idxmin"], date_col]
-                max_date = grp.loc[a["idxmax"], date_col]
-                params.append(
-                    {
-                        "agg_name": agg_name,
-                        "station_abbr": station_abbr,
-                        "variable": var,
-                        "time_slice": time_slice,
-                        "source_granularity": granularity,
-                        "min_value": a["min"],
-                        "min_value_date": min_date,
-                        "mean_value": a["mean"],
-                        "max_value": a["max"],
-                        "max_value_date": max_date,
-                        "p10_value": a["p10"],
-                        "p10_value": a["p10"],
-                        "p25_value": a["p25"],
-                        "median_value": a["p50"],
-                        "p75_value": a["p75"],
-                        "p90_value": a["p90"],
-                        "value_sum": a["sum"],
-                        "value_count": int(a["count"]),
-                    }
-                )
-        return params
 
     sql = f"""
         SELECT
@@ -956,6 +956,7 @@ def insert_summary_stats_from_daily_measurements(
     # Summary stats across the whole period for all daily vars.
     params = _var_summary_stats(
         df,
+        agg_name=agg_name,
         date_col="reference_timestamp",
         var_cols=daily_vars + [DX_SOURCE_DATE_RANGE],
         granularity="daily",
@@ -1008,7 +1009,13 @@ def insert_summary_stats_from_daily_measurements(
     # Now aggregate away the year (for each station) to compute summary stats
     # (same as above for plain daily variables).
     params.extend(
-        _var_summary_stats(dcy, date_col="year", var_cols=dc_vars, granularity="annual")
+        _var_summary_stats(
+            dcy,
+            agg_name=agg_name,
+            date_col="year",
+            var_cols=dc_vars,
+            granularity="annual",
+        )
     )
 
     if params:
