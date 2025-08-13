@@ -348,21 +348,40 @@ async def get_daily_chart(
     date: str,
     chart_type: str,
 ):
-    if chart_type not in ["overview"]:
-        raise _bad_request(f"Invalid chart type: {chart_type}")
-
     from_date, to_date = _daily_range(date)
     station_abbr = station_abbr.upper()
 
-    with app.state.engine.begin() as conn:
-        df = db.read_hourly_measurements(
-            conn,
-            station_abbr,
-            from_date=from_date,
-            to_date=to_date,
-            columns=[db.TEMP_HOURLY_MEAN, db.PRECIP_HOURLY_MM],
-        )
-    chart = charts.daily_temp_precip_chart(df, from_date, station_abbr)
+    def _read_hourly(columns):
+        with app.state.engine.begin() as conn:
+            df = db.read_hourly_measurements(
+                conn,
+                station_abbr,
+                from_date=from_date,
+                to_date=to_date,
+                columns=columns,
+            )
+            if df.empty:
+                raise NoDataError(f"No data for {columns} on {date}")
+            return df
+
+    if chart_type == "overview":
+        df = _read_hourly([db.TEMP_HOURLY_MEAN, db.PRECIP_HOURLY_MM])
+        chart = charts.daily_temp_precip_chart(df, from_date, station_abbr)
+
+    elif chart_type == "sunshine":
+        df = _read_hourly([db.SUNSHINE_HOURLY_MINUTES])
+        chart = charts.daily_sunshine_bar_chart(df, from_date, station_abbr)
+
+    elif chart_type == "wind":
+        df = _read_hourly([db.WIND_SPEED_HOURLY_MEAN])
+        chart = charts.daily_wind_speed_bar_chart(df, from_date, station_abbr)
+
+    elif chart_type == "gust_peak":
+        df = _read_hourly([db.GUST_PEAK_HOURLY_MAX])
+        chart = charts.daily_gust_peak_bar_chart(df, from_date, station_abbr)
+
+    else:
+        raise _bad_request(f"Invalid chart type: {chart_type}")
 
     return _vega_chart(request, {chart_type: chart})
 

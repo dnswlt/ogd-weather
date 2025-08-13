@@ -87,3 +87,31 @@ export function updateNavbarLinks(currentParams) {
         a.href = linkUrl.toString();
     }
 }
+
+
+export function registerTablistHandler() {
+    // Event handling for tabbed container widgets.
+    document.querySelectorAll('div[role="tablist"]').forEach(tablist => {
+        tablist.addEventListener("click", e => {
+            const btn = e.target.closest('button[role="tab"]');
+            if (!btn || !tablist.contains(btn)) return;
+
+            // Update aria-selected for highlighting selected button.
+            tablist.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', 'false'));
+            btn.setAttribute('aria-selected', 'true');
+
+            // Update hx-vals on this widget's loader div with all data- attributes of the button.
+            // hx-vals  are used as query/path parameters by the spec loader.
+            const widget = tablist.closest('.tab-widget');
+            const loader = widget.querySelector('.vega-spec-loader');
+            let hxVals = {};
+            for (const key in btn.dataset) {
+                hxVals[key] = btn.dataset[key];
+            }
+            loader.setAttribute('hx-vals', JSON.stringify(hxVals));
+
+            // Tell HTMX to refresh the loader.
+            htmx.trigger(loader, 'refresh');
+        });
+    });
+}

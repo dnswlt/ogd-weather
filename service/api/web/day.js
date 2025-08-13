@@ -1,5 +1,5 @@
 
-import { rememberAndRestoreQueryParams } from './helpers.js';
+import { rememberAndRestoreQueryParams, registerTablistHandler } from './helpers.js';
 
 function adjustDate(deltaDays) {
     const input = document.getElementById("date");
@@ -48,5 +48,8 @@ export function initDayPage() {
         document.getElementById("latest-date")?.addEventListener("click", () => setYesterdayDateString());
 
     });
+
+    // Handle clicks on tablist buttons.
+    registerTablistHandler();
 
 }

@@ -984,7 +984,7 @@ def monthly_temp_anomaly_chart(
     )
 
 
-def _localize_tz(data: pd.DataFrame | pd.Series) -> pd.DataFrame:
+def _localize_tz(data: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Series:
     if data.index.tz is not None:
         data = data.copy(deep=False)
         # Localize to Swiss time, then drop tz (works best with Vega)
@@ -1459,6 +1459,103 @@ def _renormalize_stops(
         )
 
     return new_stops
+
+
+def daily_bar_chart(
+    ser: pd.Series,
+    y_title: str,
+    title: str,
+    y_domain: list[float] | None = None,
+    color: str = _C["PaleGold"],
+):
+    # Shift time left by 1 hour: the times for hourly measurements
+    # represent the *end* time of the interval, while Vega-Lite works
+    # better with the start time.
+    # https://opendatadocs.meteoswiss.ch/general/download#time-stamps-and-time-intervals
+    ser = _localize_tz(ser)
+    df = pd.DataFrame(
+        {
+            "time_end": ser.index,
+            "time_start": ser.index - pd.Timedelta(hours=1),
+            "value": ser,
+        }
+    )
+
+    # Create a dedicated tooltip string for the intervals.
+    df["tooltip_interval"] = (
+        df["time_start"].dt.strftime("%H:%M")
+        + " - "
+        + df["time_end"].dt.strftime("%H:%M")
+    )
+
+    y = alt.Y("value:Q").axis(title=y_title)
+    if y_domain is not None:
+        y = y.scale(domain=y_domain)
+
+    return (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "time_start:T",
+                timeUnit="dayhours",
+                title="Hour of day",
+            ),
+            y=y,
+            color=alt.value(color),
+            tooltip=[
+                alt.Tooltip("tooltip_interval:O", title="Time"),
+                alt.Tooltip("value:Q", title="Sunshine (min)", format=".1f"),
+            ],
+        )
+    ).properties(
+        width="container",
+        autosize={"type": "fit", "contains": "padding"},
+        title=title,
+    )
+
+
+def daily_gust_peak_bar_chart(
+    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+) -> AltairChart:
+
+    date_str = from_date.strftime("%a, %d %b %Y")
+
+    return daily_bar_chart(
+        df[db.GUST_PEAK_HOURLY_MAX] * 3.6,
+        y_title="Peak speed (km/h)",
+        title=f"Max. hourly gust peak speed (km/h) on {date_str}",
+        color=_C["Teal"],
+    )
+
+
+def daily_wind_speed_bar_chart(
+    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+) -> AltairChart:
+
+    date_str = from_date.strftime("%a, %d %b %Y")
+
+    return daily_bar_chart(
+        df[db.WIND_SPEED_HOURLY_MEAN] * 3.6,
+        y_title="Wind speed (km/h)",
+        title=f"Average hourly wind speed (km/h) on {date_str}",
+        color=_C["Tan"],
+    )
+
+
+def daily_sunshine_bar_chart(
+    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+) -> AltairChart:
+
+    date_str = from_date.strftime("%a, %d %b %Y")
+
+    return daily_bar_chart(
+        df[db.SUNSHINE_HOURLY_MINUTES],
+        y_title="Minutes",
+        title=f"Sunshine minutes on {date_str}",
+        y_domain=[0, 60],
+        color=_C["PaleGold"],
+    )
 
 
 def daily_temp_precip_chart(

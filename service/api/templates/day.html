@@ -62,26 +62,62 @@
         </form>
 
         <!-- Charts -->
+
+        <!-- Temperature & precipitation -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Temperature and precipitation</h2>
         <div>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/day/{date}/overview" hx-include="#chart-controls"
                     hx-target="this" hx-swap="innerHTML"
                     data-vega-target="overview-chart">
-                    <!-- Vega script goes here -->
                 </div>
                 <div id="overview-chart" class="w-full overflow-hidden"></div>
             </div>
         </div>
 
-        <!-- Measurements table -->
+        
+        <!-- Sunshine -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Sunshine</h2>
         <div>
-            <div id="measurements-table-container" hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                hx-target="this" hx-trigger="change from:#chart-controls"
-                hx-get="/stations/{station}/stats/day/{date}/measurements">
-                <!-- <table> with station weather summary goes here -->
+            <div class="mb-8">
+                <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/day/{date}/sunshine" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML"
+                    data-vega-target="sunshine-chart">
+                </div>
+                <div id="sunshine-chart" class="w-full overflow-hidden"></div>
             </div>
         </div>
+
+        <!-- Wind -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Wind</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Average wind speed and gust peak speeds (in km/h) for each hour of the day.
+        </p>
+        <div class="tab-widget mb-12">
+            <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
+                <!-- Sunshine hours -->
+                <button data-facet="wind" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                    Wind
+                </button>
+                <!-- Clear (sunny) rays -->
+                <button data-facet="gust_peak" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                    Gust peaks
+                </button>
+            </div>
+
+            <div class="vega-spec-loader" data-vega-target="wind-vega-chart"
+                hx-get="/stations/{station}/charts/day/{date}/{facet}" hx-ext="path-params"
+                hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
+                hx-vals='{"facet":"wind"}' hx-target="this" hx-swap="innerHTML"></div>
+            <div id="wind-vega-chart" class="w-full overflow-hidden"></div>
+        </div>
+
 
     </main>
 
