@@ -1,0 +1,103 @@
+{{with .Response}}
+<table id="year-highlights" class="w-full table-auto border-collapse text-sm">
+    <tbody>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 w-1">
+                Station
+            </td>
+            <td class="py-2 text-gray-800">
+                {{.Station.Name}} {{.Station.Canton}} ({{.Station.Abbr}})
+                &bull;
+                {{float "%.0f" .Station.HeightMASL}} m a.s.l.
+                {{if .Station.CoordinatesWGS84Lat.HasValue}}
+                &bull;
+                {{$lat := float "%.4f" .Station.CoordinatesWGS84Lat}}
+                {{$lon := float "%.4f" .Station.CoordinatesWGS84Lon}}
+                <a href="https://www.openstreetmap.org/?mlat={{$lat}}&mlon={{$lon}}#map=12/{{$lat}}/{{$lon}}"
+                    target="_blank" class="text-blue-600 hover:underline inline-flex items-center">
+                    Map
+                    <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 w-4 h-4 inline" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M18 13v6a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h6m4-4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                </a>
+                {{end}}
+            </td>
+        </tr>
+        {{with .Highlights}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Last frost day (Jan-Jun)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{if .LastFrostDay.HasValue }}
+                    {{datefmt "a J Y" .LastFrostDay}}
+                {{else}}
+                    None
+                {{end}}
+            </td>
+        </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                First frost day (Jul-Dec)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{if .FirstFrostDay.HasValue }}
+                    {{datefmt "a J Y" .FirstFrostDay}}
+                {{else}}
+                    None
+                {{end}}
+            </td>
+        </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Max. daily temp. range
+            </td>
+            <td class="py-2 text-gray-800">
+                {{if .MaxDailyTempRange.HasValue }}
+                    {{float "%.1f" .MaxDailyTempRange}} °C
+                    ({{datefmt "a J Y" .MaxDailyTempRangeDate}})
+                {{else}}
+                    No data
+                {{end}}
+            </td>
+        </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Max. daily sunshine
+            </td>
+            <td class="py-2 text-gray-800">
+                {{if .MaxDailySunshineHours.HasValue }}
+                    {{float "%.1f" .MaxDailySunshineHours}} hours
+                    ({{datefmt "a J Y" .MaxDailySunshineHoursDate}})
+                {{else}}
+                    No data
+                {{end}}
+            </td>
+        </tr>
+        {{if .SnowDays.HasValue }}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Snow days (&gt; 1 cm)
+            </td>
+            <td class="py-2 text-gray-800">
+                    {{float "%.0f" .SnowDays}} days
+            </td>
+        </tr>
+        {{end}}
+        {{if .MaxSnowDepthCm.HasValue }}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Max. snow depth
+            </td>
+            <td class="py-2 text-gray-800">
+                    {{float "%.0f" .MaxSnowDepthCm}} cm
+            </td>
+        </tr>
+        {{end}}
+        {{end}}
+    </tbody>
+</table>
+
+{{end}}

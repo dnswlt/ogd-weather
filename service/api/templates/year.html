@@ -61,6 +61,15 @@
 
         </form>
 
+
+        <!-- Stats table -->
+        <div>
+            <div id="year-stats-container" hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                hx-get="/stations/{station}/stats/year/{year}/highlights" 
+                hx-include="#chart-controls" hx-target="this" hx-swap="innerHTML">
+            </div>
+        </div>
+
         <!-- Charts -->
 
         <!-- Dry / wet spells -->

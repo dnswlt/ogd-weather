@@ -10,11 +10,13 @@ from fastapi import FastAPI, HTTPException, Request, status, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from zoneinfo import ZoneInfo
 
+
 from . import charts
 from . import db
 from .errors import NoDataError, StationNotFoundError
 from . import logging_config as _  # configure logging
 from . import models
+from . import stats
 from . import vega
 
 
@@ -365,6 +367,37 @@ async def get_daily_chart(
     return _vega_chart(request, {chart_type: chart})
 
 
+@app.get("/stations/{station_abbr}/stats/year/{year}/highlights")
+async def get_year_highlights(
+    station_abbr: str,
+    year: int,
+):
+    with app.state.engine.begin() as conn:
+        df = db.read_daily_measurements(
+            conn,
+            station_abbr,
+            columns=[
+                db.TEMP_DAILY_MIN,
+                db.TEMP_DAILY_MAX,
+                db.SUNSHINE_DAILY_MINUTES,
+                db.SNOW_DEPTH_DAILY_CM,
+            ],
+            from_year=year,
+            to_year=year,
+        )
+        if df.empty:
+            raise NoDataError(f"No data for {station_abbr} in year {year}")
+
+        station = db.read_station(conn, station_abbr)
+
+    highlights = stats.year_highlights(df, station_abbr, year)
+
+    return {
+        "station": station,
+        "highlights": highlights,
+    }
+
+
 @app.get("/stations/{station_abbr}/stats/day/{date}/measurements")
 async def get_daily_measurements(
     station_abbr: str,
@@ -379,7 +412,7 @@ async def get_daily_measurements(
             conn, station_abbr, from_date=from_date, to_date=to_date
         )
     return {
-        "data": charts.daily_measurements(df, station_abbr),
+        "data": stats.daily_measurements(df, station_abbr),
     }
 
 

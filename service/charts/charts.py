@@ -160,14 +160,6 @@ _SEASONS = {
 }
 
 
-def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Renames all well-known columns from their ODG SwissMetNet (smn) names to human-readable names.
-
-    Example: tre200d0 -> "temp mean". See `VEGA_LEGEND_LABELS` for the full list.
-    """
-    return df.rename(columns=VEGA_LEGEND_LABELS)
-
-
 def annual_agg(df, func):
     """Returns a DataFrame with one row per year containing average values."""
     df_y = df.groupby(df.index.year).agg(func)
@@ -609,7 +601,7 @@ def temperature_deviation_chart(
         raise NoDataError(f"No temperature data for {station_abbr}")
     _verify_period(df, period)
 
-    data = rename_columns(df[CHART_TYPE_COLUMNS["temperature_deviation"]])
+    data = df[CHART_TYPE_COLUMNS["temperature_deviation"]]
 
     data_m = annual_agg(data, "mean")
     if window and window > 1:
@@ -1157,10 +1149,12 @@ def drywet_spells_bar_chart_data(
 ) -> pd.DataFrame:
     """Prepares the data for displaying a dry/wet spells"""
     _verify_annual_data(df, station_abbr, year)
-
     # Ensure dates are contiguous, fill with nan.
     # Add one day at the end to include the last spell:
     df = df[[db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX]]
+
+    if df.count().eq(0).any():
+        raise NoDataError("Missing required data for dry/wet spells")
 
     # Classification follows the drywet_grid_chart rules, but can be simpler:
     precip = df[db.PRECIP_DAILY_MM]
@@ -1494,8 +1488,15 @@ def daily_temp_precip_chart(
     if df.empty:
         raise NoDataError(f"No precipitation data for {station_abbr}")
 
+    precip_mm = "precip mm"
+    temp_mean = "temp mean"
     # Work with a copy to avoid modifying the original DataFrame
-    df_prep = df.copy().rename(columns=VEGA_LEGEND_LABELS)
+    df_prep = df.copy().rename(
+        columns={
+            db.PRECIP_HOURLY_MM: precip_mm,
+            db.TEMP_HOURLY_MEAN: temp_mean,
+        }
+    )
 
     # The key is to create explicit start, end, and midpoint columns for our intervals.
     # We convert the index to timezone-naive 'Europe/Zurich' time as Vega/Altair
@@ -1515,7 +1516,7 @@ def daily_temp_precip_chart(
     # Melt the dataframe into a long format. This is a robust pattern for
     # creating charts with a shared legend and color scheme.
     id_vars = ["time_start", "time_end", "time_midpoint", "tooltip_interval"]
-    value_vars = ["precip mm", "temp mean"]
+    value_vars = [precip_mm, temp_mean]
     long_df = df_prep.melt(
         id_vars=id_vars,
         value_vars=value_vars,
@@ -1530,7 +1531,7 @@ def daily_temp_precip_chart(
 
     # Define a consistent color scheme for the variables.
     color_scale = alt.Scale(
-        domain=["precip mm", "temp mean"], range=["steelblue", "firebrick"]
+        domain=[precip_mm, temp_mean], range=[_C["SteelBlue"], _C["CoralRed"]]
     )
 
     # Create a base chart to share data. Properties will be set on the final layered chart.
@@ -1541,8 +1542,8 @@ def daily_temp_precip_chart(
     # y-axis lower and upper bounds. Used for both the
     # gradient "background" area and the temperature plot.
     # Always show 0, and at least a 30 degree interval.
-    temp_ymin = min(df_prep["temp mean"].min() - 2, 0)
-    temp_ymax = max(temp_ymin + 30, df_prep["temp mean"].max() + 2)
+    temp_ymin = min(df_prep[temp_mean].min() - 2, 0)
+    temp_ymax = max(temp_ymin + 30, df_prep[temp_mean].max() + 2)
 
     # Layer 0: Gradient background
     # Constant data to get an "area" plot extending across the full range.
@@ -1603,9 +1604,9 @@ def daily_temp_precip_chart(
 
     # Layer 1: Precipitation Bars
     # We filter the long-form data to only include precipitation.
-    precip_ymax = max(5, df_prep["precip mm"].max() + 1)
+    precip_ymax = max(5, df_prep[precip_mm].max() + 1)
     precip_bars = (
-        base.transform_filter(alt.datum.measurement == "precip mm")
+        base.transform_filter(alt.datum.measurement == precip_mm)
         .mark_bar()
         .encode(
             # Use 'time_start:T' for x and 'time_end:T' for x2 to define the bar's width.
@@ -1636,7 +1637,7 @@ def daily_temp_precip_chart(
     # Layer 2: Temperature Line
     # Filter data to only include temperature.
     temp_line = (
-        base.transform_filter(alt.datum.measurement == "temp mean")
+        base.transform_filter(alt.datum.measurement == temp_mean)
         .mark_line(interpolate="cardinal")
         .encode(
             # The temperature is a point measurement, so we only need 'x'.
@@ -1774,32 +1775,6 @@ def station_stats(
             pass
 
     return result
-
-
-def daily_measurements(
-    df: pd.DataFrame, station_abbr: str
-) -> models.StationMeasurementsData:
-    rows = []
-    measurements = df.select_dtypes(include=["number"]).astype("float")
-    for t, d in measurements.iterrows():
-        rows.append(
-            models.MeasurementsRow(
-                reference_timestamp=t.to_pydatetime(),
-                measurements=list(d),
-            )
-        )
-    return models.StationMeasurementsData(
-        station_abbr=station_abbr,
-        rows=rows,
-        columns=[
-            models.ColumnInfo(
-                name=c,
-                display_name=VEGA_LEGEND_LABELS.get(c, c),
-                dtype=str(df[c].dtype),
-            )
-            for c in measurements.columns
-        ],
-    )
 
 
 def station_period_stats(s: pd.Series) -> models.StationPeriodStats:

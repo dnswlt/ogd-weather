@@ -196,6 +196,22 @@ type StationMeasurementsResponse struct {
 	Data *StationMeasurementsData `json:"data"`
 }
 
+type StationYearHighlights struct {
+	FirstFrostDay             NullDate    `json:"first_frost_day"`
+	LastFrostDay              NullDate    `json:"last_frost_day"`
+	MaxDailyTempRange         NullFloat64 `json:"max_daily_temp_range"`
+	MaxDailyTempRangeDate     NullDate    `json:"max_daily_temp_range_date"`
+	MaxDailySunshineHours     NullFloat64 `json:"max_daily_sunshine_hours"`
+	MaxDailySunshineHoursDate NullDate    `json:"max_daily_sunshine_hours_date"`
+	SnowDays                  NullFloat64 `json:"snow_days"`
+	MaxSnowDepthCm            NullFloat64 `json:"max_snow_depth_cm"`
+}
+
+type StationYearHighlightsResponse struct {
+	Station    *Station               `json:"station"`
+	Highlights *StationYearHighlights `json:"highlights"`
+}
+
 // MinDate returns the smaller of TemperatureMinDate and PrecipitationMinDate.
 // It is used in JavaScript to get the lowest possible year to select.
 func (s *Station) MinDate() NullDate {

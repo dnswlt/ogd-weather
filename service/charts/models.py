@@ -122,6 +122,17 @@ class StationMeasurementsData(BaseModel):
     columns: list[ColumnInfo]
 
 
+class StationYearHighlights(BaseModel):
+    first_frost_day: datetime.date | None = None
+    last_frost_day: datetime.date | None = None
+    max_daily_temp_range: float | None = None
+    max_daily_temp_range_date: datetime.date | None = None
+    max_daily_sunshine_hours: float | None = None
+    max_daily_sunshine_hours_date: datetime.date | None = None
+    snow_days: float | None = None
+    max_snow_depth_cm: float | None = None
+
+
 class ServerOptions(BaseModel):
     base_dir: str
     sanitized_postgres_url: str = ""

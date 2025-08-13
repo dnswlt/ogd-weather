@@ -653,10 +653,18 @@ func (s *Server) Serve() error {
 			}
 			proxy.ServeHTTP(w, r)
 		})
+	mux.HandleFunc("GET /stations/{stationID}/stats/year/{year}/highlights",
+		func(w http.ResponseWriter, r *http.Request) {
+			if acceptsHTML(r.Header.Get("Accept")) {
+				serveChartServiceURL[types.StationYearHighlightsResponse](s, w, r, "stats_year_highlights.html", nil)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
 	mux.HandleFunc("GET /stations/{stationID}/stats/day/{date}/measurements",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
-				serveChartServiceURL[types.StationMeasurementsResponse](s, w, r, "daily_measurements.html", nil)
+				serveChartServiceURL[types.StationMeasurementsResponse](s, w, r, "stats_day_measurements.html", nil)
 				return
 			}
 			proxy.ServeHTTP(w, r)
