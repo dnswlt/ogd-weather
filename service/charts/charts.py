@@ -1461,13 +1461,84 @@ def _renormalize_stops(
     return new_stops
 
 
+def daily_line_chart(
+    ser: pd.Series,
+    y_title: str,
+    title: str,
+    y_domain: list[float] | None = None,
+    tooltip_title: str | None = None,
+    color: str = _C["PaleGold"],
+    points: bool = False,
+):
+    if tooltip_title is None:
+        tooltip_title = y_title
+
+    # Shift time left by 1 hour: the times for hourly measurements
+    # represent the *end* time of the interval, while Vega-Lite works
+    # better with the start time.
+    # https://opendatadocs.meteoswiss.ch/general/download#time-stamps-and-time-intervals
+    ser = _localize_tz(ser)
+    df = pd.DataFrame(
+        {
+            "time_end": ser.index,
+            "time_start": ser.index - pd.Timedelta(hours=1),
+            "value": ser,
+        }
+    )
+
+    # Create a dedicated tooltip string for the intervals.
+    df["tooltip_interval"] = (
+        df["time_start"].dt.strftime("%H:%M")
+        + " - "
+        + df["time_end"].dt.strftime("%H:%M")
+    )
+
+    y = alt.Y("value:Q").axis(title=y_title)
+    if y_domain is not None:
+        y = y.scale(domain=y_domain)
+
+    line = (
+        alt.Chart(df)
+        .mark_line()
+        .encode(
+            x=alt.X(
+                "time_start:T",
+                timeUnit="dayhours",
+                title="Hour of day",
+            ),
+            y=y,
+            color=alt.value(color),
+        )
+    )
+
+    chart = line
+    if points:
+        mark_point = line.mark_point(filled=True, size=60).encode(
+            tooltip=[
+                alt.Tooltip("tooltip_interval:N", title="Time"),
+                alt.Tooltip("value:Q", title=tooltip_title, format=".1f"),
+            ]
+        )
+        chart = alt.layer(line, mark_point)
+
+    return chart.properties(
+        width="container",
+        autosize={"type": "fit", "contains": "padding"},
+        title=title,
+    )
+
+
 def daily_bar_chart(
     ser: pd.Series,
     y_title: str,
     title: str,
     y_domain: list[float] | None = None,
+    tooltip_title: str | None = None,
     color: str = _C["PaleGold"],
 ):
+    if tooltip_title is None:
+        tooltip_title = y_title
+
     # Shift time left by 1 hour: the times for hourly measurements
     # represent the *end* time of the interval, while Vega-Lite works
     # better with the start time.
@@ -1505,13 +1576,39 @@ def daily_bar_chart(
             color=alt.value(color),
             tooltip=[
                 alt.Tooltip("tooltip_interval:O", title="Time"),
-                alt.Tooltip("value:Q", title="Sunshine (min)", format=".1f"),
+                alt.Tooltip("value:Q", title=tooltip_title, format=".1f"),
             ],
         )
     ).properties(
         width="container",
         autosize={"type": "fit", "contains": "padding"},
         title=title,
+    )
+
+
+def daily_atm_pressure_line_chart(
+    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+) -> AltairChart:
+
+    date_str = from_date.strftime("%a, %d %b %Y")
+
+    ser = df[db.ATM_PRESSURE_HOURLY_MEAN]
+    # The 90th percentile daily span of min/max hourly pressure is
+    # slightly below 10 hPa. Use at least a 20 hPa window so "normal"
+    # swings don't look too impressive.
+    smin, smax = ser.min(), ser.max()
+
+    y_span = max(20, smax - smin + 5)
+    center = smin + (smax - smin) * 0.5
+    y_domain = [center - y_span / 2, center + y_span / 2]
+
+    return daily_line_chart(
+        ser,
+        y_title="Atm. pressure (hPa)",
+        title=f"Atmospheric pressure at barometric altitude on {date_str}",
+        color=_C["LeafGreen"],
+        y_domain=y_domain,
+        points=True,
     )
 
 
@@ -1551,7 +1648,7 @@ def daily_sunshine_bar_chart(
 
     return daily_bar_chart(
         df[db.SUNSHINE_HOURLY_MINUTES],
-        y_title="Minutes",
+        y_title="Sunshine (minutes)",
         title=f"Sunshine minutes on {date_str}",
         y_domain=[0, 60],
         color=_C["PaleGold"],

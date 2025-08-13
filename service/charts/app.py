@@ -380,6 +380,10 @@ async def get_daily_chart(
         df = _read_hourly([db.GUST_PEAK_HOURLY_MAX])
         chart = charts.daily_gust_peak_bar_chart(df, from_date, station_abbr)
 
+    elif chart_type == "pressure":
+        df = _read_hourly([db.ATM_PRESSURE_HOURLY_MEAN])
+        chart = charts.daily_atm_pressure_line_chart(df, from_date, station_abbr)
+
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
 

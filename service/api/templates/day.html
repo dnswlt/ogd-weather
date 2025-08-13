@@ -118,6 +118,21 @@
             <div id="wind-vega-chart" class="w-full overflow-hidden"></div>
         </div>
 
+        <!-- Atm. pressure -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Atmospheric pressure</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Average atmospheric pressure at barometric altitude (QFE; in hPa) for each hour of the day.
+        </p>
+        <div>
+            <div class="mb-8">
+                <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/day/{date}/pressure" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML"
+                    data-vega-target="pressure-chart">
+                </div>
+                <div id="pressure-chart" class="w-full overflow-hidden"></div>
+            </div>
+        </div>
 
     </main>
 
