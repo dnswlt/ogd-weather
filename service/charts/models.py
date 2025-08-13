@@ -92,6 +92,16 @@ class StationPeriodStats(BaseModel):
     variable_stats: dict[str, VariableStats]
 
 
+class MeasurementInfo(BaseModel):
+    variable: str
+    description: LocalizedString
+    group: LocalizedString
+    granularity: str
+    value_count: int
+    min_date: datetime.date | None
+    max_date: datetime.date | None
+
+
 class StationInfo(BaseModel):
     """Station information and summary statistics."""
 
@@ -100,6 +110,8 @@ class StationInfo(BaseModel):
     ref_1991_2020_stats: StationPeriodStats
 
     nearby_stations: list[NearbyStation]
+    # Data availability per variable.
+    daily_measurement_infos: list[MeasurementInfo]
 
 
 class MeasurementsRow(BaseModel):
@@ -131,6 +143,11 @@ class StationYearHighlights(BaseModel):
     max_daily_sunshine_hours_date: datetime.date | None = None
     snow_days: float | None = None
     max_snow_depth_cm: float | None = None
+
+
+################################################################
+# Server Status
+################################################################
 
 
 class ServerOptions(BaseModel):

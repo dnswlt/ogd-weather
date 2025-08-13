@@ -86,14 +86,6 @@ type Station struct {
 	PrecipitationMaxDate NullDate        `json:"precipitation_max_date"`
 }
 
-type NearbyStation struct {
-	Abbr       string  `json:"abbr"`
-	Name       string  `json:"name"`
-	Canton     string  `json:"canton"`
-	DistanceKm float64 `json:"distance_km"`
-	HeightDiff float64 `json:"height_diff"`
-}
-
 type StationsResponse struct {
 	Stations []*Station `json:"stations"`
 }
@@ -155,10 +147,45 @@ func (s *StationPeriodStats) Vars() map[string]*VariableStats {
 	return s.templateVars
 }
 
+type NearbyStation struct {
+	Abbr       string  `json:"abbr"`
+	Name       string  `json:"name"`
+	Canton     string  `json:"canton"`
+	DistanceKm float64 `json:"distance_km"`
+	HeightDiff float64 `json:"height_diff"`
+}
+
+type MeasurementInfo struct {
+	Variable    string          `json:"variable"`
+	Description LocalizedString `json:"description"`
+	Group       LocalizedString `json:"group"`
+	Granularity string          `json:"granularity"`
+	ValueCount  int             `json:"value_count"`
+	MinDate     NullDate        `json:"min_date"`
+	MaxDate     NullDate        `json:"max_date"`
+}
+
+// DailyValuePresentPercent returns the percent (0..100) of
+// days that have a measurement value.
+// If there are no values or no date range, it returns 0.
+func (m *MeasurementInfo) DailyValuePresentPercent() float64 {
+	if !m.MinDate.HasValue || !m.MaxDate.HasValue {
+		return 0
+	}
+	d := m.MaxDate.Value.Time.Sub(m.MinDate.Value.Time).Hours()/24 + 1
+	if d <= 0 {
+		// MaxDate < MinDate?
+		return 0
+	}
+
+	return float64(m.ValueCount) / d * 100
+}
+
 type StationInfo struct {
-	Station            *Station            `json:"station"`
-	Ref1991To2020Stats *StationPeriodStats `json:"ref_1991_2020_stats"`
-	NearbyStations     []*NearbyStation    `json:"nearby_stations"`
+	Station               *Station            `json:"station"`
+	Ref1991To2020Stats    *StationPeriodStats `json:"ref_1991_2020_stats"`
+	NearbyStations        []*NearbyStation    `json:"nearby_stations"`
+	DailyMeasurementInfos []*MeasurementInfo  `json:"daily_measurement_infos"`
 }
 
 type StationInfoResponse struct {

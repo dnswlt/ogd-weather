@@ -63,23 +63,6 @@
             </td>
         </tr>
         {{end}}
-        <tr class="border-b">
-            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
-                Available temperature data
-            </td>
-            <td class="py-2 text-gray-800">
-                {{datefmt "a J Y" .Station.TemperatureMinDate}} &ndash; {{datefmt "a J Y" .Station.TemperatureMaxDate}}
-            </td>
-        </tr>
-        <tr class="border-b">
-            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
-                Available precipitation data
-            </td>
-            <td class="py-2 text-gray-800">
-                {{datefmt "a J Y" .Station.PrecipitationMinDate}} &ndash; {{datefmt "a J Y"
-                .Station.PrecipitationMaxDate}}
-            </td>
-        </tr>
         <!-- Nearby stations -->
         <tr class="border-b">
             <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
@@ -306,5 +289,50 @@
         {{end}} <!-- {{/* with .Ref1991To2020Stats */}} -->
     </tbody>
 </table>
+
+<!-- Data availability -->
+<h2 class="text-lg text-gray-800 text-left mb-4 mt-8">Data availability</h2>
+
+<p class="text-sm text-gray-600 leading-relaxed mb-4">
+    The table below shows for which date ranges daily measurements
+    are available in this service's database. Coverage (<em>Cov. %</em>) should be ~ 100%;
+    lower values indicate periods of missing data between 
+    <em>First Date</em> and <em>Last Date</em>.
+</p>
+
+<table id="station-measurement-infos" class="w-full table-auto border-collapse text-sm">
+<thead>
+    <tr class="border-b">
+      <th scope="col" class="py-2 pr-2 text-left text-gray-700">Variable</th>
+      <th scope="col" class="py-2 pr-2 text-left text-gray-700">Cov. %</th>
+      <th scope="col" class="py-2 pr-2 text-left text-gray-700 whitespace-nowrap">First Date</th>
+      <th scope="col" class="py-2 pr-2 text-left text-gray-700 whitespace-nowrap" >Last Date</th>
+      <th scope="col" class="py-2 pr-2 text-left text-gray-700">Group</th>
+      <th scope="col" class="py-2 pr-2 text-left text-gray-700">Description</th>
+    </tr>    <tbody>
+        {{range .DailyMeasurementInfos}}
+        <tr class="border-b">
+            <td class="py-2 pr-2 text-gray-800">
+                {{.Variable}}
+            </td>
+            <td class="py-2 pr-2 text-gray-800">
+                {{printf "%.0f%%" .DailyValuePresentPercent}}
+            </td>
+            <td class="py-2 pr-2 text-gray-800">
+                {{datefmt "Y-m-d" .MinDate}}
+            </td>
+            <td class="py-2 pr-2 text-gray-800">
+                {{datefmt "Y-m-d" .MaxDate}}
+            </td>
+            <td class="py-2 pr-2 text-gray-800">
+                {{.Group.EN}}
+            </td>
+            <td class="py-2 text-gray-800">
+                {{.Description.EN}}
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>    
 
 {{end}}

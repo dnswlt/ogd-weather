@@ -206,6 +206,67 @@ class TestDbStations(TestDb):
         self.assertEqual(stations[0].abbr, "ABO")
 
 
+class TestDbStationVarAvailability(TestDb):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+        now = datetime.datetime(2025, 1, 1, 0, 0, 0, 0, tzinfo=datetime.timezone.utc)
+        db.insert_csv_metadata(
+            _testdata_dir(),
+            cls.engine,
+            db.sa_table_meta_parameters,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_meta_parameters.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+
+    def test_availability(self):
+        with self.engine.begin() as conn:
+            # Insert daily data.
+            def p(stn, dt, t, p):
+                return {
+                    "station_abbr": stn,
+                    "reference_timestamp": dt,
+                    db.TEMP_DAILY_MIN: t,
+                    db.PRECIP_DAILY_MM: p,
+                }
+
+            conn = self.engine.connect()
+            conn.execute(
+                sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table),
+                [
+                    p("BER", "1991-01-01", -3, 0.5),
+                    p("BER", "1991-01-02", -4, 1.5),
+                    p("BER", "2001-06-03", 22, None),
+                    p("CHU", "2001-06-03", 30, 12),
+                    p("ZER", "2001-06-03", None, None),
+                ],
+            )
+
+        db.recreate_station_var_availability(self.engine)
+
+        with self.engine.begin() as conn:
+            ber_list = db.read_measurement_infos(conn, "BER")
+            ber = {m.variable: m for m in ber_list}
+            # Has many variables, but at least the two we use in the test should be present.
+            self.assertGreaterEqual(len(ber), 2)
+            self.assertEqual(ber[db.TEMP_DAILY_MIN].value_count, 3)
+            self.assertEqual(ber[db.PRECIP_DAILY_MM].value_count, 2)
+            self.assertIn("Niederschlag", ber[db.PRECIP_DAILY_MM].description.de)
+            self.assertEqual(ber[db.TEMP_DAILY_MIN].group.en, "temperature")
+
+            zer_list = db.read_measurement_infos(conn, "ZER")
+            zer = {m.variable: m for m in zer_list}
+            # No measurement data at all, but should still have info.
+            self.assertGreaterEqual(len(zer), 2)
+            self.assertTrue(all(v.value_count == 0 for v in zer.values()))
+
+
 class TestDbDaily(TestDb):
     @classmethod
     def setUpClass(cls):
@@ -621,7 +682,7 @@ class TestCreateDb(unittest.TestCase):
         # Need this table to create nearby stations.
         db.recreate_station_data_summary(engine)
         # Now create nearby stations
-        db.recreate_nearby_stations(engine, max_neighbors=4, exclude_empty=False)
+        db.recreate_nearby_stations(engine, max_stations=4, exclude_empty=False)
 
         # Validate
         with engine.begin() as conn:

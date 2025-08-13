@@ -313,6 +313,17 @@ sa_table_update_status = sa.Table(
 # To distinguish them from SoT data and mark them as derived,
 # we prefix them all by "x_"
 
+
+sa_table_x_station_var_availability = sa.Table(
+    "x_station_var_availability",
+    metadata,
+    sa.Column("station_abbr", sa.Text, primary_key=True),
+    sa.Column("variable", sa.Text, primary_key=True),
+    sa.Column("value_count", sa.Integer, nullable=False),
+    sa.Column("min_date", sa.Text),
+    sa.Column("max_date", sa.Text),
+)
+
 sa_table_x_station_data_summary = sa.Table(
     "x_station_data_summary",
     metadata,
@@ -545,7 +556,7 @@ def insert_csv_data(
         csv_dtype[c] = float
 
     columns = table_spec.columns()
-    logger.info(f"Importing {filename} into database...")
+    logger.info(f"Importing {filename} into database")
     df = pd.read_csv(
         filename,
         sep=";",
@@ -752,25 +763,26 @@ def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
 
 def recreate_views(engine: sa.Engine) -> None:
     recreate_station_data_summary(engine)
+    recreate_station_var_availability(engine)
     recreate_nearby_stations(engine)
     recreate_climate_normals_stats_tables(engine)
 
 
 def recreate_climate_normals_stats_tables(engine: sa.Engine):
-    logger.info("Reading daily measurements (1991-2020) from DB...")
+    logger.info("Reading daily measurements (1991-2020) from DB")
     daily_measurements = _read_all_daily_measurements(
         engine, datetime.datetime(1991, 1, 1), datetime.datetime(2021, 1, 1)
     )
-    logger.info("Recreating reference period (1991-2020) 'all' stats...")
+    logger.info("Recreating reference period (1991-2020) 'all' stats")
     recreate_reference_period_stats(engine, var_summary_stats_all, daily_measurements)
-    logger.info("Recreating reference period (1991-2020) 'month' stats...")
+    logger.info("Recreating reference period (1991-2020) 'month' stats")
     recreate_reference_period_stats(engine, var_summary_stats_month, daily_measurements)
 
 
 def recreate_nearby_stations(
     engine: sa.Engine,
     max_distance_km: float = 80,
-    max_neighbors=8,
+    max_stations=8,
     exclude_empty: bool = True,
 ) -> None:
     """Recreates the sa_table_x_nearby_stations table with nearby station info.
@@ -779,7 +791,13 @@ def recreate_nearby_stations(
         engine: the SQLAlchemy engine
         exclude_empty: If True, nearby stations are only included if they have
             measurement data.
+        max_distance_km: maximum distance in km to consider a station "nearby".
+        max_stations: maximum number of nearby stations to include in the result
+            (nearest first).
     """
+
+    logger.info("Recreating station data summary")
+
     with engine.begin() as conn:
         # Drop old table if exists
         sa_table_x_nearby_stations.drop(conn, checkfirst=True)
@@ -819,7 +837,7 @@ def recreate_nearby_stations(
     for records in nearby_stations:
         # Pick at most max_neighbors nearest nearby stations.
         records.sort(key=lambda s: (s["distance_km"], s["to_station_abbr"]))
-        flat_records.extend(records[:max_neighbors])
+        flat_records.extend(records[:max_stations])
 
     logger.info(
         "Determined %d nearby station pairs for %d stations",
@@ -1040,11 +1058,57 @@ def insert_summary_stats_from_daily_measurements(
         conn.execute(insert_stmt, params)
 
 
+def recreate_station_var_availability(engine: sa.Engine) -> None:
+    """Recreates the sa_table_x_station_var_availability materialized view.
+
+    Computes availability information for each variable (measurement) in
+    TABLE_DAILY_MEASUREMENTS and stores it in long format ("unpivot").
+    """
+    logger.info("Recreating station variable availability")
+
+    with engine.begin() as conn:
+        sa_table_x_station_var_availability.drop(conn, checkfirst=True)
+        sa_table_x_station_var_availability.create(conn)
+
+    with engine.begin() as conn:
+        select_agg_avail = ", ".join(
+            f"""
+                SUM(CASE WHEN {m} IS NOT NULL THEN 1 ELSE 0 END) AS {m}_count,
+                MIN(CASE WHEN {m} IS NOT NULL THEN reference_timestamp END) AS {m}_min_date,
+                MAX(CASE WHEN {m} IS NOT NULL THEN reference_timestamp END) AS {m}_max_date
+            """
+            for m in TABLE_DAILY_MEASUREMENTS.measurements
+        )
+        # To unpivot, we UNION ALL the aggregation results for each variable.
+        select_union_all = "\nUNION ALL\n".join(
+            f"SELECT station_abbr, '{m}', {m}_count, {m}_min_date, {m}_max_date FROM Aggregated"
+            for m in TABLE_DAILY_MEASUREMENTS.measurements
+        )
+
+        insert_sql = sa.text(
+            f"""
+                WITH Aggregated AS (
+                    SELECT 
+                        station_abbr,
+                        {select_agg_avail}
+                    FROM {TABLE_DAILY_MEASUREMENTS.name}
+                    GROUP BY station_abbr
+                )
+                INSERT INTO {sa_table_x_station_var_availability.name}
+                    (station_abbr, variable, value_count, min_date, max_date)
+                {select_union_all}
+            """
+        )
+        conn.execute(insert_sql)
+
+
 def recreate_station_data_summary(engine: sa.Engine) -> None:
     """Creates a materialized view of summary data per station_abbr.
 
     The summary stats in this table are calculated across the whole dataset.
     """
+
+    logger.info("Recreating station data summary")
 
     with engine.begin() as conn:
         # Drop old table if exists
@@ -1292,6 +1356,32 @@ def _sql_filter_by_period(period: str) -> str:
     raise ValueError(f"Invalid period {period} for SQL filter")
 
 
+def utc_timestr(d: datetime.datetime) -> str:
+    """Returns the given datetime as a UTC time string in ISO format.
+
+    Example: "2025-03-31 23:59:59Z"
+
+    If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
+    """
+    if d.tzinfo is not None:
+        # datetime.UTC is only available since Python 3.11
+        d = d.astimezone(datetime.timezone.utc)
+    return d.strftime("%Y-%m-%d %H:%M:%SZ")
+
+
+def utc_datestr(d: datetime.datetime) -> str:
+    """Returns the given datetime as a UTC date string in ISO format.
+
+    Example: "2025-03-31"
+
+    If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
+    """
+    if d.tzinfo is not None:
+        # datetime.UTC is only available since Python 3.11
+        d = d.astimezone(datetime.timezone.utc)
+    return d.strftime("%Y-%m-%d")
+
+
 def read_daily_measurements(
     conn: sa.Connection,
     station_abbr: str,
@@ -1343,32 +1433,6 @@ def read_daily_measurements(
         parse_dates=["reference_timestamp"],
         index_col="reference_timestamp",
     )
-
-
-def utc_timestr(d: datetime.datetime) -> str:
-    """Returns the given datetime as a UTC time string in ISO format.
-
-    Example: "2025-03-31 23:59:59Z"
-
-    If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
-    """
-    if d.tzinfo is not None:
-        # datetime.UTC is only available since Python 3.11
-        d = d.astimezone(datetime.timezone.utc)
-    return d.strftime("%Y-%m-%d %H:%M:%SZ")
-
-
-def utc_datestr(d: datetime.datetime) -> str:
-    """Returns the given datetime as a UTC date string in ISO format.
-
-    Example: "2025-03-31"
-
-    If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
-    """
-    if d.tzinfo is not None:
-        # datetime.UTC is only available since Python 3.11
-        d = d.astimezone(datetime.timezone.utc)
-    return d.strftime("%Y-%m-%d")
 
 
 def read_hourly_measurements(
@@ -1603,6 +1667,61 @@ def read_summary_stats(
         return pd.DataFrame()
 
     return df_long.set_index(["station_abbr", "variable", "time_slice"])
+
+
+def read_measurement_infos(
+    conn: sa.Connection, station_abbr: str
+) -> list[models.MeasurementInfo]:
+
+    # Parse possible date strings into actual dates (None stays None)
+    def d(v: str | None) -> datetime.date | None:
+        return datetime.date.fromisoformat(v) if v else None
+
+    sql = f"""
+            SELECT
+                a.variable,
+                a.value_count,
+                a.min_date,
+                a.max_date,
+                p.parameter_description_de,
+                p.parameter_description_fr,
+                p.parameter_description_it,
+                p.parameter_description_en,
+                p.parameter_group_de,
+                p.parameter_group_fr,
+                p.parameter_group_it,
+                p.parameter_group_en
+            FROM {sa_table_x_station_var_availability.name} AS a
+            LEFT JOIN {sa_table_meta_parameters.name} AS p
+                ON a.variable = p.parameter_shortname
+            WHERE a.station_abbr = :station_abbr
+            ORDER BY a.variable
+        """
+
+    result = conn.execute(sa.text(sql), {"station_abbr": station_abbr}).mappings().all()
+
+    return [
+        models.MeasurementInfo(
+            variable=row["variable"],
+            description=LocalizedString.from_nullable(
+                de=row["parameter_description_de"],
+                fr=row["parameter_description_fr"],
+                it=row["parameter_description_it"],
+                en=row["parameter_description_en"],
+            ),
+            group=LocalizedString.from_nullable(
+                de=row["parameter_group_de"],
+                fr=row["parameter_group_fr"],
+                it=row["parameter_group_it"],
+                en=row["parameter_group_en"],
+            ),
+            granularity="daily",
+            value_count=row["value_count"],
+            min_date=d(row["min_date"]),
+            max_date=d(row["max_date"]),
+        )
+        for row in result
+    ]
 
 
 def table_stats(engine: sa.Engine, user: str) -> list[models.DBTableStats]:
