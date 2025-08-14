@@ -12,61 +12,77 @@
     <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
         <h1 class="text-2xl font-semibold text-center">Annual Weather Summary</h1>
 
-        <!-- Controls -->
-        <form class="space-y-4" id="chart-controls">
+        <div class="space-y-3">
+            <!-- Search (locations or postal codes) -->
+            <div class="grid grid-cols-3 gap-3 items-start">
+                <label for="station-search" class="col-span-1 font-medium pt-2">Search</label>
 
-            <!-- Station -->
-            <div class="grid grid-cols-3 gap-3 items-center">
-                <label for="station" class="col-span-1 font-medium">Station</label>
-
-                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
-                    {{$selected := .Query.station}}
-                    {{range .Stations}}
-                    <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})
-                    </option>
-                    {{end}}
-                </select>
-            </div>
-
-
-            <!-- Year picker -->
-            <div class="grid grid-cols-3 gap-3 items-center">
-                <label for="year" class="col-span-1 font-medium">Year</label>
-                <div class="col-span-2 flex gap-3 items-center">
-                    <button type="button" id="prev-year" class="border rounded px-3 py-2 text-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                            stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                        </svg>
-                    </button>
-                    <input type="text" id="year" name="year" placeholder="Pick year" value="{{.Query.year}}"
-                        class="border rounded p-2 w-full">
-
-                    <button type="button" id="current-year" class="border rounded px-3 py-2 text-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5"
-                            stroke="currentColor" class="size-6">
-                            <path strokeLinecap="round" strokeLinejoin="round"
-                                d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                        </svg>
-                    </button>
-                    <button type="button" id="next-year" class="border rounded px-3 py-2 text-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                            stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                        </svg>
-                    </button>
+                <div class="col-span-2">
+                    <div class="flex items-center gap-2">
+                        <input id="station-search" name="q" type="search" placeholder="'3001' or 'Bern'"
+                            class="border rounded p-2 w-full" autocomplete="off" spellcheck="false"
+                            hx-get="/stations/search" hx-trigger="input changed delay:400ms, search"
+                            hx-target="#search-results" />
+                    </div>
+                    <div id="search-results"></div>
                 </div>
             </div>
 
+            <!-- Controls -->
+            <form class="space-y-3" id="chart-controls">
 
-        </form>
+                <!-- Station -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    <label for="station" class="col-span-1 font-medium pt-2">Station</label>
+
+                    <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
+                        {{$selected := .Query.station}}
+                        {{range .Stations}}
+                        <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}}
+                            ({{.Abbr}})
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <!-- Year picker -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    <label for="year" class="col-span-1 font-medium pt-2">Year</label>
+                    <div class="col-span-2 flex gap-3 items-center">
+                        <button type="button" id="prev-year" class="border rounded px-3 py-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" class="size-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                            </svg>
+                        </button>
+                        <input type="text" id="year" name="year" placeholder="Pick year" value="{{.Query.year}}"
+                            class="border rounded p-2 w-full">
+
+                        <button type="button" id="current-year" class="border rounded px-3 py-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5"
+                                stroke="currentColor" class="size-6">
+                                <path strokeLinecap="round" strokeLinejoin="round"
+                                    d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                        </button>
+                        <button type="button" id="next-year" class="border rounded px-3 py-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" class="size-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+            </form>
+        </div>
 
 
         <!-- Stats table -->
         <div>
             <div id="year-stats-container" hx-ext="path-params" hx-trigger="change from:#chart-controls"
-                hx-get="/stations/{station}/stats/year/{year}/highlights" 
-                hx-include="#chart-controls" hx-target="this" hx-swap="innerHTML">
+                hx-get="/stations/{station}/stats/year/{year}/highlights" hx-include="#chart-controls" hx-target="this"
+                hx-swap="innerHTML">
             </div>
         </div>
 
@@ -187,7 +203,7 @@
                 target="_blank">box plot</a> shows the middle 50% (the interquartile range; IQR) of temperatures for
             that month. The whiskers indicate the minimum and maximum values.
             <em>Climate normals</em>: the band shows the middle 50% (IQR) of the daily mean temperature
-            in the 
+            in the
             <a class="text-blue-600 hover:underline" href="https://www.ncei.noaa.gov/products/wmo-climate-normals">WMO
                 Climate Normals</a> period
             1991&ndash;2020, the orange line indicates its mean.
@@ -197,32 +213,25 @@
         <div class="tab-widget mb-12">
             <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
                 <!-- Min temp -->
-                <button data-facet="min" data-chart-type="temperature:month" 
-                    role="tab" aria-selected="false" 
-                    class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                <button data-facet="min" data-chart-type="temperature:month" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                         hover:text-gray-800 focus:outline-none
                         aria-selected:border-blue-600 aria-selected:text-blue-600">
                     Min.&nbsp;temp
                 </button>
                 <!-- Mean temp -->
-                <button data-facet="mean" data-chart-type="temperature:month" 
-                    role="tab" aria-selected="false" 
-                    class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                <button data-facet="mean" data-chart-type="temperature:month" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                         hover:text-gray-800 focus:outline-none
                         aria-selected:border-blue-600 aria-selected:text-blue-600">
                     Avg.&nbsp;temp
                 </button>
                 <!-- Max temp -->
-                <button data-facet="max" data-chart-type="temperature:month" 
-                    role="tab" aria-selected="true"
-                    class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                <button data-facet="max" data-chart-type="temperature:month" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                         hover:text-gray-800 focus:outline-none
                         aria-selected:border-blue-600 aria-selected:text-blue-600">
                     Max.&nbsp;temp
                 </button>
                 <!-- Vs. Climate Normals 1991-2020 ref. period -->
-                <button data-facet="mean" data-chart-type="temperature_normals:month" 
-                    role="tab" aria-selected="false"
+                <button data-facet="mean" data-chart-type="temperature_normals:month" role="tab" aria-selected="false"
                     class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                         hover:text-gray-800 focus:outline-none
                         aria-selected:border-blue-600 aria-selected:text-blue-600">
@@ -232,8 +241,8 @@
 
             <!-- Loader: carries station+year from the global form + its own hx-vals facet -->
             <div class="vega-spec-loader" data-vega-target="temperature-month-chart"
-                hx-get="/stations/{station}/charts/year/{year}/{chartType}"
-                hx-ext="path-params" hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
+                hx-get="/stations/{station}/charts/year/{year}/{chartType}" hx-ext="path-params"
+                hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
                 hx-vals='{"facet":"max","chartType":"temperature:month"}' hx-target="this" hx-swap="innerHTML"></div>
             <div id="temperature-month-chart" class="w-full overflow-hidden"></div>
         </div>
@@ -244,7 +253,7 @@
             Distribution of daily sunshine hours by month.
             <em>Sunshine hours</em>: each <a href="https://en.wikipedia.org/wiki/Box_plot"
                 class="text-blue-600 hover:underline" target="_blank">box plot</a> shows the middle 50% (IQR)
-                 and median of daily sunshine hours. The whiskers indicate the minimum and maximum values.
+            and median of daily sunshine hours. The whiskers indicate the minimum and maximum values.
 
             <em>Sunny days</em>:
             The light coloured boxes indicate the middle 50% (IQR) of monthly
@@ -322,8 +331,7 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/year/{year}/humidity:month" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML"
-                    data-vega-target="humidity-month-chart">
+                    hx-target="this" hx-swap="innerHTML" data-vega-target="humidity-month-chart">
                     <!-- Vega script goes here -->
                 </div>
                 <div id="humidity-month-chart" class="w-full overflow-hidden"></div>
@@ -340,8 +348,7 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/year/{year}/windrose" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML"
-                    data-vega-target="windrose-chart">
+                    hx-target="this" hx-swap="innerHTML" data-vega-target="windrose-chart">
                     <!-- Vega script goes here -->
                 </div>
                 <!-- This is a Vega chart created without Altair, so we must set the (min-) height

@@ -115,3 +115,26 @@ export function registerTablistHandler() {
         });
     });
 }
+
+export function registerSearchBarHandler() {
+    const results = document.getElementById('search-results');
+    if (!results) {
+        return;
+    }
+
+    // Delegate clicks from buttons inside the results box.
+    results.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-station]');
+        if (!btn || !results.contains(btn)) return;
+
+        const sel = document.getElementById('station');
+        if (!sel) {
+            console.error("#station element not found. Cannot update form.")
+            return;
+        }
+        sel.value = btn.dataset.station;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        // Clear dropdown.
+        results.innerHTML = ''; 
+    });
+}

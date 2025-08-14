@@ -12,55 +12,73 @@
     <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
         <h1 class="text-2xl font-semibold text-center">Daily Data</h1>
 
-        <!-- Controls -->
-        <form class="space-y-4" id="chart-controls">
 
-            <!-- Station -->
-            <div class="grid grid-cols-3 gap-3 items-center">
-                <label for="station" class="col-span-1 font-medium">Station</label>
+        <div class="space-y-3">
+            <!-- Search (locations or postal codes) -->
+            <div class="grid grid-cols-3 gap-3 items-start">
+                <label for="station-search" class="col-span-1 font-medium pt-2">Search</label>
 
-                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
-                    {{$selected := .Query.station}}
-                    {{range .Stations}}
-                    <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})
-                    </option>
-                    {{end}}
-                </select>
-            </div>
-
-
-            <!-- Date picker -->
-            <div class="grid grid-cols-3 gap-3 items-center">
-                <label for="date" class="col-span-1 font-medium">Date</label>
-                <div class="col-span-2 flex gap-3 items-center">
-                    <button type="button" id="prev-date" class="border rounded px-3 py-2 text-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                            stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                        </svg>
-                    </button>
-                    <input type="date" id="date" name="date" placeholder="Pick date" value="{{.Query.date}}"
-                        class="border rounded p-2 w-full">
-
-                    <button type="button" id="latest-date" class="border rounded px-3 py-2 text-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5"
-                            stroke="currentColor" class="size-6">
-                            <path strokeLinecap="round" strokeLinejoin="round"
-                                d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                        </svg>
-                    </button>
-                    <button type="button" id="next-date" class="border rounded px-3 py-2 text-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                            stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                        </svg>
-                    </button>
+                <div class="col-span-2">
+                    <div class="flex items-center gap-2">
+                        <input id="station-search" name="q" type="search" placeholder="'3001' or 'Bern'"
+                            class="border rounded p-2 w-full" autocomplete="off" spellcheck="false"
+                            hx-get="/stations/search" hx-trigger="input changed delay:400ms, search"
+                            hx-target="#search-results" />
+                    </div>
+                    <div id="search-results"></div>
                 </div>
             </div>
 
+            <!-- Controls -->
+            <form class="space-y-4" id="chart-controls">
 
-        </form>
+                <!-- Station -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    <label for="station" class="col-span-1 font-medium pt-2">Station</label>
 
+                    <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
+                        {{$selected := .Query.station}}
+                        {{range .Stations}}
+                        <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}}
+                            ({{.Abbr}})
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+
+
+                <!-- Date picker -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    <label for="date" class="col-span-1 font-medium pt-2">Date</label>
+                    <div class="col-span-2 flex gap-3 items-center">
+                        <button type="button" id="prev-date" class="border rounded px-3 py-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" class="size-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                            </svg>
+                        </button>
+                        <input type="date" id="date" name="date" placeholder="Pick date" value="{{.Query.date}}"
+                            class="border rounded p-2 w-full">
+
+                        <button type="button" id="latest-date" class="border rounded px-3 py-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5"
+                                stroke="currentColor" class="size-6">
+                                <path strokeLinecap="round" strokeLinejoin="round"
+                                    d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                        </button>
+                        <button type="button" id="next-date" class="border rounded px-3 py-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" class="size-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+
+            </form>
+        </div>
         <!-- Charts -->
 
         <!-- Temperature & precipitation -->
@@ -69,22 +87,20 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/day/{date}/overview" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML"
-                    data-vega-target="overview-chart">
+                    hx-target="this" hx-swap="innerHTML" data-vega-target="overview-chart">
                 </div>
                 <div id="overview-chart" class="w-full overflow-hidden"></div>
             </div>
         </div>
 
-        
+
         <!-- Sunshine -->
         <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Sunshine</h2>
         <div>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/day/{date}/sunshine" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML"
-                    data-vega-target="sunshine-chart">
+                    hx-target="this" hx-swap="innerHTML" data-vega-target="sunshine-chart">
                 </div>
                 <div id="sunshine-chart" class="w-full overflow-hidden"></div>
             </div>
@@ -127,8 +143,7 @@
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
                     hx-get="/stations/{station}/charts/day/{date}/pressure" hx-include="#chart-controls"
-                    hx-target="this" hx-swap="innerHTML"
-                    data-vega-target="pressure-chart">
+                    hx-target="this" hx-swap="innerHTML" data-vega-target="pressure-chart">
                 </div>
                 <div id="pressure-chart" class="w-full overflow-hidden"></div>
             </div>

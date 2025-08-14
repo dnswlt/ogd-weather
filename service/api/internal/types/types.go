@@ -192,6 +192,27 @@ type StationInfoResponse struct {
 	Info *StationInfo `json:"info"`
 }
 
+type Place struct {
+	PostalCode string  `json:"postal_code"`
+	Name       string  `json:"name"`
+	Lon        float64 `json:"lon"`
+	Lat        float64 `json:"lat"`
+}
+
+type StationDistance struct {
+	Station    *Station `json:"station"`
+	DistanceKm float64  `json:"distance_km"`
+}
+
+type PlaceNearestStations struct {
+	Place    Place              `json:"place"`
+	Stations []*StationDistance `json:"stations"`
+}
+
+type PlacesSearchResponse struct {
+	Places []*PlaceNearestStations `json:"places"`
+}
+
 // VegaSpecJSON holds the JSON representation of a Vega-Lite chart.
 // The chart's actual structure does not matter to this server, so
 // we represent it as a generic map.

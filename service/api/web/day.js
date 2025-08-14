@@ -1,5 +1,9 @@
 
-import { rememberAndRestoreQueryParams, registerTablistHandler } from './helpers.js';
+import {
+    rememberAndRestoreQueryParams,
+    registerTablistHandler,
+    registerSearchBarHandler,
+} from './helpers.js';
 
 function adjustDate(deltaDays) {
     const input = document.getElementById("date");
@@ -52,4 +56,5 @@ export function initDayPage() {
     // Handle clicks on tablist buttons.
     registerTablistHandler();
 
+    registerSearchBarHandler();
 }

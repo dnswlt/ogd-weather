@@ -1,0 +1,30 @@
+<div class="text-sm text-gray-700 leading-snug mt-2">
+    {{if .Response.Places}}
+    <ul class="m-0 p-0 list-none">
+        {{range .Response.Places}}
+        <li class="pt-2 mt-2 border-t border-gray-200 first:pt-0 first:mt-0 first:border-t-0">
+            <!-- place line: plain text, full width, slightly emphasized -->
+            <div class="block w-full font-medium text-gray-900">
+                {{.Place.PostalCode}} {{.Place.Name}}
+            </div>
+
+            <!-- stations: one button per row, tight spacing -->
+            <ul class="m-0 mt-1 p-0 list-none space-y-1">
+                {{range .Stations}}
+                <li>
+                    <button data-station="{{.Station.Abbr}}" type="button" class="block w-fit rounded-md border border-gray-300
+                         px-2 py-0.5 text-gray-800 hover:bg-gray-50
+                         focus:outline-none focus:ring-1 focus:ring-blue-500/40">
+                        {{.Station.Name}} {{.Station.Canton}} ({{.Station.Abbr}})
+                        <span class="text-gray-500">({{printf "%.1f" .DistanceKm}} km)</span>
+                    </button>
+                </li>
+                {{end}}
+            </ul>
+        </li>
+        {{end}}
+    </ul>
+    {{else}}
+    <em class="text-gray-500">No matching places.</em>
+    {{end}}
+</div>

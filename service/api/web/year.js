@@ -1,5 +1,9 @@
 
-import { rememberAndRestoreQueryParams, registerTablistHandler } from './helpers.js';
+import {
+    rememberAndRestoreQueryParams,
+    registerTablistHandler,
+    registerSearchBarHandler
+} from './helpers.js';
 
 function adjustYear(delta) {
     const input = document.getElementById("year");
@@ -55,6 +59,7 @@ export function initYearPage() {
 
         // Handle clicks on tablist buttons.
         registerTablistHandler();
-        
+
+        registerSearchBarHandler();
     });
 }

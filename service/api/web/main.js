@@ -3,6 +3,7 @@ import './style.css'; // Make sure Tailwind CSS gets included by vite.
 import {
     htmxSwapStationSummaryContainer,
     rememberAndRestoreQueryParams,
+    registerSearchBarHandler,
 } from './helpers.js';
 
 import { initMapPage } from './map.js';
@@ -29,6 +30,7 @@ function initPage() {
 
     });
 
+    registerSearchBarHandler();
 }
 
 function getVegaTargets(el) {

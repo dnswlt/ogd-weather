@@ -12,45 +12,63 @@
     <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
         <h1 class="text-2xl font-semibold text-center">Sunshine &amp; Rain</h1>
 
-        <!-- Controls -->
-        <form class="space-y-4" id="chart-controls">
 
-            <!-- Station -->
-            <div class="grid grid-cols-3 gap-3 items-center">
-                <label for="station" class="col-span-1 font-medium">Station</label>
+        <div class="space-y-3">
+            <!-- Search (locations or postal codes) -->
+            <div class="grid grid-cols-3 gap-3 items-start">
+                <label for="station-search" class="col-span-1 font-medium pt-2">Search</label>
 
-                <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
-                    {{$selected := .Query.station}}
-                    {{range .Stations}}
-                    <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}} ({{.Abbr}})
-                    </option>
-                    {{end}}
-                </select>
-            </div>
-
-            <!-- Period -->
-            <div class="grid grid-cols-3 gap-3 items-center">
-                <label for="period" class="col-span-1 font-medium">Period</label>
-
-                <select id="period" name="period" class="col-span-2 border rounded p-2 w-full">
-                    <!-- Jan Feb Mar ... Spring Summer etc.-->
-                    {{range .Periods}}
-                    <option value="{{.Value}}" {{.Selected}}>{{.DisplayName}}</option>
-                    {{end}}
-                </select>
-            </div>
-
-            <!-- Year Range -->
-            <div class="grid grid-cols-3 gap-3 items-center">
-                <label for="from_year" class="col-span-1 font-medium">Year Range</label>
-                <div class="col-span-2 grid grid-cols-2 gap-3">
-                    <input type="number" id="from_year" name="from_year" placeholder="From" value="{{.Query.from_year}}"
-                        class="border rounded p-2 w-full">
-                    <input type="number" id="to_year" name="to_year" placeholder="To" value="{{.Query.to_year}}"
-                        class="border rounded p-2 w-full">
+                <div class="col-span-2">
+                    <div class="flex items-center gap-2">
+                        <input id="station-search" name="q" type="search" placeholder="'3001' or 'Bern'"
+                            class="border rounded p-2 w-full" autocomplete="off" spellcheck="false"
+                            hx-get="/stations/search" hx-trigger="input changed delay:400ms, search"
+                            hx-target="#search-results" />
+                    </div>
+                    <div id="search-results"></div>
                 </div>
             </div>
-        </form>
+            <!-- Controls -->
+            <form class="space-y-4" id="chart-controls">
+
+                <!-- Station -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    <label for="station" class="col-span-1 font-medium pt-2">Station</label>
+
+                    <select id="station" name="station" class="col-span-2 border rounded p-2 w-full">
+                        {{$selected := .Query.station}}
+                        {{range .Stations}}
+                        <option value="{{.Abbr}}" {{if eq .Abbr $selected}}selected{{end}}>{{.Name}} {{.Canton}}
+                            ({{.Abbr}})
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <!-- Period -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    <label for="period" class="col-span-1 font-medium pt-2">Period</label>
+
+                    <select id="period" name="period" class="col-span-2 border rounded p-2 w-full">
+                        <!-- Jan Feb Mar ... Spring Summer etc.-->
+                        {{range .Periods}}
+                        <option value="{{.Value}}" {{.Selected}}>{{.DisplayName}}</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <!-- Year Range -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    <label for="from_year" class="col-span-1 font-medium pt-2">Year Range</label>
+                    <div class="col-span-2 grid grid-cols-2 gap-3">
+                        <input type="number" id="from_year" name="from_year" placeholder="From"
+                            value="{{.Query.from_year}}" class="border rounded p-2 w-full">
+                        <input type="number" id="to_year" name="to_year" placeholder="To" value="{{.Query.to_year}}"
+                            class="border rounded p-2 w-full">
+                    </div>
+                </div>
+            </form>
+        </div>
 
         <!-- Charts -->
         <div>
@@ -138,7 +156,7 @@
                     <!-- Under Vega's control. Chart goes here. -->
                 </div>
             </div>
-            
+
             <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Max. daily rain</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
                 Maximum rainfall on any given day of the selected period, by year.
