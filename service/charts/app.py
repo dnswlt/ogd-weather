@@ -1,3 +1,4 @@
+from pathlib import Path
 from altair.utils import spec_to_html
 from contextlib import asynccontextmanager
 import datetime
@@ -14,6 +15,7 @@ from zoneinfo import ZoneInfo
 from . import charts
 from . import db
 from .errors import NoDataError, StationNotFoundError
+from . import geo
 from . import logging_config as _  # configure logging
 from . import models
 from . import stats
@@ -73,8 +75,16 @@ async def lifespan(app: FastAPI):
         sanitized_postgres_url=_sanitize_pg_url(postgres_url),
         start_time=datetime.datetime.now(tz=datetime.timezone.utc),
     )
-    # If charts module needs to initialize something
-    # charts.init_db(conn)
+
+    # Module initialisations go here:
+    ch_txt = Path(__file__).parent.joinpath("datafiles/geo/CH.txt")
+    if ch_txt.is_file():
+        logger.info("Reading places data from %s", ch_txt)
+        app.state.geo_places = geo.Places.from_geonames(ch_txt)
+        with engine.begin() as conn:
+            stations = db.read_stations(conn, exclude_empty=True)
+        logger.info("Initializing geo lookup for %d stations", len(stations))
+        app.state.geo_stations = geo.StationLookup(stations)
 
     yield
 
@@ -602,4 +612,24 @@ async def list_stations(cantons: str | None = None, response: Response = None):
     response.headers["Cache-Control"] = "public, max-age=86400"
     return {
         "stations": stations,
+    }
+
+
+@app.get("/stations/search")
+async def search_stations(q: str):
+    places_lookup: geo.Places = app.state.geo_places
+    station_lookup: geo.StationLookup = app.state.geo_stations
+
+    if None in (places_lookup, station_lookup):
+        raise NoDataError("No places or station information")
+
+    if q.isdigit():
+        p = places_lookup.get_postal_code(q)
+        places = [p] if p is not None else []
+    else:
+        places = places_lookup.find_prefix(q, limit=3)
+
+    ps = [station_lookup.find_nearest(p, limit=3, max_distance_km=50) for p in places]
+    return {
+        "places": ps,
     }

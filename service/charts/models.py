@@ -146,6 +146,34 @@ class StationYearHighlights(BaseModel):
 
 
 ################################################################
+# Geo locations
+################################################################
+
+
+class Place(BaseModel):
+    """Container for postal code and WGS84 coordinates of a geographical location."""
+
+    postal_code: str
+    name: str
+    lon: float
+    lat: float
+
+
+class StationDistance(BaseModel):
+    """Distance from a geo location (Place) to a given Station."""
+
+    station: Station
+    distance_km: float
+
+
+class PlaceNearestStations(BaseModel):
+    """A place and the nearest weather stations."""
+
+    place: Place
+    stations: list[StationDistance]
+
+
+################################################################
 # Server Status
 ################################################################
 
