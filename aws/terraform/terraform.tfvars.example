@@ -1,0 +1,4 @@
+# Example Terraform variables for weather services
+# Copy this file to terraform.tfvars and fill in real values locally.
+ 
+weather_api_version = "latest"

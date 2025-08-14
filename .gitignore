@@ -213,3 +213,6 @@ __marimo__/
 
 .DS_Store
 profile.stats
+
+# Temporary cloud config dumps during Terraform migration.
+/terraform-dump/

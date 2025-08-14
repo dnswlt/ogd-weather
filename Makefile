@@ -115,7 +115,11 @@ update-task-weather-db-updater:
 run-db-updater-aws:
 	bash scripts/run-db-updater-aws.sh $(CLUSTER) weather-db-updater
 
+recreate-db-aws:
+	bash scripts/run-db-updater-aws.sh $(CLUSTER) weather-db-updater \
+  		--overrides '{"containerOverrides":[{"name":"weather-db-updater","command":["--force-recreate"]}]}'
 
 recreate-views-aws:
 	bash scripts/run-db-updater-aws.sh $(CLUSTER) weather-db-updater \
   		--overrides '{"containerOverrides":[{"name":"weather-db-updater","command":["--recreate-views"]}]}'
+
