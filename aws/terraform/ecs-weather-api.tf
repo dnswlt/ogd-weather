@@ -25,7 +25,7 @@ resource "aws_ecs_task_definition" "weather_api" {
     [
         {
         "name": "weather-api",
-        "image": "006725292903.dkr.ecr.eu-central-1.amazonaws.com/weather-api:latest",
+        "image": "006725292903.dkr.ecr.eu-central-1.amazonaws.com/weather-api:${var.weather_api_version}",
         "cpu": 0,
         "portMappings": [
             {
@@ -76,12 +76,12 @@ resource "aws_ecs_service" "weather_api" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = [
+    subnets = [
       aws_subnet.subnet_a.id,
       aws_subnet.subnet_b.id,
       aws_subnet.subnet_c.id
     ]
-    security_groups = [aws_security_group.default.id]
+    security_groups  = [aws_security_group.default.id]
     assign_public_ip = true
   }
 
