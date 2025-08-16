@@ -37,9 +37,39 @@ class UpdateStatus(BaseModel):
     resource_updated_time: datetime.datetime | None = None
     etag: str | None = None
 
+    _is_not_modified: bool = False
+
     def filename(self):
         """Returns the filename part of href."""
         return os.path.basename(urlparse(self.href).path)
+
+    def mark_not_modified(
+        self,
+        table_updated_time: datetime.datetime,
+        resource_updated_time: datetime.datetime,
+    ):
+        """Marks the status as "Not Modified".
+
+        This is used to avoid repeatedly checking a resource for updates
+        by remembering the last time we checked.
+        """
+        self.table_updated_time = table_updated_time
+        self.resource_updated_time = resource_updated_time
+        self._is_not_modified = True
+
+    def is_not_modified(self):
+        return self._is_not_modified
+
+    def update(
+        self,
+        table_updated_time: datetime.datetime,
+        resource_updated_time: datetime.datetime,
+        etag: str | None,
+    ):
+        """Updates this status according to the new timestamps and Etag."""
+        self.table_updated_time = table_updated_time
+        self.resource_updated_time = resource_updated_time
+        self.etag = etag
 
 
 class DataTableSpec:

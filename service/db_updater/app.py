@@ -30,7 +30,7 @@ class CsvResource(BaseModel):
     frequency: str = ""  # "historical", "recent", "now"
     interval: str = ""  # "d", "h", "" for metadata
     is_meta: bool = False
-    updated: datetime.datetime | None = None
+    updated_time: datetime.datetime | None = None
     status: db.UpdateStatus | None = None
 
 
@@ -122,7 +122,7 @@ def fetch_data_csv_resources(filter_re: str | None = None) -> list[CsvResource]:
         resources.append(
             CsvResource(
                 href=href,
-                updated=updated,
+                updated_time=updated,
                 frequency=match.frequency,
                 interval=match.interval,
             )
@@ -133,8 +133,15 @@ def fetch_data_csv_resources(filter_re: str | None = None) -> list[CsvResource]:
 def fetch_metadata_csv_resources() -> list[CsvResource]:
     """Fetch URLs of metadata CSV resources ("assets")."""
     resources = []
+    ignored_metadata_files = set(["ogd-smn_meta_datainventory.csv"])
+
     for r in fetch_paginated(f"{OGD_SNM_URL}/assets"):
         for asset in r.get("assets", []):
+            filename = os.path.basename(urlparse(asset["href"]).path)
+            if filename in ignored_metadata_files:
+                # Ignore irrelevant metadata files.
+                continue
+
             updated = (
                 datetime.datetime.fromisoformat(asset["updated"])
                 if asset["updated"]
@@ -144,7 +151,7 @@ def fetch_metadata_csv_resources() -> list[CsvResource]:
             resources.append(
                 CsvResource(
                     href=asset["href"],
-                    updated=updated,
+                    updated_time=updated,
                     interval="",
                     frequency="historical",
                     is_meta=True,
@@ -238,9 +245,9 @@ def fetch_latest_data(
             logger.debug("Adding %s (no table_updated_time)", c.href)
             update_csvs.append(c)
         elif (
-            c.updated
+            c.updated_time
             and c.status.resource_updated_time
-            and c.updated > c.status.resource_updated_time
+            and c.updated_time > c.status.resource_updated_time
         ):
             logger.debug("Adding %s (resource updated)", c.href)
             update_csvs.append(c)
@@ -268,21 +275,23 @@ def fetch_latest_data(
             return
 
         if not is_modified:
-            import_queue.put(_NOOP_SENTINEL)
-            return
-
-        if c.status and c.status.id is not None:
-            # Reuse existing UpdateStatus → just update fields
-            c.status.table_updated_time = now
-            c.status.resource_updated_time = c.updated
-            c.status.etag = etag
+            # We checked, but the old data is still valid. Update the DB
+            # So we don't try again immediately on the next run.
+            c.status.mark_not_modified(
+                table_updated_time=now, resource_updated_time=c.updated_time
+            )
+        elif c.status and c.status.id is not None:
+            # Update fields in existing UpdateStatus
+            c.status.update(
+                table_updated_time=now, resource_updated_time=c.updated_time, etag=etag
+            )
         else:
-            # No existing status or it's a brand-new one → create fresh
+            # No existing status or it's a brand-new one: create fresh
             c.status = db.UpdateStatus(
                 id=None,  # Leave empty to process as an INSERT.
                 href=c.href,
                 table_updated_time=now,
-                resource_updated_time=c.updated,
+                resource_updated_time=c.updated_time,
                 etag=etag,
             )
         import_queue.put(c)
@@ -415,6 +424,8 @@ def main():
     # Now download CSVs concurrently and feed them to the importer thread
     # via a queue:
     import_queue = queue.SimpleQueue()
+    # Count how many actual DB imports were done. If zero, don't recreate views.
+    import_count = 0
     with ThreadPoolExecutor(max_workers=8) as executor:
 
         futures = fetch_latest_data(
@@ -430,15 +441,24 @@ def main():
             if work_item is _NOOP_SENTINEL:
                 continue  # Skip failed CSV imports
             resource: CsvResource = work_item
-            import_into_db(engine, base_dir, resource, insert_mode=insert_mode)
+            if resource.status.is_not_modified():
+                # Not Modified => Just update timestamps.
+                with engine.begin() as conn:
+                    db.save_update_status(conn, resource.status)
+            else:
+                import_into_db(engine, base_dir, resource, insert_mode=insert_mode)
+                import_count += 1
 
         # Consume futures (they're all done)
         for fut in as_completed(futures):
             fut.result()  # Raise exception if any occurred (indicates programming error)
 
     # Recreate materialized views
-    logger.info("Recreating materialized views...")
-    db.recreate_views(engine)
+    if import_count > 0:
+        logger.info("Recreating materialized views...")
+        db.recreate_views(engine)
+    else:
+        logger.info("No new CSV files imported, won't update views.")
 
     logger.info("Done. DB %s updated in %.1fs.", engine.url, time.time() - started_time)
 
