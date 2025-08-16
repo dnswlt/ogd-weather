@@ -80,7 +80,7 @@ resource "aws_ecs_service" "weather_charts" {
 
 
   service_registries {
-    registry_arn = "arn:aws:servicediscovery:eu-central-1:006725292903:service/srv-wxj3yczl6rmnwvbz"
+    registry_arn = aws_service_discovery_service.weather_charts.arn
   }
 
   network_configuration {
