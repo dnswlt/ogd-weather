@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-### Store or update secret Postgres password in Secrets Manager.
+############################################################
+### Postgres app user password
+############################################################
 
 SECRET_NAME="/weather/db/credentials"
+
+# DB_USER should match the ROLE defined in ./bootstrap_db.sql
+DB_USER="weather"
 
 # Generate a strong password for the app user.
 DB_PASSWORD="$(aws secretsmanager get-random-password \
@@ -16,12 +21,12 @@ DB_PASSWORD="$(aws secretsmanager get-random-password \
 if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
   aws secretsmanager put-secret-value \
     --secret-id "$SECRET_NAME" \
-    --secret-string "$DB_PASSWORD" >/dev/null
+    --secret-string "$DB_USER:$DB_PASSWORD" >/dev/null
 else
   aws secretsmanager create-secret \
     --name "$SECRET_NAME" \
     --description "Postgres app user password" \
-    --secret-string "$DB_PASSWORD" >/dev/null
+    --secret-string "$DB_USER:$DB_PASSWORD" >/dev/null
 fi
 
 echo "Updated Secrets Manager Postgres DB password: $SECRET_NAME"

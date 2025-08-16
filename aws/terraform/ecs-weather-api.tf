@@ -37,7 +37,7 @@ resource "aws_ecs_task_definition" "weather_api" {
         "secrets": [
             {
             "name": "OGD_BEARER_TOKEN",
-            "valueFrom": "arn:aws:ssm:eu-central-1:006725292903:parameter/weather/api/BearerToken"
+            "valueFrom": "/weather/api/BearerToken"
             }
         ],
         "logConfiguration": {

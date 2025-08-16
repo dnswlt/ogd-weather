@@ -13,5 +13,7 @@ the following steps are required:
 1. `./create_tf_assets.sh` to create the S3 bucket and DynamoDB for Terraform
    lock management.
 
-2. `./create_db_secrets.sh` to create the password secret for the Postgres DB app user.
+2. `./create_secrets_db.sh` to create the password secret for the Postgres DB app user.
+
+3. `./create_secrets_bearer.sh` to create the BearerToken for /status page access.
 

@@ -13,7 +13,7 @@ resource "aws_service_discovery_service" "weather_charts" {
 
     dns_records {
       type = "A"
-      ttl  = 10
+      ttl  = 60 # 60s - compromise between dev fast cut-over and DNS churn in prod.
     }
   }
 }
