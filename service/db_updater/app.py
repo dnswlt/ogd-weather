@@ -9,9 +9,12 @@ import time
 from pydantic import BaseModel
 import requests
 from urllib.parse import urlparse
+
 from service.charts import db
+from service.charts import env
 from service.charts import logging_config as _  # configure logging
 
+from .bootstrap import bootstrap_postgres
 from .smn import match_csv_resource
 
 OGD_SNM_URL = (
@@ -349,6 +352,15 @@ def main():
         help="Only recreate database views, do not update any data.",
     )
     parser.add_argument(
+        "--bootstrap-postgres",
+        action="store_true",
+        default=False,
+        help=(
+            "If specified, bootstrap the Postgres database (CREATE ROLE etc.) and exit."
+            " OGD_POSTGRES_MASTER_SECRET must be set to a JSON containing connection credentials."
+        ),
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         default=False,
@@ -362,13 +374,31 @@ def main():
     elif "OGD_BASE_DIR" in os.environ:
         base_dir = os.environ["OGD_BASE_DIR"]
     else:
-        parser.error("base_dir is required if $OGD_BASE_DIR is not set.")
+        parser.error("--base-dir is required if $OGD_BASE_DIR is not set.")
 
-    postgres_url = args.postgres_url or os.environ.get("OGD_POSTGRES_URL")
+    if args.postgres_url:
+        pgconn = env.PgConnectionInfo(url=args.postgres_url)
+    elif "OGD_POSTGRES_ROLE_SECRET" in os.environ:
+        # If PG specific env vars are set, use them
+        pgconn = env.PgConnectionInfo.from_env(secret_var="OGD_POSTGRES_ROLE_SECRET")
+    elif any(os.getenv(v) for v in ["OGD_POSTGRES_URL", "OGD_DB_HOST"]):
+        pgconn = env.PgConnectionInfo.from_env()
+    else:
+        pgconn = None  # => local sqlite
+
+    if args.bootstrap_postgres:
+        master_secret = os.getenv("OGD_POSTGRES_MASTER_SECRET")
+        if None in (pgconn, master_secret):
+            parser.error(
+                "$OGD_POSTGRES_MASTER_SECRET and pgconn must be set when running --bootstrap-postgres"
+            )
+        bootstrap_postgres(pgconn, master_secret=master_secret)
+        return
 
     started_time = time.time()
 
-    if postgres_url:
+    if pgconn:
+        postgres_url = pgconn.get_url()
         logger.info("Connecting to postgres DB at %s", postgres_url)
         engine = sa.create_engine(postgres_url, echo=args.verbose)
     else:

@@ -5,7 +5,7 @@ set -euo pipefail
 ### Postgres app user password
 ############################################################
 
-SECRET_NAME="/weather/db/credentials"
+SECRET_NAME="/weather/db/credentials/app_role"
 
 # DB_USER should match the ROLE defined in ./bootstrap_db.sql
 DB_USER="weather"
@@ -17,16 +17,19 @@ DB_PASSWORD="$(aws secretsmanager get-random-password \
   --exclude-punctuation \
   --output text)"
 
+# Use the same JSON format that AWS uses for the aws_db_instance.postgres.master_user_secret.
+SECRET_STRING="{\"username\":\"$DB_USER\",\"password\":\"$DB_PASSWORD\"}"
+
 # Store or update in Secrets Manager.
 if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
   aws secretsmanager put-secret-value \
     --secret-id "$SECRET_NAME" \
-    --secret-string "$DB_USER:$DB_PASSWORD" >/dev/null
+    --secret-string "$SECRET_STRING" >/dev/null
 else
   aws secretsmanager create-secret \
     --name "$SECRET_NAME" \
-    --description "Postgres app user password" \
-    --secret-string "$DB_USER:$DB_PASSWORD" >/dev/null
+    --description "Postgres app role password" \
+    --secret-string "$SECRET_STRING" >/dev/null
 fi
 
 echo "Updated Secrets Manager Postgres DB password: $SECRET_NAME"
