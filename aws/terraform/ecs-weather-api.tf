@@ -1,25 +1,12 @@
-# ECS Cluster
-resource "aws_ecs_cluster" "weather" {
-  name = "weather-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "disabled" # Change if you actually have it enabled
-  }
-
-  tags = {
-    Name = "weather-cluster"
-  }
-}
-
-# ECS Task Definition for weather-api-service
+# Task definition
 resource "aws_ecs_task_definition" "weather_api" {
   family                   = "weather-api"
   cpu                      = "256"
   memory                   = "512"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  execution_role_arn       = "arn:aws:iam::006725292903:role/ecsTaskExecutionRole"
+  execution_role_arn       = data.aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.weather_task.arn
 
   container_definitions = <<JSON
     [

@@ -1,11 +1,12 @@
+# Task definition
 resource "aws_ecs_task_definition" "weather_db_updater" {
   family                   = "weather-db-updater"
   cpu                      = "512"
   memory                   = "1024"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  execution_role_arn       = "arn:aws:iam::006725292903:role/ecsTaskExecutionRole"
-  task_role_arn            = "arn:aws:iam::006725292903:role/weather-task-role"
+  execution_role_arn = data.aws_iam_role.ecs_task_execution.arn
+  task_role_arn = aws_iam_role.weather_task.arn
 
   # EFS volume (match existing exactly)
   volume {
