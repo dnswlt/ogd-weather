@@ -23,10 +23,11 @@ DB_UPDATER_IMAGE = $(ECR_REGISTRY)/weather-db-updater:latest
 
 CLUSTER = weather-cluster
 
-.PHONY: up restart update-db logs clean rebuild aws-login build-aws push-aws deploy-aws
+.PHONY: build rebuild up down restart update-db recreate-views logs clean
+.PHONY: aws-login aws-build aws-push aws-redeploy aws-roll aws-update-db
 
 ## Local testing =====================================================
-.PHONY: test-all test-api test-db-updater test-charts
+.PHONY: test test-api test-db-updater test-charts
 
 # --- General Test Commands ---
 
@@ -80,7 +81,7 @@ clean: ## Stop everything and remove containers, images, volumes
 aws-login: ## Authenticate Docker with ECR
 	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(ECR_REGISTRY)
 
-build-aws: ## Build AWS images (charts, api, db-updater)
+aws-build: ## Build AWS images (charts, api, db-updater)
 	docker build -t $(CHARTS_IMAGE) -f service/charts/Dockerfile .
 	docker build \
 		--build-arg VERSION=$(VERSION) \
@@ -89,37 +90,19 @@ build-aws: ## Build AWS images (charts, api, db-updater)
 	  	-t $(API_IMAGE) -f service/api/Dockerfile ./service/api
 	docker build -t $(DB_UPDATER_IMAGE) -f service/db_updater/Dockerfile .
 
-push-aws: ## Push all images to ECR
+aws-push: ## Push all images to ECR
 	docker push $(CHARTS_IMAGE)
 	docker push $(API_IMAGE)
 	docker push $(DB_UPDATER_IMAGE)
 
-# Redeploy with same task definition, just pull new :latest images
-redeploy-aws: ## Force ECS services to restart (pull latest image)
-	aws ecs update-service --no-cli-pager --cluster $(CLUSTER) --service weather-charts-service --force-new-deployment
-	aws ecs update-service --no-cli-pager --cluster $(CLUSTER) --service weather-api-service --force-new-deployment
+aws-redeploy: ## Roll charts first (wait), then API
+	$(MAKE) aws-roll SERVICE=weather-charts-service
+	$(MAKE) aws-roll SERVICE=weather-api-service
 
-# Register + activate new task definition revisions
-update-tasks-aws: update-task-weather-charts update-task-weather-api update-task-weather-db-updater
+aws-roll: ## Usage: make roll SERVICE=weather-api-service
+	aws ecs update-service --no-cli-pager --cluster $(CLUSTER) --service $(SERVICE) --force-new-deployment
+	aws ecs wait services-stable --cluster $(CLUSTER) --services $(SERVICE)
+	@echo "Rolled $(SERVICE) on $(CLUSTER)"
 
-update-task-weather-charts:
-	bash scripts/update-ecs-task.sh aws/weather-charts-task.json $(CLUSTER) weather-charts-service
-
-update-task-weather-api:
-	bash scripts/update-ecs-task.sh aws/weather-api-task.json $(CLUSTER) weather-api-service
-
-# Pass empty service, since this is a batch job that doesn't have a service defn.
-update-task-weather-db-updater:
-	bash scripts/update-ecs-task.sh aws/weather-db-updater-task.json $(CLUSTER) ""
-
-run-db-updater-aws:
-	bash scripts/run-db-updater-aws.sh $(CLUSTER) weather-db-updater
-
-recreate-db-aws:
-	bash scripts/run-db-updater-aws.sh $(CLUSTER) weather-db-updater \
-  		--overrides '{"containerOverrides":[{"name":"weather-db-updater","command":["--force-recreate"]}]}'
-
-recreate-views-aws:
-	bash scripts/run-db-updater-aws.sh $(CLUSTER) weather-db-updater \
-  		--overrides '{"containerOverrides":[{"name":"weather-db-updater","command":["--recreate-views"]}]}'
-
+aws-update-db:
+	bash aws/scripts/run_db_updater.sh
