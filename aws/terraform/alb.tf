@@ -3,11 +3,11 @@ resource "aws_lb" "api" {
   name               = "weather-alb"
   load_balancer_type = "application"
   internal           = false
-  security_groups    = [aws_security_group.default.id]
+  security_groups    = [aws_security_group.alb.id]
   subnets            = [
-    aws_subnet.subnet_a.id, # eu-central-1a (subnet-022084e39877c4dc6)
-    aws_subnet.subnet_b.id, # eu-central-1b (subnet-043a2c956fd46946b)
-    aws_subnet.subnet_c.id  # eu-central-1c (subnet-0e8c31a794fe5d829)
+    aws_subnet.subnet_a.id,
+    aws_subnet.subnet_b.id,
+    aws_subnet.subnet_c.id 
   ]
 
   ip_address_type = "ipv4"
