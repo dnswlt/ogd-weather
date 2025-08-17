@@ -25,7 +25,7 @@ resource "aws_ecs_task_definition" "weather_api" {
         "environment": [
             {
             "name": "OGD_CHART_SERVICE_ENDPOINT",
-            "value": "http://weather-charts.weather.local:8080"
+            "value": "http://weather-charts.weather.internal:8080"
             },
             {
             "name": "OGD_CACHE_SIZE",

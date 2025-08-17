@@ -1,5 +1,11 @@
 FROM python:3.12-slim
 
+# Install curl (for health checks) and CA certs, then clean up apt cache
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Runtime dependencies

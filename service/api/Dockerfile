@@ -17,7 +17,7 @@ RUN go mod download
 # Copy everything inside build context: ./service/api
 COPY . .
 
-# Build frontend (web → static/dist)
+# Build frontend (web -> static/dist)
 WORKDIR /app/web
 RUN npm install && npm run build
 
@@ -33,7 +33,10 @@ RUN CGO_ENABLED=0 go build \
 # --- runtime stage ---
 FROM alpine:3.20
 
-RUN apk add --no-cache tzdata
+# Add deps:
+#   * curl for health checks in the cloud
+#   * tzdata for time zone information used by the Go server
+RUN apk add --no-cache curl tzdata
 
 WORKDIR /app
 
