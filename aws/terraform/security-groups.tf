@@ -145,3 +145,8 @@ resource "aws_security_group" "efs" {
 
   tags = { Name = "weather-efs-sg" }
 }
+
+output "security_group_ecs_tasks" {
+  description = "Subnets to run the ECS tasks in"
+  value = aws_security_group.ecs_tasks.id
+}

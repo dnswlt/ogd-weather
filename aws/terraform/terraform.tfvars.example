@@ -2,3 +2,5 @@
 # Copy this file to terraform.tfvars and fill in real values locally.
  
 weather_api_version = "latest"
+weather_charts_version = "latest"
+weather_db_updater_version = "latest"

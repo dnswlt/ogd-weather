@@ -1,30 +1,12 @@
 # Task definition
 resource "aws_ecs_task_definition" "weather_db_updater" {
   family                   = "weather-db-updater"
-  cpu                      = "512"
-  memory                   = "1024"
+  cpu                      = "1024"
+  memory                   = "4096"  # Needs ~ 2GiB during view creation
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   execution_role_arn = data.aws_iam_role.ecs_task_execution.arn
   task_role_arn = aws_iam_role.weather_task.arn
-
-  # EFS volume (match existing exactly)
-  volume {
-    name                = "weather-sqlite"
-    configure_at_launch = false
-
-    efs_volume_configuration {
-      file_system_id          = "fs-05754135c68678c1d"
-      root_directory          = "/"
-      transit_encryption      = "ENABLED"
-      transit_encryption_port = 0
-
-      authorization_config {
-        access_point_id = "fsap-0e0734cec27f5a6df"
-        iam             = "DISABLED"
-      }
-    }
-  }
 
   container_definitions = <<JSON
     [  
@@ -37,14 +19,29 @@ resource "aws_ecs_task_definition" "weather_db_updater" {
             "environment": [
                 { 
                     "name": "OGD_BASE_DIR",
-                    "value": "/app/efs"
+                    "value": "/tmp"
+                },
+                {
+                    "name": "OGD_DB_HOST",
+                    "value": "${aws_db_instance.postgres.address}"
+                },
+                {
+                    "name": "OGD_DB_PORT",
+                    "value": "${aws_db_instance.postgres.port}"
+                },
+                {
+                    "name": "OGD_DB_DBNAME",
+                    "value": "${aws_db_instance.postgres.db_name}"
                 }
             ],
-            "mountPoints": [
-                { 
-                    "sourceVolume": "weather-sqlite",
-                    "containerPath": "/app/efs",
-                    "readOnly": false
+            "secrets": [
+                {
+                    "name": "OGD_POSTGRES_MASTER_SECRET",
+                    "valueFrom": "${aws_db_instance.postgres.master_user_secret[0].secret_arn}"
+                },
+                {
+                    "name": "OGD_POSTGRES_ROLE_SECRET",
+                    "valueFrom": "${data.aws_secretsmanager_secret.db_credentials_app_role.arn}"
                 }
             ],
             "volumesFrom": [],
@@ -60,4 +57,9 @@ resource "aws_ecs_task_definition" "weather_db_updater" {
         }
     ]
 JSON
+}
+
+
+output "weather_db_updater_task_def_arn" {
+  value = aws_ecs_task_definition.weather_db_updater.arn
 }

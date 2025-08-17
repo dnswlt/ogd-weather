@@ -30,3 +30,12 @@ resource "aws_subnet" "subnet_c" {
     Name = "default-subnet-c"
   }
 }
+
+output "ecs_subnet_ids" {
+  description = "Subnets to run the ECS tasks in"
+  value = [
+    aws_subnet.subnet_a.id,
+    aws_subnet.subnet_b.id,
+    aws_subnet.subnet_c.id,
+  ]
+}

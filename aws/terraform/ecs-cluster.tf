@@ -11,3 +11,9 @@ resource "aws_ecs_cluster" "weather" {
     Name = "weather-cluster"
   }
 }
+
+
+output "ecs_cluster_arn" {
+    description = "ECS weather-cluster ARN"
+    value = aws_ecs_cluster.weather.arn
+}

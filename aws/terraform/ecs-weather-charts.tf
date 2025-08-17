@@ -8,26 +8,6 @@ resource "aws_ecs_task_definition" "weather_charts" {
   execution_role_arn       = data.aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.weather_task.arn
 
-  # --- VOLUMES (fill from jq output) ---
-  # Example (replace IDs/flags to exactly match your JSON):
-  volume {
-    name                = "weather-sqlite"
-    configure_at_launch = false
-
-    efs_volume_configuration {
-      file_system_id          = "fs-05754135c68678c1d"
-      root_directory          = "/"
-      transit_encryption      = "ENABLED"
-      transit_encryption_port = 0
-
-      authorization_config {
-        access_point_id = "fsap-0e0734cec27f5a6df"
-        iam             = "DISABLED"
-      }
-    }
-  }
-
-  # Container definitions: paste EXACT JSON from your dump to avoid drift
   container_definitions = <<JSON
     [
         {
@@ -45,14 +25,7 @@ resource "aws_ecs_task_definition" "weather_charts" {
             "environment": [
                 {
                     "name": "OGD_BASE_DIR",
-                    "value": "/app/efs"
-                }
-            ],
-            "mountPoints": [
-                {
-                    "sourceVolume": "weather-sqlite",
-                    "containerPath": "/app/efs",
-                    "readOnly": false
+                    "value": "/tmp"
                 }
             ],
             "volumesFrom": [],
