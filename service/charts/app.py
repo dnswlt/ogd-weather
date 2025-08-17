@@ -31,26 +31,6 @@ def _pg_user(conn_str: str) -> str:
     return urlparse(conn_str).username
 
 
-def _sanitize_pg_url(conn_str: str) -> str:
-    """Returns a connection URL for postgres with the password removed (if present)."""
-    if not conn_str:
-        return conn_str
-
-    parsed = urlparse(conn_str)
-    if parsed.username is None:
-        return conn_str  # no user info, nothing to redact
-
-    # Rebuild netloc without password
-    netloc = parsed.hostname or ""
-    if parsed.username:
-        netloc = parsed.username + "@" + netloc
-    if parsed.port:
-        netloc += f":{parsed.port}"
-
-    sanitized = parsed._replace(netloc=netloc)
-    return urlunparse(sanitized)
-
-
 def _get_pgconn_from_env():
     """Uses OGD_ environment variables to create a PgConnectionInfo.
 
@@ -85,11 +65,11 @@ async def lifespan(app: FastAPI):
 
     if pgconn:
         postgres_url = pgconn.url()
-        logger.info("Connecting to postgres DB at %s", postgres_url)
+        logger.info("Connecting to postgres DB at %s", pgconn.sanitized_url())
         engine = sa.create_engine(postgres_url, echo=False)
         with engine.connect() as conn:
             conn.execute(sa.text("SELECT 1"))
-        logger.info("Successfully connected to postgres DB at %s", postgres_url)
+        logger.info("Successfully connected to postgres DB")
     else:
         # Use SQLite database
         db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
@@ -100,7 +80,7 @@ async def lifespan(app: FastAPI):
 
     app.state.server_options = models.ServerOptions(
         base_dir=base_dir,
-        sanitized_postgres_url=_sanitize_pg_url(postgres_url),
+        sanitized_postgres_url=pgconn.sanitized_url() if pgconn else None,
         start_time=datetime.datetime.now(tz=datetime.timezone.utc),
     )
 

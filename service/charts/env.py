@@ -70,3 +70,14 @@ class PgConnectionInfo(BaseModel):
         port_suffix = f":{self.port}" if self.port else ""
 
         return f"postgresql+psycopg://{self.user}{pw_suffix}@{self.host}{port_suffix}/{self.dbname}"
+
+    def sanitized_url(self):
+        """Returns the connection string as a URL without the password.
+
+        Use this method for logging to avoid leaking passwords.
+        """
+        port_suffix = f":{self.port}" if self.port else ""
+
+        return (
+            f"postgresql+psycopg://{self.user}@{self.host}{port_suffix}/{self.dbname}"
+        )

@@ -7,27 +7,27 @@ resource "aws_security_group" "default" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description      = "Allow all traffic from self"
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    self             = true
+    description = "Allow all traffic from self"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    self        = true
   }
 
   ingress {
-    description      = "Allow HTTPS from anywhere"
-    from_port        = 443
-    to_port          = 443
-    protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
+    description = "Allow HTTPS from anywhere"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
-    description      = "Allow all outbound traffic"
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -75,13 +75,22 @@ resource "aws_security_group" "ecs_tasks" {
   description = "Ingress from ALB on app port; full egress"
   vpc_id      = aws_vpc.main.id
 
+  # Allow all ECS tasks to talk to each other.
+  ingress {
+    description = "Allow all traffic from self"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    self        = true
+  }
+
   # ALB -> tasks on container port 8080 (adjust if your API uses a different port)
   ingress {
-    description  = "ALB to ECS tasks"
-    protocol     = "tcp"
-    from_port    = 8080
-    to_port      = 8080
-    security_groups = [aws_security_group.alb.id]  # source = ALB SG
+    description     = "ALB to ECS tasks"
+    protocol        = "tcp"
+    from_port       = 8080
+    to_port         = 8080
+    security_groups = [aws_security_group.alb.id] # source = ALB SG
   }
 
   egress {
@@ -102,10 +111,10 @@ resource "aws_security_group" "db" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description    = "Postgres from ECS tasks"
-    protocol       = "tcp"
-    from_port      = 5432
-    to_port        = 5432
+    description     = "Postgres from ECS tasks"
+    protocol        = "tcp"
+    from_port       = 5432
+    to_port         = 5432
     security_groups = [aws_security_group.ecs_tasks.id]
   }
 
@@ -120,33 +129,7 @@ resource "aws_security_group" "db" {
   tags = { Name = "weather-db-sg" }
 }
 
-# EFS: allow NFS 2049 inbound from ECS tasks.
-# NOTE: This SG must be attached to EFS *mount targets* to take effect.
-resource "aws_security_group" "efs" {
-  name        = "weather-efs-sg"
-  description = "EFS NFS inbound from ECS tasks"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description    = "NFS from ECS tasks"
-    protocol       = "tcp"
-    from_port      = 2049
-    to_port        = 2049
-    security_groups = [aws_security_group.ecs_tasks.id]
-  }
-
-  egress {
-    description = "All egress"
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = { Name = "weather-efs-sg" }
-}
-
 output "security_group_ecs_tasks" {
   description = "Subnets to run the ECS tasks in"
-  value = aws_security_group.ecs_tasks.id
+  value       = aws_security_group.ecs_tasks.id
 }

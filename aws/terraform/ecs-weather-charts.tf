@@ -65,7 +65,7 @@ resource "aws_ecs_service" "weather_charts" {
   name            = "weather-charts-service"
   cluster         = aws_ecs_cluster.weather.id
   task_definition = aws_ecs_task_definition.weather_charts.arn
-  desired_count   = 0
+  desired_count   = 1
   launch_type     = "FARGATE"
   enable_execute_command = true
 
@@ -80,11 +80,16 @@ resource "aws_ecs_service" "weather_charts" {
       aws_subnet.subnet_b.id,
       aws_subnet.subnet_c.id
     ]
-    security_groups  = [aws_security_group.default.id]
+    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
 
   # No load_balancer{} block on purpose (service isn't attached to ALB)
 
   tags = { Name = "weather-charts-service" }
+}
+
+
+output "weather_charts_task_def_arn" {
+  value = aws_ecs_task_definition.weather_charts.arn
 }

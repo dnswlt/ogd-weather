@@ -68,7 +68,7 @@ resource "aws_ecs_service" "weather_api" {
       aws_subnet.subnet_b.id,
       aws_subnet.subnet_c.id
     ]
-    security_groups  = [aws_security_group.default.id]
+    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
 
@@ -86,4 +86,9 @@ resource "aws_ecs_service" "weather_api" {
   tags = {
     Name = "weather-api-service"
   }
+}
+
+
+output "weather_api_task_def_arn" {
+  value = aws_ecs_task_definition.weather_api.arn
 }
