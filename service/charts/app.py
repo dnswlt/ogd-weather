@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from . import charts
 from . import db
+from . import env
 from .errors import NoDataError, StationNotFoundError
 from . import geo
 from . import logging_config as _  # configure logging
@@ -50,13 +51,40 @@ def _sanitize_pg_url(conn_str: str) -> str:
     return urlunparse(sanitized)
 
 
+def _get_pgconn_from_env():
+    """Uses OGD_ environment variables to create a PgConnectionInfo.
+
+    Returns None if the required environment variables are not set.
+    """
+    if "OGD_POSTGRES_ROLE_SECRET" in os.environ:
+        return env.PgConnectionInfo.from_env(secret_var="OGD_POSTGRES_ROLE_SECRET")
+
+    if any(os.getenv(v) for v in ["OGD_POSTGRES_URL", "OGD_DB_HOST"]):
+        return env.PgConnectionInfo.from_env()
+
+    return None
+
+
+def _init_geo(app: FastAPI, engine: sa.Engine):
+    ch_txt = Path(__file__).parent.joinpath("datafiles/geo/CH.txt")
+    if ch_txt.is_file():
+        logger.info("Reading places data from %s", ch_txt)
+        app.state.geo_places = geo.Places.from_geonames(ch_txt)
+        with engine.begin() as conn:
+            stations = db.read_stations(conn, exclude_empty=True)
+        logger.info("Initializing geo lookup for %d stations", len(stations))
+        app.state.geo_stations = geo.StationLookup(stations)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: open SQLite connection once
     base_dir = os.environ.get("OGD_BASE_DIR", ".")
-    postgres_url = os.environ.get("OGD_POSTGRES_URL", "")
+    pgconn = _get_pgconn_from_env()
+    postgres_url = ""
 
-    if postgres_url:
+    if pgconn:
+        postgres_url = pgconn.url()
         logger.info("Connecting to postgres DB at %s", postgres_url)
         engine = sa.create_engine(postgres_url, echo=False)
         with engine.connect() as conn:
@@ -77,14 +105,7 @@ async def lifespan(app: FastAPI):
     )
 
     # Module initialisations go here:
-    ch_txt = Path(__file__).parent.joinpath("datafiles/geo/CH.txt")
-    if ch_txt.is_file():
-        logger.info("Reading places data from %s", ch_txt)
-        app.state.geo_places = geo.Places.from_geonames(ch_txt)
-        with engine.begin() as conn:
-            stations = db.read_stations(conn, exclude_empty=True)
-        logger.info("Initializing geo lookup for %d stations", len(stations))
-        app.state.geo_stations = geo.StationLookup(stations)
+    _init_geo(app, engine)
 
     yield
 

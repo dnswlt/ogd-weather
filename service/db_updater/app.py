@@ -398,7 +398,7 @@ def main():
     started_time = time.time()
 
     if pgconn:
-        postgres_url = pgconn.get_url()
+        postgres_url = pgconn.url()
         logger.info("Connecting to postgres DB at %s", postgres_url)
         engine = sa.create_engine(postgres_url, echo=args.verbose)
     else:

@@ -6,6 +6,7 @@ will be provided as env vars.
 
 import json
 import os
+from urllib.parse import urlparse
 from pydantic import BaseModel
 
 
@@ -15,27 +16,46 @@ class PgConnectionInfo(BaseModel):
     host: str | None
     port: int | None
     dbname: str | None
-    url: str | None
 
     @classmethod
     def from_env(cls, secret_var: str | None = None):
+        """Builds a PgConnectionInfo from environment variables.
+
+        Args:
+            secret_var: the name of an environment variable to retrieve
+                username and password from. If set, it must be a JSON string
+                '{"username": "...", "password": "..."}' and OGD_DB_USER and
+                OGD_DB_PASSWORD are ignored.
+
+        If OGD_POSTGRES_URL is set, it is used and all OGD_DB_* vars are ignored.
+        Otherwise, OGD_DB_{USER, PASSWORD, HOST, PORT, DBNAME} variables are read.
+        """
+
+        url = os.getenv("OGD_POSTGRES_URL")
+        if url:
+            parsed_url = urlparse(url)
+            user = parsed_url.username
+            password = parsed_url.password
+            host = parsed_url.hostname
+            port = parsed_url.port
+            dbname = parsed_url.path.removeprefix("/")
+        else:
+            user = os.getenv("OGD_DB_USER")
+            password = os.getenv("OGD_DB_PASSWORD")
+            host = os.getenv("OGD_DB_HOST")
+            port = os.getenv("OGD_DB_PORT")
+            dbname = os.getenv("OGD_DB_DBNAME")
 
         if secret_var:
             secret_val = os.getenv(secret_var)
             if not secret_val:
                 raise ValueError(f"{secret_var} is specified but not set")
-            secret = json.loads(secret_val)
-            user = secret["username"]
-            password = secret["password"]
-        else:
-            user = os.getenv("OGD_DB_USER")
-            password = os.getenv("OGD_DB_PASSWORD")
-
-        host = os.getenv("OGD_DB_HOST")
-        port = os.getenv("OGD_DB_PORT")
-        dbname = os.getenv("OGD_DB_DBNAME")
-
-        url = os.getenv("OGD_POSTGRES_URL")
+            try:
+                secret = json.loads(secret_val)
+                user = secret["username"]
+                password = secret["password"]
+            except ValueError:
+                raise ValueError(f"Invalid JSON value for {secret_var}: '{secret_val}'")
 
         return cls(
             user=user,
@@ -43,13 +63,9 @@ class PgConnectionInfo(BaseModel):
             host=host,
             port=int(port) if port else None,
             dbname=dbname,
-            url=url,
         )
 
-    def get_url(self):
-        if self.url:
-            return self.url
-
+    def url(self):
         pw_suffix = f":{self.password}" if self.password else ""
         port_suffix = f":{self.port}" if self.port else ""
 

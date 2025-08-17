@@ -26,6 +26,24 @@ resource "aws_ecs_task_definition" "weather_charts" {
                 {
                     "name": "OGD_BASE_DIR",
                     "value": "/tmp"
+                },
+                {
+                    "name": "OGD_DB_HOST",
+                    "value": "${aws_db_instance.postgres.address}"
+                },
+                {
+                    "name": "OGD_DB_PORT",
+                    "value": "${aws_db_instance.postgres.port}"
+                },
+                {
+                    "name": "OGD_DB_DBNAME",
+                    "value": "${aws_db_instance.postgres.db_name}"
+                }
+            ],
+            "secrets": [
+                {
+                    "name": "OGD_POSTGRES_ROLE_SECRET",
+                    "valueFrom": "${data.aws_secretsmanager_secret.db_credentials_app_role.arn}"
                 }
             ],
             "volumesFrom": [],
