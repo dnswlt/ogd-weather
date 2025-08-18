@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
+from . import atm
 from .pandas_funcs import pctl
 from . import colors
 from . import db
@@ -1469,6 +1470,8 @@ def daily_line_chart(
     tooltip_title: str | None = None,
     color: str = _C["PaleGold"],
     points: bool = False,
+    band_low: pd.Series = None,
+    band_high: pd.Series = None,
 ):
     if tooltip_title is None:
         tooltip_title = y_title
@@ -1485,6 +1488,11 @@ def daily_line_chart(
             "value": ser,
         }
     )
+    # Add bands, if specified. Ignore indices in assignment since they won't match.
+    if band_low is not None:
+        df["low"] = band_low.values
+    if band_high is not None:
+        df["high"] = band_high.values
 
     # Create a dedicated tooltip string for the intervals.
     df["tooltip_interval"] = (
@@ -1493,14 +1501,14 @@ def daily_line_chart(
         + df["time_end"].dt.strftime("%H:%M")
     )
 
-    y = alt.Y("value:Q").axis(title=y_title)
+    y = alt.Y().field("value").type("quantitative").axis(title=y_title)
     if y_domain is not None:
         y = y.scale(domain=y_domain)
 
-    line = (
-        alt.Chart(df)
-        .mark_line()
-        .encode(
+    base = alt.Chart(df)
+    charts = []
+    charts.append(
+        base.mark_line().encode(
             x=alt.X(
                 "time_start:T",
                 timeUnit="dayhours",
@@ -1511,16 +1519,33 @@ def daily_line_chart(
         )
     )
 
-    chart = line
     if points:
-        mark_point = line.mark_point(filled=True, size=60).encode(
-            tooltip=[
-                alt.Tooltip("tooltip_interval:N", title="Time"),
-                alt.Tooltip("value:Q", title=tooltip_title, format=".1f"),
-            ]
+        charts.append(
+            charts[-1]
+            .mark_point(filled=True, size=60)
+            .encode(
+                tooltip=[
+                    alt.Tooltip("tooltip_interval:N", title="Time"),
+                    alt.Tooltip("value:Q", title=tooltip_title, format=".1f"),
+                ]
+            )
         )
-        chart = alt.layer(line, mark_point)
 
+    if "low" in df.columns and "high" in df.columns:
+        charts.append(
+            base.mark_area(color=_C["AshGray"]).encode(
+                x=alt.X(
+                    "time_start:T",
+                    timeUnit="dayhours",
+                    title="Hour of day",
+                ),
+                y=y.copy().field("low"),
+                y2=alt.Y2("high:Q"),
+                opacity=alt.value(0.35),
+            )
+        )
+
+    chart = alt.layer(*charts) if len(charts) > 1 else charts[0]
     return chart.properties(
         width="container",
         autosize={"type": "fit", "contains": "padding"},
@@ -1587,18 +1612,22 @@ def daily_bar_chart(
 
 
 def daily_atm_pressure_line_chart(
-    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+    df: pd.DataFrame, from_date: datetime.datetime, station: models.Station
 ) -> AltairChart:
 
+    pnorm = atm.pressure_normals_qfe(
+        df[db.TEMP_HOURLY_MEAN], station.height_masl, from_date
+    )
     date_str = from_date.strftime("%a, %d %b %Y")
 
     ser = df[db.ATM_PRESSURE_HOURLY_MEAN]
     # The 90th percentile daily span of min/max hourly pressure is
-    # slightly below 10 hPa. Use at least a 20 hPa window so "normal"
-    # swings don't look too impressive.
-    smin, smax = ser.min(), ser.max()
+    # slightly below 10 hPa. Add 10 hPa "padding" so the band
+    # does not fill the whole chart.
 
-    y_span = max(20, smax - smin + 5)
+    smin = min(ser.min(), pnorm["low"].min())
+    smax = max(ser.max(), pnorm["high"].max())
+    y_span = smax - smin + 10
     center = smin + (smax - smin) * 0.5
     y_domain = [center - y_span / 2, center + y_span / 2]
 
@@ -1609,6 +1638,8 @@ def daily_atm_pressure_line_chart(
         color=_C["LeafGreen"],
         y_domain=y_domain,
         points=True,
+        band_low=pnorm["low"],
+        band_high=pnorm["high"],
     )
 
 
