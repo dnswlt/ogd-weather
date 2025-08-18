@@ -221,30 +221,90 @@ async def get_annual_chart(
     to_year: str | None = None,
     window: str | None = None,
 ):
-    if chart_type not in charts.CHART_TYPE_COLUMNS:
-        raise _bad_request(f"Invalid chart type: {chart_type}")
-
     period = _period_default(period)
 
     station_abbr = station_abbr.upper()
     from_year_int = int(from_year) if from_year and from_year.isdigit() else None
     to_year_int = int(to_year) if to_year and to_year.isdigit() else None
     # Internal code treats window=None as "no window"
-    window_int = int(window) if window and window.isdigit() and window != "1" else None
+    window_int = int(window) if window and window.isdigit() else 1
 
-    with app.state.engine.begin() as conn:
-        df = db.read_daily_measurements(
-            conn,
-            station_abbr,
-            period=period,
-            columns=charts.CHART_TYPE_COLUMNS[chart_type],
-            from_year=from_year_int,
-            to_year=to_year_int,
+    def _read_daily(columns):
+        with app.state.engine.begin() as conn:
+            return db.read_daily_measurements(
+                conn,
+                station_abbr,
+                period=period,
+                columns=columns,
+                from_year=from_year_int,
+                to_year=to_year_int,
+            )
+
+    def _read_daily_manual(columns):
+        with app.state.engine.begin() as conn:
+            return db.read_daily_manual_measurements(
+                conn,
+                station_abbr,
+                period=period,
+                columns=columns,
+                from_year=from_year_int,
+                to_year=to_year_int,
+            )
+
+    if chart_type == "temperature":
+        df = _read_daily([db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX])
+        chart = charts.temperature_chart(
+            df, station_abbr=station_abbr, period=period, window=window_int
         )
+    elif chart_type == "precipitation":
+        df = _read_daily([db.PRECIP_DAILY_MM])
+        chart = charts.precipitation_chart(
+            df, station_abbr=station_abbr, period=period, window=window_int
+        )
+    elif chart_type == "temperature_deviation":
+        df = _read_daily([db.TEMP_DAILY_MEAN])
+        chart = charts.temperature_deviation_chart(
+            df, station_abbr=station_abbr, period=period, window=window_int
+        )
+    elif chart_type == "raindays":
+        df = _read_daily([db.PRECIP_DAILY_MM])
+        chart = charts.raindays_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "sunshine":
+        df = _read_daily([db.SUNSHINE_DAILY_MINUTES])
+        chart = charts.sunshine_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "sunny_days":
+        df = _read_daily([db.SUNSHINE_DAILY_MINUTES])
+        chart = charts.sunny_days_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "summer_days":
+        df = _read_daily([db.TEMP_DAILY_MAX])
+        chart = charts.summer_days_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "frost_days":
+        df = _read_daily([db.TEMP_DAILY_MIN])
+        chart = charts.frost_days_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "rainiest_day":
+        df = _read_daily([db.PRECIP_DAILY_MM])
+        chart = charts.rainiest_day_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "max_snow_height":
+        df = _read_daily_manual([db.SNOW_DEPTH_MANUAL_DAILY_CM])
+        chart = charts.max_snow_depth_chart(
+            df, station_abbr=station_abbr, period=period
+        )
+    elif chart_type == "snow_days":
+        df = _read_daily_manual([db.SNOW_DEPTH_MANUAL_DAILY_CM])
+        chart = charts.snow_days_chart(df, station_abbr=station_abbr, period=period)
+    elif chart_type == "max_fresh_snow":
+        df = _read_daily_manual([db.FRESH_SNOW_MANUAL_DAILY_CM])
+        chart = charts.max_fresh_snow_chart(
+            df, station_abbr=station_abbr, period=period
+        )
+    elif chart_type == "fresh_snow_days":
+        df = _read_daily_manual([db.FRESH_SNOW_MANUAL_DAILY_CM])
+        chart = charts.fresh_snow_days_chart(
+            df, station_abbr=station_abbr, period=period
+        )
+    else:
+        raise ValueError(f"Invalid chart type: {chart_type}")
 
-    chart = charts.create_annual_chart(
-        chart_type, df, station_abbr, period=period, window=window_int
-    )
     return _vega_chart(request, {chart_type: chart})
 
 
