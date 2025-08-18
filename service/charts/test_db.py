@@ -216,7 +216,7 @@ class TestDbStationVarAvailability(TestDb):
         db.insert_csv_metadata(
             _testdata_dir(),
             cls.engine,
-            db.sa_table_meta_parameters,
+            db.sa_table_smn_meta_parameters,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_meta_parameters.csv",
@@ -647,7 +647,7 @@ class TestCreateDb(unittest.TestCase):
         db.insert_csv_metadata(
             _testdata_dir(),
             engine,
-            db.sa_table_meta_stations,
+            db.sa_table_smn_meta_stations,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_meta_stations.csv",
@@ -671,7 +671,7 @@ class TestCreateDb(unittest.TestCase):
         db.insert_csv_metadata(
             _testdata_dir(),
             engine,
-            db.sa_table_meta_stations,
+            db.sa_table_smn_meta_stations,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_meta_stations.csv",
@@ -1091,7 +1091,7 @@ class TestHelpers(unittest.TestCase):
 
         self.assertEqual(db._column_to_dtype(_col(db.PRECIP_DAILY_MM)), float)
         self.assertEqual(db._column_to_dtype(_col("station_abbr")), str)
-        int_col = db.sa_table_meta_parameters.columns["parameter_decimals"]
+        int_col = db.sa_table_smn_meta_parameters.columns["parameter_decimals"]
         self.assertEqual(db._column_to_dtype(int_col), int)
         # Unsupported type should raise ValueError:
         with self.assertRaises(ValueError):

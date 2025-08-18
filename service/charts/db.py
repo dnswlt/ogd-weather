@@ -166,7 +166,11 @@ SUNSHINE_MONTHLY_MINUTES = "sre000m0"
 SUNSHINE_DAILY_PCT_OF_MAX = "sremaxdv"
 
 # Snow
+# According to https://opendatadocs.meteoswiss.ch/general/faq
+# the official snow depth measurement is the manual one (as of Aug 2025).
 SNOW_DEPTH_DAILY_CM = "htoautd0"
+SNOW_DEPTH_MANUAL_DAILY_CM = "hto000d0"
+FRESH_SNOW_MANUAL_DAILY_CM = "hns000d0"
 
 # Map SwissMetNet parameter names to readable names to use at the API level
 # (e.g. when returning summary stats for variables).
@@ -257,6 +261,22 @@ TABLE_DAILY_MEASUREMENTS = DataTableSpec(
     ],
 )
 
+TABLE_DAILY_MANUAL_MEASUREMENTS = DataTableSpec(
+    name="ogd_nime_daily",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        PRECIP_DAILY_MM,
+        SNOW_DEPTH_MANUAL_DAILY_CM,
+        FRESH_SNOW_MANUAL_DAILY_CM,
+    ],
+)
+
 TABLE_MONTHLY_MEASUREMENTS = DataTableSpec(
     name="ogd_smn_monthly",
     primary_key=[
@@ -279,8 +299,22 @@ TABLE_MONTHLY_MEASUREMENTS = DataTableSpec(
     ],
 )
 
+TABLE_MONTHLY_MANUAL_MEASUREMENTS = DataTableSpec(
+    name="ogd_nime_monthly",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        PRECIP_MONTHLY_MM,
+    ],
+)
 
-sa_table_meta_stations = sa.Table(
+
+sa_table_smn_meta_stations = sa.Table(
     "ogd_smn_meta_stations",
     metadata,
     sa.Column("station_abbr", sa.Text, primary_key=True),
@@ -309,7 +343,7 @@ sa_table_meta_stations = sa.Table(
     sa.Column("station_url_en", sa.Text),
 )
 
-sa_table_meta_parameters = sa.Table(
+sa_table_smn_meta_parameters = sa.Table(
     "ogd_smn_meta_parameters",
     metadata,
     sa.Column("parameter_shortname", sa.Text, primary_key=True),
@@ -1179,7 +1213,7 @@ def recreate_station_data_summary(engine: sa.Engine) -> None:
                 h.rre150d0_min_date,
                 h.rre150d0_max_date
 
-            FROM {sa_table_meta_stations.name} AS m
+            FROM {sa_table_smn_meta_stations.name} AS m
             LEFT JOIN (
                 SELECT
                     station_abbr,
@@ -1722,7 +1756,7 @@ def read_measurement_infos(
                 p.parameter_group_it,
                 p.parameter_group_en
             FROM {sa_table_x_station_var_availability.name} AS a
-            LEFT JOIN {sa_table_meta_parameters.name} AS p
+            LEFT JOIN {sa_table_smn_meta_parameters.name} AS p
                 ON a.variable = p.parameter_shortname
             WHERE a.station_abbr = :station_abbr
             ORDER BY a.variable

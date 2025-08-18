@@ -21,6 +21,10 @@ OGD_SNM_URL = (
     "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-smn"
 )
 
+OGD_NIME_URL = (
+    "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-nime"
+)
+
 UPDATE_STATUS_TABLE_NAME = "update_status"
 
 _NOOP_SENTINEL = object()
@@ -29,6 +33,7 @@ logger = logging.getLogger("db_updater")
 
 
 class CsvResource(BaseModel):
+    parent_id: str  # E.g. "ch.meteoschweiz.ogd-smn"
     href: str
     frequency: str = ""  # "historical", "recent", "now"
     interval: str = ""  # "d", "h", "" for metadata
@@ -37,17 +42,21 @@ class CsvResource(BaseModel):
     status: db.UpdateStatus | None = None
 
 
+def fetch_single(url, timeout=10):
+    try:
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+    except (requests.RequestException, ValueError) as e:
+        raise RuntimeError(f"Failed to fetch or parse {url}: {e}") from e
+
+
 def fetch_paginated(url, timeout=10):
     """Yields paginated resources from a web API that uses HAL-style links."""
     next_url = url
 
     while next_url:
-        try:
-            resp = requests.get(next_url, timeout=timeout)
-            resp.raise_for_status()
-            data = resp.json()
-        except (requests.RequestException, ValueError) as e:
-            raise RuntimeError(f"Failed to fetch or parse {next_url}: {e}") from e
+        data = fetch_single(next_url, timeout)
 
         yield data
 
@@ -94,12 +103,19 @@ def download_csv(url, output_dir, etag: str | None = None) -> tuple[str | None, 
     return (etag, True)
 
 
-def fetch_data_csv_resources(filter_re: str | None = None) -> list[CsvResource]:
+def fetch_data_csv_resources(
+    base_url: str, filter_re: str | None = None
+) -> list[CsvResource]:
     """Fetch URLs of CSV data resources ("items")."""
+
+    # Fetch parent resource to get its ID
+    # (we could just use the last part of the URL)
+    res = fetch_single(base_url)
+    parent_id = res["id"]
 
     # Fetch assets from /items
     assets = []
-    for r in fetch_paginated(f"{OGD_SNM_URL}/items"):
+    for r in fetch_paginated(f"{base_url}/items"):
         for feature in r.get("features", []):
             for asset in feature.get("assets", {}).values():
                 assets.append(asset)
@@ -124,6 +140,7 @@ def fetch_data_csv_resources(filter_re: str | None = None) -> list[CsvResource]:
 
         resources.append(
             CsvResource(
+                parent_id=parent_id,
                 href=href,
                 updated_time=updated,
                 frequency=match.frequency,
@@ -133,12 +150,17 @@ def fetch_data_csv_resources(filter_re: str | None = None) -> list[CsvResource]:
     return resources
 
 
-def fetch_metadata_csv_resources() -> list[CsvResource]:
+def fetch_metadata_csv_resources(base_url: str) -> list[CsvResource]:
     """Fetch URLs of metadata CSV resources ("assets")."""
     resources = []
     ignored_metadata_files = set(["ogd-smn_meta_datainventory.csv"])
 
-    for r in fetch_paginated(f"{OGD_SNM_URL}/assets"):
+    # Fetch parent resource to get its ID
+    # (we could just use the last part of the URL)
+    res = fetch_single(base_url)
+    parent_id = res["id"]
+
+    for r in fetch_paginated(f"{base_url}/assets"):
         for asset in r.get("assets", []):
             filename = os.path.basename(urlparse(asset["href"]).path)
             if filename in ignored_metadata_files:
@@ -153,6 +175,7 @@ def fetch_metadata_csv_resources() -> list[CsvResource]:
             # Treat Metadata as historical, i.e. with low update frequency.
             resources.append(
                 CsvResource(
+                    parent_id=parent_id,
                     href=asset["href"],
                     updated_time=updated,
                     interval="",
@@ -175,20 +198,23 @@ def import_into_db(
     """
 
     measurement_tables = {
-        "h": db.TABLE_HOURLY_MEASUREMENTS,
-        "d": db.TABLE_DAILY_MEASUREMENTS,
-        "m": db.TABLE_MONTHLY_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-smn", "h"): db.TABLE_HOURLY_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-smn", "d"): db.TABLE_DAILY_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-smn", "m"): db.TABLE_MONTHLY_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-nime", "d"): db.TABLE_DAILY_MANUAL_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-nime", "m"): db.TABLE_MONTHLY_MANUAL_MEASUREMENTS,
     }
     metadata_tables = {
-        "ogd-smn_meta_parameters.csv": db.sa_table_meta_parameters,
-        "ogd-smn_meta_stations.csv": db.sa_table_meta_stations,
+        "ogd-smn_meta_parameters.csv": db.sa_table_smn_meta_parameters,
+        "ogd-smn_meta_stations.csv": db.sa_table_smn_meta_stations,
     }
 
-    if resource.interval in measurement_tables:
+    table_spec = measurement_tables.get((resource.parent_id, resource.interval))
+    if table_spec is not None:
         db.insert_csv_data(
             weather_dir,
             engine,
-            table_spec=measurement_tables[resource.interval],
+            table_spec=table_spec,
             update=resource.status,
             insert_mode=insert_mode,
         )
@@ -439,9 +465,11 @@ def main():
     db.metadata.create_all(engine)
 
     # Fetch CSV URLs.
-    data_csvs = fetch_data_csv_resources(args.csv_filter)
-    meta_csvs = fetch_metadata_csv_resources()
-    csvs = meta_csvs + data_csvs
+    csvs = []
+    csvs.extend(fetch_data_csv_resources(OGD_SNM_URL, args.csv_filter))
+    csvs.extend(fetch_data_csv_resources(OGD_NIME_URL, args.csv_filter))
+    csvs.extend(fetch_metadata_csv_resources(OGD_SNM_URL))
+    csvs.extend(fetch_metadata_csv_resources(OGD_NIME_URL))
 
     statuses = db.read_update_status(engine)
     logger.debug("Fetched %d update statuses from DB", len(statuses))
