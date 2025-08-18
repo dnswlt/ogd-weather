@@ -4,6 +4,7 @@ import {
     htmxSwapStationSummaryContainer,
     rememberAndRestoreQueryParams,
     registerSearchBarHandler,
+    registerTablistHandler,
 } from './helpers.js';
 
 import { initMapPage } from './map.js';
@@ -29,6 +30,9 @@ function initPage() {
         });
 
     });
+
+    // Handle clicks on tablist buttons.
+    registerTablistHandler();
 
     registerSearchBarHandler();
 }

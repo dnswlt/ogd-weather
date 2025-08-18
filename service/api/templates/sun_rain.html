@@ -73,105 +73,100 @@
         <!-- Charts -->
         <div>
 
-            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Sunny days</h2>
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Sunshine</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
                 Number of sunny days, i.e. days with &geq; 6 hours of sunshine,
+                and daily sunshine duration
                 for each year during the selected period.
             </p>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/sunny_days"
-                    data-vega-target="sunny-days-chart">
-                    <!-- <script> element with Vega from the backend goes here. -->
+
+            <div class="tab-widget mb-12">
+                <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
+                    <!-- Summer days -->
+                    <button data-chart-type="sunny_days" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Sunny days
+                    </button>
+                    <!-- Frost days -->
+                    <button data-chart-type="sunshine" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Sunshine hours
+                    </button>
                 </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="sunny-days-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                </div>
+
+                <div class="vega-spec-loader" data-vega-target="sun-vega-chart"
+                    hx-get="/stations/{station}/charts/annual/{chartType}" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
+                    hx-vals='{"chartType":"sunny_days"}' hx-target="this" hx-swap="innerHTML"></div>
+                <div id="sun-vega-chart" class="w-full overflow-hidden"></div>
             </div>
 
-            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Summer days</h2>
+
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Season days</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
-                Number of summer days, i.e. days with a maximum temperature of &geq; 25 &deg;C
+                Number of summer days (maximum temperature &geq; 25 &deg;C)
+                and frost days (minimum temperature &lt; 0 &deg;C)
                 for each year during the selected period.
             </p>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/summer_days"
-                    data-vega-target="summer-days-chart">
-                    <!-- <script> element with Vega from the backend goes here. -->
+
+            <div class="tab-widget mb-12">
+                <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
+                    <!-- Summer days -->
+                    <button data-chart-type="summer_days" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Summer days
+                    </button>
+                    <!-- Frost days -->
+                    <button data-chart-type="frost_days" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Frost days
+                    </button>
                 </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="summer-days-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                </div>
+
+                <div class="vega-spec-loader" data-vega-target="seasondays-vega-chart"
+                    hx-get="/stations/{station}/charts/annual/{chartType}" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
+                    hx-vals='{"chartType":"summer_days"}' hx-target="this" hx-swap="innerHTML"></div>
+                <div id="seasondays-vega-chart" class="w-full overflow-hidden"></div>
             </div>
 
-            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Sunshine duration</h2>
-            <p class="text-sm text-gray-600 leading-relaxed mb-4">
-                Total duration of sunshine for each year during the selected period.
-            </p>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/sunshine"
-                    data-vega-target="sunshine-chart">
-                    <!-- <script> element with Vega from the backend goes here. -->
-                </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="sunshine-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                </div>
-            </div>
 
-            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Frost days</h2>
-            <p class="text-sm text-gray-600 leading-relaxed mb-4">
-                Number of frost days, i.e. days with a minimum temperature of &lt; 0 &deg;C
-                for each year during the selected period.
-            </p>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/frost_days"
-                    data-vega-target="frost-days-chart">
-                    <!-- <script> element with Vega from the backend goes here. -->
-                </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="frost-days-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                </div>
-            </div>
-
-            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Rain days</h2>
+            
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Precipitation</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
                 Number of rain days, i.e. days with &geq; 1 mm total precipitation,
-                for each year during the selected period.
+                and maximum rainfall on a single
+                day, for each year during the selected period.
             </p>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/raindays"
-                    data-vega-target="raindays-chart">
-                    <!-- <script> element with Vega from the backend goes here. -->
+
+
+            <div class="tab-widget mb-12">
+                <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
+                    <!-- Rain days -->
+                    <button data-chart-type="raindays" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Rain days
+                    </button>
+                    <!-- Max daily rainfall -->
+                    <button data-chart-type="rainiest_day" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Max. daily rain
+                    </button>
                 </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="raindays-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                </div>
+
+                <div class="vega-spec-loader" data-vega-target="precipitation-vega-chart"
+                    hx-get="/stations/{station}/charts/annual/{chartType}" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
+                    hx-vals='{"chartType":"raindays"}' hx-target="this" hx-swap="innerHTML"></div>
+                <div id="precipitation-vega-chart" class="w-full overflow-hidden"></div>
             </div>
 
-            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Max. daily rain</h2>
-            <p class="text-sm text-gray-600 leading-relaxed mb-4">
-                Maximum rainfall on any given day of the selected period, by year.
-            </p>
-            <div class="mb-8">
-                <div hx-ext="path-params" hx-include="#chart-controls" hx-swap="innerHTML"
-                    hx-trigger="change from:#chart-controls" hx-get="/stations/{station}/charts/annual/rainiest_day"
-                    data-vega-target="rainiest-day-chart">
-                    <!-- <script> element with Vega from the backend goes here. -->
-                </div>
-                <!-- ‘overflow-hidden’ keeps stray pixels inside; w‑full lets Vega stretch -->
-                <div id="rainiest-day-chart" class="w-full overflow-hidden">
-                    <!-- Under Vega's control. Chart goes here. -->
-                </div>
-            </div>
         </div>
     </main>
 
