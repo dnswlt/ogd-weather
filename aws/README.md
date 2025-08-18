@@ -19,6 +19,24 @@ the following steps are required:
 3. [./scripts/create_secrets_bearer.sh](./scripts/create_secrets_bearer.sh)
    to create the BearerToken for the `api` service's admin endpoints.
 
+
+## Releases
+
+We use UTC timestamps and git commit hashes to tag Docker images in AWS ECR.
+The format is `v{YYYYmmdd}_${HHMM}_{hash}`, for example: `v20250818_0718_a6763ba`.
+
+The latest tag values are stored as AWS SSM parameters, which are used by
+Terraform to identify the versions to be deployed.
+
+To build and deploy a new release, make sure you are in a clean repo state and run
+the following commands on a Linux machine:
+
+```bash
+make aws-build
+
+make aws-push
+```
+
 ## Terraform
 
 Make sure instantiate your local `terraform.tfvars` from the given example

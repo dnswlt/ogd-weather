@@ -26,23 +26,34 @@ resource "aws_ecr_repository" "weather_db_updater" {
   tags = { project = "weather", iac = "terraform" }
 }
 
-# Images
+# Images and tags of currently deployed images
+
+data "aws_ssm_parameter" "weather_api_tag" {
+  name = "/weather/images/api/tag"
+}
+
+data "aws_ssm_parameter" "weather_charts_tag" {
+  name = "/weather/images/charts/tag"
+}
+
+data "aws_ssm_parameter" "weather_db_updater_tag" {
+  name = "/weather/images/db_updater/tag"
+}
 
 data "aws_ecr_image" "api" {
   repository_name = aws_ecr_repository.weather_api.name
-  image_tag       = var.weather_api_version
+  image_tag       = data.aws_ssm_parameter.weather_api_tag.value
 }
 
 data "aws_ecr_image" "charts" {
   repository_name = aws_ecr_repository.weather_charts.name
-  image_tag       = var.weather_charts_version
+  image_tag       = data.aws_ssm_parameter.weather_charts_tag.value
 }
 
 data "aws_ecr_image" "db_updater" {
   repository_name = aws_ecr_repository.weather_db_updater.name
-  image_tag       = var.weather_db_updater_version
+  image_tag       = data.aws_ssm_parameter.weather_db_updater_tag.value
 }
-
 
 # Policies
 

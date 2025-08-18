@@ -17,10 +17,6 @@ AWS_ACCOUNT_ID ?= ACCOUNT_ID_NOT_SET
 AWS_REGION ?= $(if $(AWS_DEFAULT_REGION),$(AWS_DEFAULT_REGION),AWS_REGION_NOT_SET)
 ECR_REGISTRY = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
-CHARTS_IMAGE = $(ECR_REGISTRY)/weather-charts:latest
-API_IMAGE = $(ECR_REGISTRY)/weather-api:latest
-DB_UPDATER_IMAGE = $(ECR_REGISTRY)/weather-db-updater:latest
-
 CLUSTER = weather-cluster
 
 .PHONY: build rebuild up down restart update-db recreate-views logs clean
@@ -82,18 +78,10 @@ aws-login: ## Authenticate Docker with ECR
 	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(ECR_REGISTRY)
 
 aws-build: ## Build AWS images (charts, api, db-updater)
-	docker build -t $(CHARTS_IMAGE) -f service/charts/Dockerfile .
-	docker build \
-		--build-arg VERSION=$(VERSION) \
-	  	--build-arg COMMIT=$(COMMIT) \
-	  	--build-arg BUILDTIME=$(BUILDTIME) \
-	  	-t $(API_IMAGE) -f service/api/Dockerfile ./service/api
-	docker build -t $(DB_UPDATER_IMAGE) -f service/db_updater/Dockerfile .
+	bash aws/scripts/aws_build.sh
 
 aws-push: ## Push all images to ECR
-	docker push $(CHARTS_IMAGE)
-	docker push $(API_IMAGE)
-	docker push $(DB_UPDATER_IMAGE)
+	bash aws/scripts/aws_push.sh
 
 aws-redeploy: ## Roll charts first (wait), then API
 	$(MAKE) aws-roll SERVICE=weather-charts-service
