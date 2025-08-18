@@ -1446,6 +1446,74 @@ def utc_datestr(d: datetime.datetime) -> str:
     return d.strftime("%Y-%m-%d")
 
 
+_COLUMN_NAME_RE = re.compile(r"^[a-z][a-zA-Z0-9_]*$")
+
+
+def _validate_column_names(columns: list[str]) -> None:
+    """Checks that all elements of columns are valid SQL column names.
+
+    Raises:
+        ValueError if an invalid name if found.
+    """
+    if not all(_COLUMN_NAME_RE.search(c) for c in columns):
+        raise ValueError(f"Invalid columns: {','.join(columns)}")
+
+
+def read_daily_manual_measurements(
+    conn: sa.Connection,
+    station_abbr: str,
+    columns: list[str] | None = None,
+    period: str | None = None,
+    from_year: int | None = None,
+    to_year: int | None = None,
+) -> pd.DataFrame:
+    """Returns daily measurements matching the provided filters.
+
+    The returned DataFrame has a datetime (reference_timestamp) index.
+    """
+    if columns is None:
+        columns = [
+            PRECIP_DAILY_MM,
+            SNOW_DEPTH_MANUAL_DAILY_CM,
+            FRESH_SNOW_MANUAL_DAILY_CM,
+        ]
+
+    _validate_column_names(columns)
+
+    select_columns = ["station_abbr", "reference_timestamp"] + columns
+    sql = f"""
+        SELECT {', '.join(select_columns)}
+        FROM {TABLE_DAILY_MANUAL_MEASUREMENTS.name}
+    """
+    # Filter by station.
+    filters = ["station_abbr = :station_abbr"]
+    params = {"station_abbr": station_abbr}
+
+    if period is not None:
+        filters.append(_sql_filter_by_period(period))
+
+    if from_year is not None:
+        filters.append(f"date(reference_timestamp) >= date('{from_year:04d}-01-01')")
+    if to_year is not None:
+        filters.append(f"date(reference_timestamp) < date('{to_year+1:04d}-01-01')")
+
+    # Filter out any row that has only NULL measurements.
+    if columns:
+        non_null = " OR ".join(f"{c} IS NOT NULL" for c in columns)
+        filters.append(f"({non_null})")
+
+    sql += " WHERE " + " AND ".join(filters)
+    sql += " ORDER BY reference_timestamp ASC"
+
+    return pd.read_sql_query(
+        sa.text(sql),
+        conn,
+        params=params,
+        parse_dates=["reference_timestamp"],
+        index_col="reference_timestamp",
+    )
+
+
 def read_daily_measurements(
     conn: sa.Connection,
     station_abbr: str,
@@ -1461,9 +1529,7 @@ def read_daily_measurements(
     if columns is None:
         columns = [TEMP_DAILY_MEAN, TEMP_DAILY_MIN, TEMP_DAILY_MAX, PRECIP_DAILY_MM]
 
-    # Validate column names to prevent SQL injection
-    if not all(re.search(r"^[a-z][a-zA-Z0-9_]*$", c) for c in columns):
-        raise ValueError(f"Invalid columns: {','.join(columns)}")
+    _validate_column_names(columns)
 
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""
@@ -1510,9 +1576,7 @@ def read_hourly_measurements(
     if columns is None:
         columns = [TEMP_HOURLY_MIN, TEMP_HOURLY_MEAN, TEMP_HOURLY_MAX, PRECIP_HOURLY_MM]
 
-    # Validate column names to prevent SQL injection
-    if not all(re.search(r"^[a-z][a-zA-Z0-9_]*$", c) for c in columns):
-        raise ValueError(f"Invalid columns: {','.join(columns)}")
+    _validate_column_names(columns)
 
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""
@@ -1569,9 +1633,7 @@ def read_monthly_measurements(
             PRECIP_MONTHLY_MM,
         ]
 
-    # Validate column names to prevent SQL injection
-    if not all(re.search(r"^[a-z][a-zA-Z0-9_]*$", c) for c in columns):
-        raise ValueError(f"Invalid columns: {','.join(columns)}")
+    _validate_column_names(columns)
 
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""

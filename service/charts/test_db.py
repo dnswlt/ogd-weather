@@ -640,6 +640,38 @@ class TestCreateDb(unittest.TestCase):
             "All measurement columns should have some nonzero values.",
         )
 
+    def test_create_daily_manual(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        db.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            db.TABLE_DAILY_MANUAL_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-nime_abo_d_recent.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+        with engine.connect() as conn:
+            columns = [
+                db.PRECIP_DAILY_MM,
+                db.SNOW_DEPTH_MANUAL_DAILY_CM,
+                db.FRESH_SNOW_MANUAL_DAILY_CM,
+            ]
+            df = db.read_daily_manual_measurements(
+                conn,
+                "ABO",
+                columns=columns,
+            )
+        self.assertGreaterEqual(len(df), 200)
+        self.assertTrue(
+            (df[columns].sum() > 0).all(),
+            "All measurement columns should have some nonzero values.",
+        )
+
     def test_create_metadata_stations(self):
         engine = sa.create_engine("sqlite:///:memory:")
         db.metadata.create_all(engine)
