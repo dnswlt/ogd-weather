@@ -38,7 +38,8 @@ def year_highlights(
     # Temp. range
     td = df[db.TEMP_DAILY_MAX] - df[db.TEMP_DAILY_MIN]
     max_daily_temp_range_date = td.idxmax()
-    max_daily_temp_range = td.loc[max_daily_temp_range_date]
+    max_daily_temp_range_min = df.loc[max_daily_temp_range_date, db.TEMP_DAILY_MIN]
+    max_daily_temp_range_max = df.loc[max_daily_temp_range_date, db.TEMP_DAILY_MAX]
 
     # Frost days
     fd = df[db.TEMP_DAILY_MIN]
@@ -66,7 +67,7 @@ def year_highlights(
     sd = df[db.SNOW_DEPTH_DAILY_CM].dropna()
     if len(sd) > 0:
         max_snow_depth_cm = sd.max()
-        snow_days = (sd > 1.0).sum()
+        snow_days = (sd >= 1.0).sum()
     else:
         max_snow_depth_cm = None
         snow_days = None
@@ -74,7 +75,8 @@ def year_highlights(
     return models.StationYearHighlights(
         first_frost_day=first_frost_day,
         last_frost_day=last_frost_day,
-        max_daily_temp_range=max_daily_temp_range,
+        max_daily_temp_range_min=max_daily_temp_range_min,
+        max_daily_temp_range_max=max_daily_temp_range_max,
         max_daily_temp_range_date=max_daily_temp_range_date,
         max_daily_sunshine_hours=max_daily_sunshine_hours,
         max_daily_sunshine_hours_date=max_daily_sunshine_hours_date,

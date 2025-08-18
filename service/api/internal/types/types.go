@@ -247,7 +247,8 @@ type StationMeasurementsResponse struct {
 type StationYearHighlights struct {
 	FirstFrostDay             NullDate    `json:"first_frost_day"`
 	LastFrostDay              NullDate    `json:"last_frost_day"`
-	MaxDailyTempRange         NullFloat64 `json:"max_daily_temp_range"`
+	MaxDailyTempRangeMin      NullFloat64 `json:"max_daily_temp_range_min"`
+	MaxDailyTempRangeMax      NullFloat64 `json:"max_daily_temp_range_max"`
 	MaxDailyTempRangeDate     NullDate    `json:"max_daily_temp_range_date"`
 	MaxDailySunshineHours     NullFloat64 `json:"max_daily_sunshine_hours"`
 	MaxDailySunshineHoursDate NullDate    `json:"max_daily_sunshine_hours_date"`
@@ -258,6 +259,16 @@ type StationYearHighlights struct {
 type StationYearHighlightsResponse struct {
 	Station    *Station               `json:"station"`
 	Highlights *StationYearHighlights `json:"highlights"`
+}
+
+func (s *StationYearHighlights) MaxDailyTempRange() NullFloat64 {
+	if !(s.MaxDailyTempRangeMax.HasValue && s.MaxDailyTempRangeMin.HasValue) {
+		return NullFloat64{}
+	}
+	return NullFloat64{
+		Value:    s.MaxDailyTempRangeMax.Value - s.MaxDailyTempRangeMin.Value,
+		HasValue: true,
+	}
 }
 
 // MinDate returns the smaller of TemperatureMinDate and PrecipitationMinDate.
