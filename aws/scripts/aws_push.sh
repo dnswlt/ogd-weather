@@ -21,11 +21,10 @@ docker push "${REGISTRY}/weather-db-updater:${TAG}"
 # Update terraform.tfvars
 TEMP_TFVARS=$(mktemp)
 TFVARS=./aws/terraform/terraform.tfvars
-grep -E -v '^weather_(api|charts|db_updater)_version[[:space:]]' "$TFVARS" > "$TEMP_TFVARS"
+grep -E -v '^weather_(api|charts|db_updater)_version[[:space:]]*=' "$TFVARS" > "$TEMP_TFVARS" || true
 
 echo "weather_api_version = \"$TAG\"" >> "$TEMP_TFVARS"
 echo "weather_charts_version = \"$TAG\"" >> "$TEMP_TFVARS"
 echo "weather_db_updater_version = \"$TAG\"" >> "$TEMP_TFVARS"
 
 mv "$TEMP_TFVARS" "$TFVARS"
-
