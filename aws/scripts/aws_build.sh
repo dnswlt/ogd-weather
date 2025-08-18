@@ -40,7 +40,12 @@ if [[ "$COMMIT" = "unknown" ]]; then
 fi
 
 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-IMAGE_TAG="$COMMIT"
+
+# Build image tag from UTC timestamp and hash of current git commit.
+EPOCH="$(git show -s --format=%ct HEAD)"
+TS="$(python3 -c "from datetime import datetime, timezone; print(datetime.fromtimestamp(${EPOCH}, tz=timezone.utc).strftime('%Y%m%d_%H%M%S'))")"
+SHA="$(git rev-parse --short=7 HEAD)"
+IMAGE_TAG="v${TS}_${SHA}"
 
 CHARTS_IMAGE="${ECR_REGISTRY}/weather-charts:${IMAGE_TAG}"
 API_IMAGE="${ECR_REGISTRY}/weather-api:${IMAGE_TAG}"

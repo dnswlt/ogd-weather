@@ -2,17 +2,15 @@
 set -euo pipefail
 
 # Script to push docker images built from the current commit to AWS.
-# Usage: ./aws/scripts/aws_push.sh [TAG]
 
 # cd to repo root
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
-# Build the image tag from current UTC time and git commit hash,
-# unless a tag is specified on the command line.
-TS="$(date -u +%Y%m%d_%H%M)"
+# Build image tag from UTC timestamp and hash of current git commit.
+EPOCH="$(git show -s --format=%ct HEAD)"
+TS="$(python3 -c "from datetime import datetime, timezone; print(datetime.fromtimestamp(${EPOCH}, tz=timezone.utc).strftime('%Y%m%d_%H%M%S'))")"
 SHA="$(git rev-parse --short=7 HEAD)"
-SHA_TAG="v${TS}_${SHA}"
-TAG="${1:-$SHA_TAG}"
+TAG="v${TS}_${SHA}"
 
 echo "Pushing images with tag $TAG."
 
