@@ -1,4 +1,5 @@
-# Task definition
+# Service and task definition for api service.
+
 resource "aws_ecs_task_definition" "weather_api" {
   family                   = "weather-api"
   cpu                      = "256"
@@ -8,51 +9,50 @@ resource "aws_ecs_task_definition" "weather_api" {
   execution_role_arn       = data.aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.weather_task.arn
 
-  container_definitions = <<JSON
-    [
+  container_definitions = jsonencode([
+    {
+      name  = "weather-api"
+      image = "${aws_ecr_repository.weather_api.repository_url}@${data.aws_ecr_image.api.image_digest}"
+      cpu   = 0
+      portMappings = [
         {
-        "name": "weather-api",
-        "image": "006725292903.dkr.ecr.eu-central-1.amazonaws.com/weather-api:${var.weather_api_version}",
-        "cpu": 0,
-        "portMappings": [
-            {
-            "containerPort": 8080,
-            "hostPort": 8080,
-            "protocol": "tcp"
-            }
-        ],
-        "essential": true,
-        "environment": [
-            {
-            "name": "OGD_CHART_SERVICE_ENDPOINT",
-            "value": "http://weather-charts.weather.internal:8080"
-            },
-            {
-            "name": "OGD_CACHE_SIZE",
-            "value": "50000000"
-            }
-        ],
-        "mountPoints": [],
-        "volumesFrom": [],
-        "secrets": [
-            {
-            "name": "OGD_BEARER_TOKEN",
-            "valueFrom": "/weather/api/BearerToken"
-            }
-        ],
-        "logConfiguration": {
-            "logDriver": "awslogs",
-            "options": {
-            "awslogs-group": "/ecs/weather-api",
-            "awslogs-region": "eu-central-1",
-            "awslogs-stream-prefix": "ecs"
-            }
-        },
-        "systemControls": []
+          containerPort = 8080
+          hostPort      = 8080
+          protocol      = "tcp"
         }
-    ]
-JSON
+      ]
+      essential   = true
+      environment = [
+        {
+          name  = "OGD_CHART_SERVICE_ENDPOINT"
+          value = "http://weather-charts.weather.internal:8080"
+        },
+        {
+          name  = "OGD_CACHE_SIZE"
+          value = "50000000"
+        }
+      ]
+      mountPoints = []
+      volumesFrom = []
+      secrets = [
+        {
+          name      = "OGD_BEARER_TOKEN"
+          valueFrom = "/weather/api/BearerToken"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = "/ecs/weather-api"
+          awslogs-region        = "eu-central-1"
+          awslogs-stream-prefix = "ecs"
+        }
+      }
+      systemControls = []
+    }
+  ])
 }
+
 
 # ECS Service for weather-api-service
 resource "aws_ecs_service" "weather_api" {
