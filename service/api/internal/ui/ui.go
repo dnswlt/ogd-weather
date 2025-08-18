@@ -41,6 +41,7 @@ func (o *Option) Selected() string {
 
 func Periods(selected string) []Option {
 	opts := []Option{
+		{"all", "Whole Year", false},
 		{"1", "January", false},
 		{"2", "February", false},
 		{"3", "March", false},
@@ -57,7 +58,9 @@ func Periods(selected string) []Option {
 		{"summer", "Summer (Jun-Aug)", false},
 		{"autumn", "Autumn (Sep-Nov)", false},
 		{"winter", "Winter (Dec-Feb)", false},
-		{"all", "Whole Year", false},
+	}
+	if selected == "" {
+		selected = "all" // By default, select "Whole Year"
 	}
 	for i := range opts {
 		if selected == opts[i].Value {
