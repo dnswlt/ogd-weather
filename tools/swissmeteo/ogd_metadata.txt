@@ -1,0 +1,439 @@
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn/ber/ogd-smn_ber_h_recent.csv:
+
+dkl010h0 Windrichtung; Stundenmittel
+erefaoh0 Referenzverdunstung nach FAO; Stundensumme
+fkl010h0 Windgeschwindigkeit skalar; Stundenmittel in m/s
+fkl010h1 Böenspitze (Sekundenböe); Stundenmaximum in m/s
+fkl010h3 Böenspitze (3-Sekundenböe); Stundenmaximum in m/s
+fu3010h0 Windgeschwindigkeit skalar; Stundenmittel in km/h
+fu3010h1 Böenspitze (Sekundenböe); Stundenmaximum in km/h
+fu3010h3 Böenspitze (3-Sekundenböe); Stundenmaximum in km/h
+fve010h0 Windgeschwindigkeit vektoriell; Stundenmittel in m/s
+gre000h0 Globalstrahlung; Stundenmittel
+htoauths Schneehöhe (automatisch gemessen); stündlicher Momentanwert
+ods000h0 Diffusstrahlung; Stundenmittel
+oli000h0 Langwellige Einstrahlung; Stundenmittel
+olo000h0 Langwellige Ausstrahlung; Stundenmittel
+osr000h0 Kurzwellig reflektierte Strahlung; Stundenmittel
+pp0qffh0 Luftdruck reduziert auf Meeresniveau (QFF); Stundenmittel
+pp0qnhh0 Luftdruck reduziert auf Meeresniveau mit Standardatmosphäre (QNH); Stundenmittel
+ppz700h0 Geopotentielle Höhe der 700 hPa-Fläche; Stundenmittel
+ppz850h0 Geopotentielle Höhe der 850 hPa-Fläche; Stundenmittel
+prestah0 Luftdruck auf Barometerhöhe (QFE); Stundenmittel
+pva200h0 Dampfdruck 2 m über Boden; Stundenmittel
+rre150h0 Niederschlag; Stundensumme
+sre000h0 Sonnenscheindauer; Stundensumme
+tde200h0 Taupunkt 2 m über Boden; Stundenmittel
+tre005h0 Lufttemperatur 5 cm über Gras; Stundenmittel
+tre005hn Lufttemperatur 5 cm über Gras; Stundenminimum
+tre200h0 Lufttemperatur 2 m über Boden; Stundenmittel
+tre200hn Lufttemperatur 2 m über Boden; Stundenminimum
+tre200hx Lufttemperatur 2 m über Boden; Stundenmaximum
+ure200h0 Relative Luftfeuchtigkeit 2 m über Boden; Stundenmittel
+wcc006h0 Föhnindex; Stundenwert
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn/ber/ogd-smn_ber_d_recent.csv:
+
+dkl010d0 Windrichtung; Tagesmittel
+erefaod0 Referenzverdunstung nach FAO; Tagessumme
+fkl010d0 Windgeschwindigkeit skalar; Tagesmittel in m/s
+fkl010d1 Böenspitze (Sekundenböe); Tagesmaximum in m/s
+fkl010d3 Böenspitze (3-Sekundenböe); Tagesmaximum in m/s
+fu3010d0 Windgeschwindigkeit skalar; Tagesmittel in km/h
+fu3010d1 Böenspitze (Sekundenböe); Tagesmaximum in km/h
+fu3010d3 Böenspitze (3-Sekundenböe); Tagesmaximum in km/h
+gre000d0 Globalstrahlung; Tagesmittel
+htoautd0 Schneehöhe (automatisch gemessen); Morgenmessung von 6 UTC
+ods000d0 Diffusstrahlung; Tagesmittel
+oli000d0 Langwellige Einstrahlung; Tagesmittel
+olo000d0 Langwellige Ausstrahlung; Tagesmittel
+osr000d0 Kurzwellig reflektierte Strahlung; Tagesmittel
+pp0qffd0 Luftdruck reduziert auf Meeresniveau (QFF); Tagesmittel
+pp0qnhd0 Luftdruck reduziert auf Meeresniveau mit Standardatmosphäre (QNH); Tagesmittel
+ppz700d0 Geopotentielle Höhe der 700 hPa-Fläche; Tagesmittel
+ppz850d0 Geopotentielle Höhe der 850 hPa-Fläche; Tagesmittel
+prestad0 Luftdruck auf Barometerhöhe (QFE); Tagesmittel
+pva200d0 Dampfdruck 2 m über Boden; Tagesmittel
+rka150d0 Niederschlag; Tagessumme 0 UTC - 0 UTC
+rre150d0 Niederschlag; Tagessumme 6 UTC - 6 UTC Folgetag
+rreetsd0 Wassereintrag (Wasserbilanz, R-ETS); Tagessumme
+sre000d0 Sonnenscheindauer; Tagessumme
+sremaxdv Sonnenscheindauer; relativ zur absolut möglichen Tagessumme
+tre005d0 Lufttemperatur 5 cm über Gras; Tagesmittel
+tre005dn Lufttemperatur 5 cm über Gras; Tagesminimum
+tre005dx Lufttemperatur 5 cm über Gras; Tagesmaximum
+tre200d0 Lufttemperatur 2 m über Boden; Tagesmittel
+tre200dn Lufttemperatur 2 m über Boden; Tagesminimum
+tre200dx Lufttemperatur 2 m über Boden; Tagesmaximum
+ure200d0 Relative Luftfeuchtigkeit 2 m über Boden; Tagesmittel
+wcc006d0 Föhnindex, Tageswert
+xcd000d0 Kühlgradzahl (CDD: Cooling Degree Day, nach USA)
+xno000d0 Heizgradzahl 12/20 (SIA: Heizgradtage)
+xno012d0 Heizgradtage ATD12
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn/ber/ogd-smn_ber_m.csv:
+
+erefaom0 Referenzverdunstung nach FAO; Monatssumme
+fkl010m0 Windgeschwindigkeit skalar; Monatsmittel in m/s
+fkl010m1 Böenspitze (Sekundenböe); Monatsmaximum in m/s
+fu3010m0 Windgeschwindigkeit skalar; Monatsmittel in km/h
+fu3010m1 Böenspitze (Sekundenböe); Monatsmaximum in km/h
+gre000m0 Globalstrahlung; Monatsmittel
+oli000m0 Langwellige Einstrahlung; Monatsmittel
+olo000m0 Langwellige Ausstrahlung; Monatsmittel
+osr000m0 Kurzwellig reflektierte Strahlung; Monatsmittel
+pp0qffm0 Luftdruck reduziert auf Meeresniveau (QFF); Monatsmittel
+pp0qnhm0 Luftdruck reduziert auf Meeresniveau mit Standardatmosphäre (QNH); Monatsmittel
+ppz700m0 Geopotentielle Höhe der 700 hPa-Fläche; Monatsmittel
+ppz850m0 Geopotentielle Höhe der 850 hPa-Fläche; Monatsmittel
+prestam0 Luftdruck auf Barometerhöhe (QFE); Monatsmittel
+pva200m0 Dampfdruck 2 m über Boden; Monatsmittel
+rre150m0 Niederschlag; Monatssumme
+rreetsm0 Wassereintrag (Wasserbilanz, R-ETS); Monatssumme
+sre000m0 Sonnenscheindauer; Monatssumme
+sremaxmv Sonnenscheindauer; Verhältnis der Monatssumme zur maximal Möglichen
+tre005m0 Lufttemperatur 5 cm über Gras; Monatsmittel
+tre005mn Lufttemperatur 5 cm über Gras; absolutes Monatsminimum
+tre005mx Lufttemperatur 5 cm über Gras; absolutes Monatsmaximum
+tre200m0 Lufttemperatur 2 m über Boden; Monatsmittel
+tre200mn Lufttemperatur 2 m über Boden; absolutes Monatsminimum
+tre200mx Lufttemperatur 2 m über Boden; absolutes Monatsmaximum
+ure200m0 Relative Luftfeuchtigkeit 2 m über Boden; Monatsmittel
+xcd000m0 Kühlgradzahl (CDD nach USA); Monatssumme
+xno000m0 Heizgradzahl 12/20 (SIA: Heizgradtage); Monatssumme
+xno012m0 Heizgradtage ATD12; Monatssumme
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn/ber/ogd-smn_ber_y.csv:
+
+erefaoy0 Referenzverdunstung nach FAO; Jahressumme
+fkl010y0 Windgeschwindigkeit skalar; Jahresmittel in m/s
+fkl010y1 Böenspitze (Sekundenböe); Jahresmaximum in m/s
+fu3010y0 Windgeschwindigkeit skalar; Jahresmittel in km/h
+fu3010y1 Böenspitze (Sekundenböe); Jahresmaximum in km/h
+gre000y0 Globalstrahlung; Jahresmittel
+oli000y0 Langwellige Einstrahlung; Jahresmittel
+olo000y0 Langwellige Ausstrahlung; Jahresmittel
+osr000y0 Kurzwellig reflektierte Strahlung; Jahresmittel
+pp0qffy0 Luftdruck reduziert auf Meeresniveau (QFF); Jahresmittel
+pp0qnhy0 Luftdruck reduziert auf Meeresniveau mit Standardatmosphäre (QNH); Jahresmittel
+ppz700y0 Geopotentielle Höhe der 700 hPa-Fläche; Jahresmittel
+ppz850y0 Geopotentielle Höhe der 850 hPa-Fläche; Jahresmittel
+prestay0 Luftdruck auf Barometerhöhe (QFE); Jahresmittel
+pva200y0 Dampfdruck 2 m über Boden; Jahresmittel
+rre150y0 Niederschlag; Jahressumme
+rreetsy0 Wassereintrag (Wasserbilanz, R-ETS); Jahressumme
+sre000y0 Sonnenscheindauer; Jahressumme
+sremaxyv Sonnenscheindauer; Verhältnis der Jahressumme zur maximal Möglichen
+tre005y0 Lufttemperatur 5 cm über Gras; Jahresmittel
+tre005yn Lufttemperatur 5 cm über Gras; absolutes Jahresminimum
+tre005yx Lufttemperatur 5 cm über Gras; absolutes Jahresmaximum
+tre200y0 Lufttemperatur 2 m über Boden; Jahresmittel
+tre200yn Lufttemperatur 2 m über Boden; absolutes Jahresminimum
+tre200yx Lufttemperatur 2 m über Boden; absolutes Jahresmaximum
+ure200y0 Relative Luftfeuchtigkeit 2 m über Boden; Jahresmittel
+xcd000y0 Kühlgradzahl (CDD nach USA); Jahressumme
+xno000y0 Heizgradzahl 12/20 (SIA: Heizgradtage); Jahressumme
+xno012y0 Heizgradtage ATD12; Jahressumme
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-nbcn/ber/ogd-nbcn_ber_d_recent.csv:
+
+th9120dv Lufttemperatur 2 m über Boden; Abweichung des homogenen Tagesmittels (statistisch abgeleitet) von der Norm 9120
+th91dndv Lufttemperatur 2 m über Boden; Abweichung des homogenen Tagesminimum (statistisch abgeleitet) von der Norm 9120
+th91dxdv Lufttemperatur 2 m über Boden; Abweichung des homogenen Tagesmaximum (statistisch abgeleitet) von der Norm 9120
+ths200d0 Lufttemperatur 2 m über Boden; homogenes Tagesmittel (statistisch abgeleitet)
+ths200dn Lufttemperatur 2 m über Boden; homogenes Tagesminimum (statistisch abgeleitet)
+ths200dx Lufttemperatur 2 m über Boden; homogenes Tagesmaximum (statistisch abgeleitet)
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-nbcn/ber/ogd-nbcn_ber_m.csv:
+
+fh9120mv Windgeschwindigkeit skalar; Verhältnis des homogenen Monatsmittels zur Norm 9120
+fhs010m0 Windgeschwindigkeit skalar; homogenes Monatsmittel
+gh9120mv Globalstrahlung; Verhältnis des homogenen Monatsmittels zur Norm 9120
+ghs000m0 Globalstrahlung; homogenes Monatsmittel
+ph9120mv Luftdruck auf Barometerhöhe (QFE); Abweichung des homogenen Monatsmittels von der Norm 9120
+phsstam0 Luftdruck auf Barometerhöhe (QFE); homogenes Monatsmittel
+pv9120mv Dampfdruck 2 m über Boden; Abweichung des homogenen Monatsmittels von der Norm 9120
+pva2hsm0 Dampfdruck 2 m über Boden; homogenes Monatsmittel
+rh9120mv Niederschlag; Verhältnis der homogenen Monatssumme zur Norm 9120
+rhs001m0 Anzahl Tage im Monat mit Niederschlag >= 1 mm homogen; Anzahl Tage bei denen der tägliche Gesamtniederschlag >= 1mm war.
+rhs150m0 Niederschlag; homogene Monatssumme
+sh9120mv Sonnenscheindauer; Verhältnis der homogenen Monatssumme zur Norm 9120
+shs000m0 Sonnenscheindauer; homogene Monatssumme
+th9120mv Lufttemperatur 2 m über Boden; Abweichung des homogenen Monatsmittels von der Norm 9120
+th91dnmv Lufttemperatur 2 m über Boden; Abweichung des homogenen Monatsmittels der Tagesminima von der Norm 9120
+th91dxmv Lufttemperatur 2 m über Boden; Abweichung des homogenen Monatsmittels der Tagesmaxima von der Norm 9120
+thl200mn Lufttemperatur 2 m über Boden; absolutes Monatsminimum, homogen
+thl200mx Lufttemperatur 2 m über Boden; absolutes Monatsmaximum, homogen
+ths00nm0 Frosttage (Minimum tiefer als 0 Grad C); Monatssumme, homogen
+ths00xm0 Eistage (Maximum tiefer als 0 Grad C); Monatssumme, homogen
+ths200m0 Lufttemperatur 2 m über Boden; homogenes Monatsmittel
+ths20nm0 Tropennächte; Monatssumme, homogen
+ths25xm0 Sommertage (Maximum 25 Grad C oder höher); Monatssumme, homogen
+ths2dymn Lufttemperatur 2 m über Boden; homogenes Monatsmittel der Tagesminima
+ths2dymx Lufttemperatur 2 m über Boden; homogenes Monatsmittel der Tagesmaxima
+ths30xm0 Hitzetage (Maximum 30 Grad C oder höher); Monatssumme, homogen
+ths35xm0 Sehr heisse Tage; monatliche Anzahl der Tage mit einer täglichen Maximumtemperatur >= 35 Grad C, homogen
+xhs000m0 Heizgradzahl 12/20 (SIA: Heizgradtage); Monatssumme, homogen
+xhs00om0 Kühlgradzahl (CDD nach USA); Monatssumme, homogen
+xhs012m0 Heizgradtage ATD12; Monatssumme, homogen
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-nbcn/ber/ogd-nbcn_ber_y.csv:
+
+fh9120yv Windgeschwindigkeit skalar; Verhältnis des homogenen Jahresmittels zur Norm 9120
+fhs010y0 Windgeschwindigkeit skalar; homogenes Jahresmittel
+gh9120yv Globalstrahlung; Verhältnis des homogenen Jahresmittels zur Norm 9120
+ghs000y0 Globalstrahlung; homogenes Jahresmittel
+ph9120yv Luftdruck auf Barometerhöhe (QFE); Abweichung des homogenen Jahresmittels von der Norm 9120
+phsstay0 Luftdruck auf Barometerhöhe (QFE); homogenes Jahresmittel
+pv9120yv Dampfdruck 2 m über Boden; Abweichung des homogenen Jahresmittels von der Norm 9120
+pva2hsy0 Dampfdruck 2 m über Boden; homogenes Jahresmittel
+rh9120yv Niederschlag; Verhältnis der homogenen Jahressumme zur Norm 9120
+rhs001y0 Anzahl Tage im Jahr mit Niederschlag >= 1 mm homogen; Anzahl Tage bei denen der tägliche Gesamtniederschlag >= 1mm war pro Jahr.
+rhs001yx Folge von Niederschlagstagen homogen; Maximale Anzahl aufeinanderfolgender Tage pro Jahr mit Niederschlag >=1mm
+rhs150y0 Niederschlag; homogene Jahressumme
+rhsdryyx Längste Folge von Trockentagen (Tagesniederschlagssumme < 1 mm) des Jahres, homogen
+sh9120yv Sonnenscheindauer; Verhältnis der homogenen Jahressumme zur Norm 9120
+shs000y0 Sonnenscheindauer; homogene Jahressumme
+th9120yv Lufttemperatur 2 m über Boden; Abweichung des homogenen Jahresmittels von der Norm 9120
+th91dnyv Lufttemperatur 2 m über Boden; Abweichung des homogenen Jahresmittels der Tagesminima von der Norm 9120
+th91dxyv Lufttemperatur 2 m über Boden; Abweichung des homogenen Jahresmittels der Tagesmaxima von der Norm 9120
+thl200yn Lufttemperatur 2 m über Boden; absolutes Jahresminimum, homogen
+thl200yx Lufttemperatur 2 m über Boden; absolutes Jahresmaximum, homogen
+ths00ny0 Frosttage (Minimum tiefer als 0 Grad C); Jahressumme, homogen
+ths00xy0 Eistage (Maximum tiefer als 0 Grad C); Jahressumme, homogen
+ths200y0 Lufttemperatur 2 m über Boden; homogenes Jahresmittel
+ths20ny0 Tropennächte; Jahressumme, homogen
+ths25xy0 Sommertage (Maximum 25 Grad C oder höher); Jahressumme, homogen
+ths2dyyn Lufttemperatur 2 m über Boden; homogenes Jahresmittel der Tagesminima
+ths2dyyx Lufttemperatur 2 m über Boden; homogenes Jahresmittel der Tagesmaxima
+ths30xy0 Hitzetage (Maximum 30 Grad C oder höher); Jahressumme, homogen
+ths35xy0 Sehr heisse Tage; jährliche Anzahl der Tage mit einer täglichen Maximumtemperatur >= 35 Grad C, homogen
+xhs000y0 Heizgradzahl 12/20 (SIA: Heizgradtage); Jahressumme, homogen
+xhs00oy0 Kühlgradzahl (CDD nach USA); Jahressumme, homogen
+xhs012y0 Heizgradtage ATD12; Jahressumme, homogen
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-nime/ber/ogd-nime_ber_d_recent.csv:
+
+hns000d0 Neuschneehöhe; Tagessumme 6 UTC - 6 UTC Folgetag
+hto000d0 Schneehöhe; Morgenmessung von 6 UTC
+rre150d0 Niederschlag; Tagessumme 6 UTC - 6 UTC Folgetag
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-nime/ber/ogd-nime_ber_m.csv:
+
+hns000m0 Neuschneehöhe; Monatssumme der täglichen Messungen
+hto000m0 Schneehöhe; Monatsmittel
+rre150m0 Niederschlag; Monatssumme
+
+
+Parameters in https://data.geo.admin.ch/ch.meteoschweiz.ogd-nime/ber/ogd-nime_ber_y.csv:
+
+hns000l0 Neuschneehöhe; Summe August - Juli
+hns000y0 Neuschneehöhe; Jahressumme der täglichen Messungen
+hto000l0 Schneehöhe; Jahresmittel vom August - Juli
+hto000y0 Schneehöhe; Jahresmittel
+rre150y0 Niederschlag; Jahressumme
+
+
+Weather stations for dataset 'smn':
+
+ABO Adelboden BE
+AEG Oberägeri ZG
+AIG Aigle VD
+ALT Altdorf UR
+AND Andeer GR
+ANT Andermatt UR
+ARH Altenrhein SG
+ARO Arosa GR
+ATT Les Attelas VS
+BAN Bantiger BE
+BAS Basel / Binningen BL
+BEH Passo del Bernina GR
+BER Bern / Zollikofen BE
+BEZ Beznau AG
+BIA Biasca TI
+BIE Bière VD
+BIN Binn VS
+BIV Bivio GR
+BIZ Bischofszell / Sitterdorf TG
+BLA Blatten, Lötschental VS
+BOL Boltigen BE
+BOU Bouveret VS
+BRL La Brévine NE
+BRZ Brienz BE
+BUF Buffalora GR
+BUS Buchs / Aarau AG
+CDF La Chaux-de-Fonds NE
+CDM Col des Mosses VD
+CEV Cevio TI
+CGI Nyon / Changins VD
+CHA Chasseral BE
+CHB Les Charbonnières VD
+CHD Château-d'Oex VD
+CHM Chaumont NE
+CHU Chur GR
+CHZ Cham ZG
+CIM Cimetta TI
+CMA Crap Masegn GR
+COM Acquarossa / Comprovasco TI
+COV Piz Corvatsch GR
+COY Courtelary BE
+CRM Cressier NE
+DAV Davos GR
+DEM Delémont JU
+DIA Les Diablerets VD
+DIS Disentis GR
+DOL La Dôle VD
+EBK Ebnat-Kappel SG
+EGH Eggishorn VS
+EGO Egolzwil LU
+EIN Einsiedeln SZ
+ELM Elm GL
+ENG Engelberg OW
+EVI Evionnaz VS
+EVO Evolène / Villa VS
+FAH Fahy JU
+FLU Flühli, LU LU
+FRE Bullet / La Frétaz VD
+FRU Frutigen BE
+GEN Monte Generoso TI
+GES Gersau SZ
+GIH Giswil OW
+GLA Glarus GL
+GOE Gösgen SO
+GOR Gornergrat VS
+GOS Göschenen UR
+GRA Fribourg / Grangeneuve FR
+GRC Grächen VS
+GRE Grenchen SO
+GRH Grimsel Hospiz BE
+GRO Grono GR
+GSB Col du Grand St-Bernard VS
+GUE Gütsch, Andermatt UR
+GUT Güttingen TG
+GVE Genève / Cointrin GE
+HAI Salen-Reutenen TG
+HLL Hallau SH
+HOE Hörnli ZH
+ILZ Ilanz GR
+INT Interlaken BE
+JUN Jungfraujoch VS
+KLO Zürich / Kloten ZH
+KOP Koppigen BE
+LAC Lachen / Galgenen SZ
+LAE Lägern ZH
+LAG Langnau i.E. BE
+LAT Bergün / Latsch GR
+LEI Leibstadt AG
+LUG Lugano TI
+LUZ Luzern LU
+MAG Magadino / Cadenazzo TI
+MAH Mathod VD
+MAR Les Marécottes VS
+MAS Marsens FR
+MER Meiringen BE
+MLS Le Moléson FR
+MOA Mosen LU
+MOB Montagnier, Bagnes VS
+MOE Möhlin AG
+MTE Mottec VS
+MTR Matro TI
+MUB Mühleberg BE
+MVE Montana VS
+NAP Napf BE
+NAS Naluns / Schlivera GR
+NEU Neuchâtel NE
+OBR Oberriet / Kriessern SG
+ORO Oron VD
+OTL Locarno / Monti TI
+PAY Payerne VD
+PFA Pfäffikon, ZH ZH
+PIL Pilatus OW
+PIO Piotta TI
+PLF Plaffeien FR
+PMA Piz Martegnas GR
+PRE St-Prex VD
+PSI Würenlingen / PSI AG
+PUY Pully VD
+QUI Quinten SG
+RAG Bad Ragaz SG
+REH Zürich / Affoltern ZH
+ROB Poschiavo / Robbia GR
+ROE Robièi TI
+RUE Rünenberg BL
+SAE Säntis AI
+SAG Sattel, SZ SZ
+SAM Samedan GR
+SBE S. Bernardino GR
+SBO Stabio TI
+SCM Schmerikon SG
+SCU Scuol GR
+SHA Schaffhausen SH
+SIA Segl-Maria GR
+SIM Simplon-Dorf VS
+SIO Sion VS
+SMA Zürich / Fluntern ZH
+SMM Sta. Maria, Val Müstair GR
+SPF Schüpfheim LU
+SRS Schiers GR
+STC St. Chrischona BS
+STG St. Gallen SG
+STK Steckborn TG
+TAE Aadorf / Tänikon TG
+THU Thun BE
+TIT Titlis OW
+UEB Uetliberg ZH
+ULR Ulrichen VS
+VAB Valbella GR
+VAD Vaduz FL
+VEV Vevey / Corseaux VD
+VIO Vicosoprano GR
+VIS Visp VS
+VIT Villars-Tiercelin VD
+VLS Vals GR
+WAE Wädenswil ZH
+WFJ Weissfluhjoch GR
+WYN Wynau BE
+ZER Zermatt VS
+
+
+Weather stations for dataset 'nbcn':
+
+ALT Altdorf UR
+ANT Andermatt UR
+BAS Basel / Binningen BL
+BER Bern / Zollikofen BE
+CDF La Chaux-de-Fonds NE
+CHD Château-d'Oex VD
+CHM Chaumont NE
+DAV Davos GR
+ELM Elm GL
+ENG Engelberg OW
+GRC Grächen VS
+GRH Grimsel Hospiz BE
+GSB Col du Grand St-Bernard VS
+GVE Genève / Cointrin GE
+JUN Jungfraujoch VS
+LUG Lugano TI
+LUZ Luzern LU
+MER Meiringen BE
+NEU Neuchâtel NE
+OTL Locarno / Monti TI
+PAY Payerne VD
+RAG Bad Ragaz SG
+SAE Säntis AI
+SAM Samedan GR
+SBE S. Bernardino GR
+SIA Segl-Maria GR
+SIO Sion VS
+SMA Zürich / Fluntern ZH
+STG St. Gallen SG
+
+
