@@ -65,14 +65,10 @@ class PrefixLookup:
     def __init__(self, corpus: Iterable[Any], key: Callable[[Any], str] = str) -> None:
         # Build (normalized, original) pairs; de-duplicate originals
         ts = []
-        seen = set()
         for item in corpus:
             if item is None:
                 continue
             k = key(item)
-            if k in seen:
-                continue
-            seen.add(k)
             n = _ascii_fold(k).casefold()
             ts.append((n, k, item))
 

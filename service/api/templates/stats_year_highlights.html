@@ -57,7 +57,7 @@
             <td class="py-2 text-gray-800">
                 {{if .MaxDailyTempRange.HasValue }}
                     {{float "%.1f" .MaxDailyTempRange}} °C
-                    ({{datefmt "a J Y" .MaxDailyTempRangeDate}},
+                    ({{datefmt "a J Y" .MaxDailyTempRangeDate}} &bull;
                     {{float "%.1f" .MaxDailyTempRangeMin}} - {{float "%.1f" .MaxDailyTempRangeMax}} °C)
                 {{else}}
                     No data

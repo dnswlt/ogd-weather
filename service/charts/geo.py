@@ -44,6 +44,18 @@ def station_distance_meters(
     return math.hypot(dist_horiz, height_diff)
 
 
+def _deduper():
+    seen = set()
+
+    def _check(key):
+        if key in seen:
+            return True
+        seen.add(key)
+        return False
+
+    return _check
+
+
 class Places:
 
     def __init__(self, places: list[models.Place]):
@@ -59,6 +71,30 @@ class Places:
 
     def find_prefix(self, prefix: str, limit: int = 10) -> list[models.Place]:
         return self._lookup.find_prefix(prefix, limit)
+
+    @classmethod
+    def from_swisstopo(cls, path: str) -> "Places":
+        df = pd.read_csv(path, sep=";")
+        df = df.sort_values(by=["Ortschaftsname", "PLZ", "Gemeindename"])
+        places = []
+
+        # Heuristically filter out duplicates:
+        # * Duplicate (Ortschaftsname, PLZ) => Ortschaft spans multiple Gemeinden
+        seen_plz = _deduper()
+        for t in df.itertuples():
+            if seen_plz((t.Ortschaftsname, t.PLZ)):
+                continue
+
+            places.append(
+                models.Place(
+                    postal_code=str(t.PLZ),
+                    name=t.Ortschaftsname,
+                    lon=t.E,
+                    lat=t.N,
+                )
+            )
+
+        return cls(places)
 
     @classmethod
     def from_geonames(cls, path: str) -> "Places":

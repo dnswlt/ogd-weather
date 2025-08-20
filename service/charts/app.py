@@ -46,10 +46,10 @@ def _get_pgconn_from_env():
 
 
 def _init_geo(app: FastAPI, engine: sa.Engine):
-    ch_txt = Path(__file__).parent.joinpath("datafiles/geo/CH.txt")
+    ch_txt = Path(__file__).parent.joinpath("datafiles/geo/AMTOVZ_CSV_WGS84.csv")
     if ch_txt.is_file():
         logger.info("Reading places data from %s", ch_txt)
-        app.state.geo_places = geo.Places.from_geonames(ch_txt)
+        app.state.geo_places = geo.Places.from_swisstopo(ch_txt)
         with engine.begin() as conn:
             stations = db.read_stations(conn, exclude_empty=True)
         logger.info("Initializing geo lookup for %d stations", len(stations))
