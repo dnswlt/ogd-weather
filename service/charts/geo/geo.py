@@ -1,9 +1,9 @@
 import math
 import pandas as pd
-from pydantic import BaseModel
 from pyproj import Geod
 
-from . import models
+from service.charts import models
+
 from . import prefix
 
 # Create the geodesic object once (WGS84 ellipsoid)

@@ -3,7 +3,7 @@ import logging
 import sqlalchemy as sa
 from typing import Any
 
-from service.charts import env
+from service.charts.db import env
 
 
 logger = logging.getLogger("bootstrap")

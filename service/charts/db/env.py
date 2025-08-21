@@ -18,7 +18,7 @@ class PgConnectionInfo(BaseModel):
     dbname: str | None
 
     @classmethod
-    def from_env(cls, secret_var: str | None = None):
+    def from_env(cls, secret_var: str | None = None) -> "PgConnectionInfo":
         """Builds a PgConnectionInfo from environment variables.
 
         Args:
@@ -62,6 +62,23 @@ class PgConnectionInfo(BaseModel):
             password=password,
             host=host,
             port=int(port) if port else None,
+            dbname=dbname,
+        )
+
+    @classmethod
+    def from_url(cls, url: str) -> "PgConnectionInfo":
+        parsed_url = urlparse(url)
+        user = parsed_url.username
+        password = parsed_url.password
+        host = parsed_url.hostname
+        port = parsed_url.port
+        dbname = parsed_url.path.removeprefix("/")
+
+        return cls(
+            user=user,
+            password=password,
+            host=host,
+            port=port if port else None,
             dbname=dbname,
         )
 

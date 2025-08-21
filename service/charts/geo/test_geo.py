@@ -1,11 +1,12 @@
 import pytest
 from pathlib import Path
+
 from . import geo
 
 
 def test_from_geonames():
     here = Path(__file__).resolve().parent
-    places = geo.Places.from_geonames(here / "datafiles/geo/CH.txt")
+    places = geo.Places.from_geonames(here / "../datafiles/geo/CH.txt")
 
     assert len(places) >= 1000
 
@@ -18,7 +19,7 @@ def test_from_geonames():
 
 def test_from_swisstopo():
     here = Path(__file__).resolve().parent
-    places = geo.Places.from_swisstopo(here / "datafiles/geo/AMTOVZ_CSV_WGS84.csv")
+    places = geo.Places.from_swisstopo(here / "../datafiles/geo/AMTOVZ_CSV_WGS84.csv")
 
     assert len(places) >= 1000
 
@@ -31,7 +32,7 @@ def test_from_swisstopo():
 
 def test_places_find_prefix():
     here = Path(__file__).resolve().parent
-    places = geo.Places.from_geonames(here / "datafiles/geo/CH.txt")
+    places = geo.Places.from_geonames(here / "../datafiles/geo/CH.txt")
 
     zuri = set(p.name for p in places.find_prefix("zuri"))
     assert set(["Zürich"]).issubset(zuri)

@@ -10,9 +10,11 @@ from pydantic import BaseModel
 import requests
 from urllib.parse import urlparse
 
-from service.charts import db
-from service.charts import env
-from service.charts import logging_config as _  # configure logging
+from service.charts.base import logging_config as _  # configure logging
+
+from service.charts.db import db
+from service.charts.db import env
+from service.charts.db import constants as dc
 
 from .bootstrap import bootstrap_postgres
 from .smn import match_csv_resource
@@ -403,7 +405,7 @@ def main():
         parser.error("--base-dir is required if $OGD_BASE_DIR is not set.")
 
     if args.postgres_url:
-        pgconn = env.PgConnectionInfo(url=args.postgres_url)
+        pgconn = env.PgConnectionInfo.from_url(args.postgres_url)
     elif "OGD_POSTGRES_ROLE_SECRET" in os.environ:
         # If PG specific env vars are set, use them
         pgconn = env.PgConnectionInfo.from_env(secret_var="OGD_POSTGRES_ROLE_SECRET")
@@ -428,7 +430,7 @@ def main():
         logger.info("Connecting to postgres DB at %s", postgres_url)
         engine = sa.create_engine(postgres_url, echo=args.verbose)
     else:
-        db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
+        db_path = os.path.join(base_dir, dc.DATABASE_FILENAME)
         logger.info("Connecting to sqlite DB at %s", db_path)
         engine = sa.create_engine(f"sqlite:///{db_path}", echo=args.verbose)
 

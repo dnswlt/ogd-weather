@@ -6,7 +6,7 @@ For all chart types that cannot be expressed in Altair/Vega.
 import numpy as np
 import pandas as pd
 
-from . import db
+from service.charts.db import constants as dc
 
 # Also used for HTML exports.
 # Keep in sync with versions in the "head.html" template!
@@ -48,8 +48,8 @@ def windrose_chart(
     # Rename DB columns for better code readability.
     df = df.rename(
         columns={
-            db.WIND_DIRECTION_HOURLY_MEAN: "deg",
-            db.WIND_SPEED_HOURLY_MEAN: "speed",
+            dc.WIND_DIRECTION_HOURLY_MEAN: "deg",
+            dc.WIND_SPEED_HOURLY_MEAN: "speed",
         }
     )
 

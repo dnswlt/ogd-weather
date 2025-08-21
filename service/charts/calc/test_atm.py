@@ -3,25 +3,26 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from service.charts.db import constants as dc
+
 from . import atm
-from . import db
 
 
 def test_atm_pressure_z850():
     here = Path(__file__).resolve().parent
-    csv_file = here.joinpath("testdata/ogd-smn_vis_h_recent.csv")
+    csv_file = here.joinpath("../testdata/ogd-smn_vis_h_recent.csv")
     df = pd.read_csv(
         csv_file,
         sep=";",
         encoding="cp1252",
     )
-    p_qfe = db.ATM_PRESSURE_HOURLY_MEAN
+    p_qfe = dc.ATM_PRESSURE_HOURLY_MEAN
     p_z850 = "ppz850h0"
 
     H_stn = 639  # station elevation
     G = 9.81  # Acceleration due to gravity
     R = 287.05  # specific gas constant for dry air
-    K_mean = df[db.TEMP_HOURLY_MEAN] + 273.15  # mean hourly temp in Kelvin
+    K_mean = df[dc.TEMP_HOURLY_MEAN] + 273.15  # mean hourly temp in Kelvin
 
     z850 = df[p_z850]
     qfe_approx = 850 * np.exp((G * (z850 - H_stn)) / (R * K_mean))
@@ -38,20 +39,20 @@ def test_atm_pressure_qff():
     # QFE (station level) air pressure from given QFF (sea level) values
     # yield accurate values.
     here = Path(__file__).resolve().parent
-    csv_file = here.joinpath("testdata/ogd-smn_ber_h_recent.csv")
+    csv_file = here.joinpath("../testdata/ogd-smn_ber_h_recent.csv")
     df = pd.read_csv(
         csv_file,
         sep=";",
         encoding="cp1252",
     )
-    p_qfe = db.ATM_PRESSURE_HOURLY_MEAN
+    p_qfe = dc.ATM_PRESSURE_HOURLY_MEAN
     p_qff = "pp0qffh0"
 
     H_stn = 553  # station elevation
     G = 9.81  # Acceleration due to gravity
     R = 287.05  # specific gas constant for dry air
     qff = df[p_qff]
-    K_mean = df[db.TEMP_HOURLY_MEAN] + 273.15  # mean hourly temp in Kelvin
+    K_mean = df[dc.TEMP_HOURLY_MEAN] + 273.15  # mean hourly temp in Kelvin
     qfe_approx = np.round(qff * np.exp(-(H_stn * G) / (R * K_mean)), 1)
 
     err_abs = np.abs(df[p_qfe] - qfe_approx)

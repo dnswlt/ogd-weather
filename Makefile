@@ -36,11 +36,11 @@ test-api:
 
 test-db-updater:
 	@echo "--- Running tests for Python service/db_updater ---"
-	cd service/db_updater && pytest
+	pytest service/db_updater
 
 test-charts:
 	@echo "--- Running tests for Python service/charts ---"
-	cd service/charts && pytest
+	pytest service/charts
 
 
 ## Local Dev =========================================================

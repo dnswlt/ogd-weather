@@ -5,22 +5,23 @@ import datetime
 from io import StringIO
 import logging
 import os
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
 import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException, Request, status, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from zoneinfo import ZoneInfo
 
+from service.charts.base import logging_config as _  # configure logging
 
-from . import charts
-from . import db
-from . import env
-from .errors import NoDataError, StationNotFoundError
-from . import geo
-from . import logging_config as _  # configure logging
-from . import models
-from . import stats
-from . import vega
+from service.charts import charts
+from service.charts import db
+from service.charts import geo
+from service.charts import models
+from service.charts.base.errors import NoDataError, StationNotFoundError
+from service.charts.calc import stats
+from service.charts.charts import vega
+from service.charts.db import constants as dc
+from service.charts.db import env
 
 
 logger = logging.getLogger("app")
@@ -72,7 +73,7 @@ async def lifespan(app: FastAPI):
         logger.info("Successfully connected to postgres DB")
     else:
         # Use SQLite database
-        db_path = os.path.join(base_dir, db.DATABASE_FILENAME)
+        db_path = os.path.join(base_dir, dc.DATABASE_FILENAME)
         logger.info("Connecting to sqlite DB at %s", db_path)
         engine = sa.create_engine(f"sqlite:///{db_path}", echo=True)
 
@@ -252,53 +253,53 @@ async def get_annual_chart(
             )
 
     if chart_type == "temperature":
-        df = _read_daily([db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX])
+        df = _read_daily([dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX])
         chart = charts.temperature_chart(
             df, station_abbr=station_abbr, period=period, window=window_int
         )
     elif chart_type == "precipitation":
-        df = _read_daily([db.PRECIP_DAILY_MM])
+        df = _read_daily([dc.PRECIP_DAILY_MM])
         chart = charts.precipitation_chart(
             df, station_abbr=station_abbr, period=period, window=window_int
         )
     elif chart_type == "temperature_deviation":
-        df = _read_daily([db.TEMP_DAILY_MEAN])
+        df = _read_daily([dc.TEMP_DAILY_MEAN])
         chart = charts.temperature_deviation_chart(
             df, station_abbr=station_abbr, period=period, window=window_int
         )
     elif chart_type == "raindays":
-        df = _read_daily([db.PRECIP_DAILY_MM])
+        df = _read_daily([dc.PRECIP_DAILY_MM])
         chart = charts.raindays_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "sunshine":
-        df = _read_daily([db.SUNSHINE_DAILY_MINUTES])
+        df = _read_daily([dc.SUNSHINE_DAILY_MINUTES])
         chart = charts.sunshine_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "sunny_days":
-        df = _read_daily([db.SUNSHINE_DAILY_MINUTES])
+        df = _read_daily([dc.SUNSHINE_DAILY_MINUTES])
         chart = charts.sunny_days_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "summer_days":
-        df = _read_daily([db.TEMP_DAILY_MAX])
+        df = _read_daily([dc.TEMP_DAILY_MAX])
         chart = charts.summer_days_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "frost_days":
-        df = _read_daily([db.TEMP_DAILY_MIN])
+        df = _read_daily([dc.TEMP_DAILY_MIN])
         chart = charts.frost_days_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "rainiest_day":
-        df = _read_daily([db.PRECIP_DAILY_MM])
+        df = _read_daily([dc.PRECIP_DAILY_MM])
         chart = charts.rainiest_day_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "max_snow_height":
-        df = _read_daily_manual([db.SNOW_DEPTH_MANUAL_DAILY_CM])
+        df = _read_daily_manual([dc.SNOW_DEPTH_MANUAL_DAILY_CM])
         chart = charts.max_snow_depth_chart(
             df, station_abbr=station_abbr, period=period
         )
     elif chart_type == "snow_days":
-        df = _read_daily_manual([db.SNOW_DEPTH_MANUAL_DAILY_CM])
+        df = _read_daily_manual([dc.SNOW_DEPTH_MANUAL_DAILY_CM])
         chart = charts.snow_days_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "max_fresh_snow":
-        df = _read_daily_manual([db.FRESH_SNOW_MANUAL_DAILY_CM])
+        df = _read_daily_manual([dc.FRESH_SNOW_MANUAL_DAILY_CM])
         chart = charts.max_fresh_snow_chart(
             df, station_abbr=station_abbr, period=period
         )
     elif chart_type == "fresh_snow_days":
-        df = _read_daily_manual([db.FRESH_SNOW_MANUAL_DAILY_CM])
+        df = _read_daily_manual([dc.FRESH_SNOW_MANUAL_DAILY_CM])
         chart = charts.fresh_snow_days_chart(
             df, station_abbr=station_abbr, period=period
         )
@@ -338,14 +339,14 @@ async def get_year_chart(
         with app.state.engine.begin() as conn:
             return db.read_var_summary_stats_month(
                 conn,
-                agg_name=db.AGG_NAME_REF_1991_2020,
+                agg_name=dc.AGG_NAME_REF_1991_2020,
                 station_abbr=station_abbr,
                 variables=variables,
             )
 
     # drywet returns multiple charts:
     if chart_type == "drywet":
-        df = _read_daily([db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX])
+        df = _read_daily([dc.PRECIP_DAILY_MM, dc.SUNSHINE_DAILY_PCT_OF_MAX])
         grid_chart = charts.drywet_grid_chart(df, station_abbr, year)
         spell_chart = charts.drywet_spells_bar_chart(df, station_abbr, year)
         return _vega_chart(
@@ -357,35 +358,35 @@ async def get_year_chart(
         )
     # Single chart cases.
     if chart_type == "temperature:month":
-        df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
+        df = _read_daily([dc.TEMP_DAILY_MAX, dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN])
         chart = charts.monthly_temp_boxplot_chart(df, station_abbr, year, facet)
 
     elif chart_type == "temperature_normals:month":
-        df = _read_daily([db.TEMP_DAILY_MAX, db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN])
-        df_ref = _read_ref([db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX])
+        df = _read_daily([dc.TEMP_DAILY_MAX, dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN])
+        df_ref = _read_ref([dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX])
         chart = charts.monthly_temp_anomaly_chart(df, df_ref, station_abbr, year, facet)
 
     elif chart_type == "sunny_days:month":
-        df = _read_daily([db.SUNSHINE_DAILY_PCT_OF_MAX])
-        df_ref = _read_ref([db.DX_SUNNY_DAYS_ANNUAL_COUNT])
+        df = _read_daily([dc.SUNSHINE_DAILY_PCT_OF_MAX])
+        df_ref = _read_ref([dc.DX_SUNNY_DAYS_ANNUAL_COUNT])
         chart = charts.monthly_sunny_days_bar_chart(df, df_ref, station_abbr, year)
 
     elif chart_type == "sunshine:month":
-        df = _read_daily([db.SUNSHINE_DAILY_MINUTES])
+        df = _read_daily([dc.SUNSHINE_DAILY_MINUTES])
         chart = charts.monthly_sunshine_boxplot_chart(df, station_abbr, year)
 
     elif chart_type == "humidity:month":
-        df = _read_daily([db.REL_HUMIDITY_DAILY_MEAN])
+        df = _read_daily([dc.REL_HUMIDITY_DAILY_MEAN])
         chart = charts.monthly_humidity_boxplot_chart(df, station_abbr, year)
 
     elif chart_type == "precipitation:month":
-        df = _read_daily([db.PRECIP_DAILY_MM])
-        df_ref = _read_ref([db.DX_PRECIP_TOTAL])
+        df = _read_daily([dc.PRECIP_DAILY_MM])
+        df_ref = _read_ref([dc.DX_PRECIP_TOTAL])
         chart = charts.monthly_precipitation_bar_chart(df, df_ref, station_abbr, year)
 
     elif chart_type == "raindays:month":
-        df = _read_daily([db.PRECIP_DAILY_MM])
-        df_ref = _read_ref([db.DX_RAIN_DAYS_ANNUAL_COUNT])
+        df = _read_daily([dc.PRECIP_DAILY_MM])
+        df_ref = _read_ref([dc.DX_RAIN_DAYS_ANNUAL_COUNT])
         chart = charts.monthly_raindays_bar_chart(df, df_ref, station_abbr, year)
 
     elif chart_type == "windrose":
@@ -396,7 +397,7 @@ async def get_year_chart(
                 station_abbr,
                 from_date=datetime.datetime(year, 1, 1),
                 to_date=datetime.datetime(year + 1, 1, 1),
-                columns=[db.WIND_DIRECTION_HOURLY_MEAN, db.WIND_SPEED_HOURLY_MEAN],
+                columns=[dc.WIND_DIRECTION_HOURLY_MEAN, dc.WIND_SPEED_HOURLY_MEAN],
             )
         if df.empty:
             raise NoDataError("No wind data for wind rose")
@@ -436,23 +437,23 @@ async def get_daily_chart(
             return df
 
     if chart_type == "overview":
-        df = _read_hourly([db.TEMP_HOURLY_MEAN, db.PRECIP_HOURLY_MM])
+        df = _read_hourly([dc.TEMP_HOURLY_MEAN, dc.PRECIP_HOURLY_MM])
         chart = charts.daily_temp_precip_chart(df, from_date, station_abbr)
 
     elif chart_type == "sunshine":
-        df = _read_hourly([db.SUNSHINE_HOURLY_MINUTES])
+        df = _read_hourly([dc.SUNSHINE_HOURLY_MINUTES])
         chart = charts.daily_sunshine_bar_chart(df, from_date, station_abbr)
 
     elif chart_type == "wind":
-        df = _read_hourly([db.WIND_SPEED_HOURLY_MEAN])
+        df = _read_hourly([dc.WIND_SPEED_HOURLY_MEAN])
         chart = charts.daily_wind_speed_bar_chart(df, from_date, station_abbr)
 
     elif chart_type == "gust_peak":
-        df = _read_hourly([db.GUST_PEAK_HOURLY_MAX])
+        df = _read_hourly([dc.GUST_PEAK_HOURLY_MAX])
         chart = charts.daily_gust_peak_bar_chart(df, from_date, station_abbr)
 
     elif chart_type == "pressure":
-        df = _read_hourly([db.TEMP_HOURLY_MEAN, db.ATM_PRESSURE_HOURLY_MEAN])
+        df = _read_hourly([dc.TEMP_HOURLY_MEAN, dc.ATM_PRESSURE_HOURLY_MEAN])
         with app.state.engine.begin() as conn:
             stn = db.read_station(conn, station_abbr)
         chart = charts.daily_atm_pressure_line_chart(df, from_date, stn)
@@ -473,10 +474,10 @@ async def get_year_highlights(
             conn,
             station_abbr,
             columns=[
-                db.TEMP_DAILY_MIN,
-                db.TEMP_DAILY_MAX,
-                db.SUNSHINE_DAILY_MINUTES,
-                db.SNOW_DEPTH_DAILY_CM,
+                dc.TEMP_DAILY_MIN,
+                dc.TEMP_DAILY_MAX,
+                dc.SUNSHINE_DAILY_MINUTES,
+                dc.SNOW_DEPTH_DAILY_CM,
             ],
             from_year=year,
             to_year=year,
@@ -608,10 +609,10 @@ async def get_summary(
             station_abbr,
             period=period,
             columns=[
-                db.TEMP_DAILY_MIN,
-                db.TEMP_DAILY_MEAN,
-                db.TEMP_DAILY_MAX,
-                db.PRECIP_DAILY_MM,
+                dc.TEMP_DAILY_MIN,
+                dc.TEMP_DAILY_MEAN,
+                dc.TEMP_DAILY_MAX,
+                dc.PRECIP_DAILY_MM,
             ],
             from_year=from_year_int,
             to_year=to_year_int,
@@ -641,7 +642,7 @@ async def get_info(
 
         vars = db.read_var_summary_stats_all(
             conn,
-            agg_name=db.AGG_NAME_REF_1991_2020,
+            agg_name=dc.AGG_NAME_REF_1991_2020,
             station_abbr=station_abbr,
         )
         nearby_stations = db.read_nearby_stations(conn, station_abbr)

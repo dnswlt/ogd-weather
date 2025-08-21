@@ -1,4 +1,12 @@
-# Global logging config
+"""Global logging config.
+
+Import this module once per application (in its "main" module) as
+
+from service.charts.base import logging_config as _  # configure logging
+
+This ensures that logging is configured consistently.
+"""
+
 import logging
 import os
 

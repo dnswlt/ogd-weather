@@ -7,26 +7,27 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from . import atm
-from .pandas_funcs import pctl
+from service.charts.base.pandas_funcs import pctl
+from service.charts.base.errors import NoDataError
+from service.charts.calc import atm
+from service.charts.db import constants as dc
+from service.charts import models
+
 from . import colors
-from . import db
-from . import models
-from .errors import NoDataError
 
 AltairChart: TypeAlias = Union[alt.Chart, alt.LayerChart]
 
 PERIOD_ALL = "all"
 
 VEGA_LEGEND_LABELS = {
-    db.TEMP_DAILY_MEAN: "temp mean",
-    db.TEMP_DAILY_MAX: "temp max",
-    db.TEMP_DAILY_MIN: "temp min",
-    db.PRECIP_DAILY_MM: "precip mm",
-    db.TEMP_HOURLY_MEAN: "temp mean",
-    db.TEMP_HOURLY_MAX: "temp max",
-    db.TEMP_HOURLY_MIN: "temp min",
-    db.PRECIP_HOURLY_MM: "precip mm",
+    dc.TEMP_DAILY_MEAN: "temp mean",
+    dc.TEMP_DAILY_MAX: "temp max",
+    dc.TEMP_DAILY_MIN: "temp min",
+    dc.PRECIP_DAILY_MM: "precip mm",
+    dc.TEMP_HOURLY_MEAN: "temp mean",
+    dc.TEMP_HOURLY_MAX: "temp max",
+    dc.TEMP_HOURLY_MIN: "temp min",
+    dc.PRECIP_HOURLY_MM: "precip mm",
 }
 
 MONTH_NAMES = {
@@ -53,16 +54,16 @@ SEASON_NAMES = {
 
 # Measurement colums to load, by chart type.
 CHART_TYPE_COLUMNS = {
-    "temperature": [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX],
-    "temperature_deviation": [db.TEMP_DAILY_MEAN],
-    "precipitation": [db.PRECIP_DAILY_MM],
-    "raindays": [db.PRECIP_DAILY_MM],
-    "sunshine": [db.SUNSHINE_DAILY_MINUTES],
-    "sunny_days": [db.SUNSHINE_DAILY_MINUTES],
-    "summer_days": [db.TEMP_DAILY_MAX],
-    "frost_days": [db.TEMP_DAILY_MIN],
-    "rainiest_day": [db.PRECIP_DAILY_MM],
-    "max_snow_height": [db.SNOW_DEPTH_MANUAL_DAILY_CM],
+    "temperature": [dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX],
+    "temperature_deviation": [dc.TEMP_DAILY_MEAN],
+    "precipitation": [dc.PRECIP_DAILY_MM],
+    "raindays": [dc.PRECIP_DAILY_MM],
+    "sunshine": [dc.SUNSHINE_DAILY_MINUTES],
+    "sunny_days": [dc.SUNSHINE_DAILY_MINUTES],
+    "summer_days": [dc.TEMP_DAILY_MAX],
+    "frost_days": [dc.TEMP_DAILY_MIN],
+    "rainiest_day": [dc.PRECIP_DAILY_MM],
+    "max_snow_height": [dc.SNOW_DEPTH_MANUAL_DAILY_CM],
 }
 
 # Short names for the color palettes, for concise code.
@@ -416,9 +417,9 @@ def raindays_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# rain days" chart for the given station and period."""
-    _verify_day_count_data(df, station_abbr, period, db.PRECIP_DAILY_MM)
+    _verify_day_count_data(df, station_abbr, period, dc.PRECIP_DAILY_MM)
     return day_count_chart(
-        predicate=df[db.PRECIP_DAILY_MM] >= 1.0,
+        predicate=df[dc.PRECIP_DAILY_MM] >= 1.0,
         period=period,
         title="Number of rain days (≥ 1.0 mm precip.)",
         palette=colors.Tab20("SkyBlue"),
@@ -429,9 +430,9 @@ def sunny_days_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# sunny days" chart for the given station and period."""
-    _verify_day_count_data(df, station_abbr, period, db.SUNSHINE_DAILY_MINUTES)
+    _verify_day_count_data(df, station_abbr, period, dc.SUNSHINE_DAILY_MINUTES)
     return day_count_chart(
-        predicate=df[db.SUNSHINE_DAILY_MINUTES] >= 6 * 60,
+        predicate=df[dc.SUNSHINE_DAILY_MINUTES] >= 6 * 60,
         period=period,
         title="Number of sunny days (≥ 6 h of sunshine)",
         palette=colors.Tab20("Apricot"),
@@ -442,9 +443,9 @@ def frost_days_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# frost days" chart for the given station and period."""
-    _verify_day_count_data(df, station_abbr, period, db.TEMP_DAILY_MIN)
+    _verify_day_count_data(df, station_abbr, period, dc.TEMP_DAILY_MIN)
     return day_count_chart(
-        predicate=df[db.TEMP_DAILY_MIN] < 0,
+        predicate=df[dc.TEMP_DAILY_MIN] < 0,
         period=period,
         title="Number of frost days (min. < 0 °C)",
         palette=colors.Tab20("AshGray"),
@@ -455,9 +456,9 @@ def summer_days_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# summer days" chart for the given station and period."""
-    _verify_day_count_data(df, station_abbr, period, db.TEMP_DAILY_MAX)
+    _verify_day_count_data(df, station_abbr, period, dc.TEMP_DAILY_MAX)
     return day_count_chart(
-        predicate=df[db.TEMP_DAILY_MAX] >= 25,
+        predicate=df[dc.TEMP_DAILY_MAX] >= 25,
         period=period,
         title="Number of summer days (max. ≥ 25 °C)",
         palette=colors.Tab20("Lavender"),
@@ -497,9 +498,9 @@ def timeline_years_chart_data(
 def sunshine_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_timeline_data(df, [db.SUNSHINE_DAILY_MINUTES], station_abbr, period)
+    _verify_timeline_data(df, [dc.SUNSHINE_DAILY_MINUTES], station_abbr, period)
 
-    sunshine = df[db.SUNSHINE_DAILY_MINUTES] / 60.0
+    sunshine = df[dc.SUNSHINE_DAILY_MINUTES] / 60.0
     data = pd.DataFrame({"sunshine (h)": sunshine})
     data_long, trend_long = timeline_years_chart_data(data, "mean")
 
@@ -519,9 +520,9 @@ def sunshine_chart(
 def rainiest_day_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_timeline_data(df, [db.PRECIP_DAILY_MM], station_abbr, period)
+    _verify_timeline_data(df, [dc.PRECIP_DAILY_MM], station_abbr, period)
 
-    data = pd.DataFrame({"precip (mm)": df[db.PRECIP_DAILY_MM]})
+    data = pd.DataFrame({"precip (mm)": df[dc.PRECIP_DAILY_MM]})
     data_long, trend_long = timeline_years_chart_data(data, "max")
 
     title = f"Max daily amount of rain in {period_to_title(period)}, by year".strip()
@@ -538,9 +539,9 @@ def rainiest_day_chart(
 def max_snow_depth_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_timeline_data(df, [db.SNOW_DEPTH_MANUAL_DAILY_CM], station_abbr, period)
+    _verify_timeline_data(df, [dc.SNOW_DEPTH_MANUAL_DAILY_CM], station_abbr, period)
 
-    data = pd.DataFrame({"snow depth (cm)": df[db.SNOW_DEPTH_MANUAL_DAILY_CM]})
+    data = pd.DataFrame({"snow depth (cm)": df[dc.SNOW_DEPTH_MANUAL_DAILY_CM]})
     data_long, trend_long = timeline_years_chart_data(data, "max")
 
     title = f"Max. snow depth in {period_to_title(period)}, by year".strip()
@@ -557,9 +558,9 @@ def max_snow_depth_chart(
 def max_fresh_snow_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_timeline_data(df, [db.FRESH_SNOW_MANUAL_DAILY_CM], station_abbr, period)
+    _verify_timeline_data(df, [dc.FRESH_SNOW_MANUAL_DAILY_CM], station_abbr, period)
 
-    data = pd.DataFrame({"snow depth (cm)": df[db.FRESH_SNOW_MANUAL_DAILY_CM]})
+    data = pd.DataFrame({"snow depth (cm)": df[dc.FRESH_SNOW_MANUAL_DAILY_CM]})
     data_long, trend_long = timeline_years_chart_data(data, "max")
 
     title = f"Max. daily fresh snow in {period_to_title(period)}, by year".strip()
@@ -576,9 +577,9 @@ def max_fresh_snow_chart(
 def snow_days_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_day_count_data(df, station_abbr, period, db.SNOW_DEPTH_MANUAL_DAILY_CM)
+    _verify_day_count_data(df, station_abbr, period, dc.SNOW_DEPTH_MANUAL_DAILY_CM)
     return day_count_chart(
-        predicate=df[db.SNOW_DEPTH_MANUAL_DAILY_CM] >= 1,
+        predicate=df[dc.SNOW_DEPTH_MANUAL_DAILY_CM] >= 1,
         period=period,
         title="Number of snow days (≥ 1 cm snow depth)",
         palette=colors.Tab20("AshGray"),
@@ -588,9 +589,9 @@ def snow_days_chart(
 def fresh_snow_days_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_day_count_data(df, station_abbr, period, db.FRESH_SNOW_MANUAL_DAILY_CM)
+    _verify_day_count_data(df, station_abbr, period, dc.FRESH_SNOW_MANUAL_DAILY_CM)
     return day_count_chart(
-        predicate=df[db.FRESH_SNOW_MANUAL_DAILY_CM] >= 1,
+        predicate=df[dc.FRESH_SNOW_MANUAL_DAILY_CM] >= 1,
         period=period,
         title="Number of days on which it snowed (> 0 cm fresh snow)",
         palette=colors.Tab20("Teal"),
@@ -603,14 +604,14 @@ def temperature_chart(
     period: str = PERIOD_ALL,
     window: int = 1,
 ) -> AltairChart:
-    columns = [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]
+    columns = [dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX]
     _verify_timeline_data(df, columns, station_abbr, period)
 
     data = pd.DataFrame(
         {
-            "temp (min)": df[db.TEMP_DAILY_MIN],
-            "temp (mean)": df[db.TEMP_DAILY_MEAN],
-            "temp (max)": df[db.TEMP_DAILY_MAX],
+            "temp (min)": df[dc.TEMP_DAILY_MIN],
+            "temp (mean)": df[dc.TEMP_DAILY_MEAN],
+            "temp (max)": df[dc.TEMP_DAILY_MAX],
         }
     )
     data_long, trend_long = timeline_years_chart_data(data, "mean", window)
@@ -637,9 +638,9 @@ def precipitation_chart(
     period: str = PERIOD_ALL,
     window: int | None = None,
 ) -> AltairChart:
-    _verify_timeline_data(df, [db.PRECIP_DAILY_MM], station_abbr, period)
+    _verify_timeline_data(df, [dc.PRECIP_DAILY_MM], station_abbr, period)
 
-    data = pd.DataFrame({"precip (mm)": df[db.PRECIP_DAILY_MM]})
+    data = pd.DataFrame({"precip (mm)": df[dc.PRECIP_DAILY_MM]})
     data_long, trend_long = timeline_years_chart_data(data, "sum", window)
 
     window_info = f"({window}y rolling avg.)" if window else ""
@@ -902,7 +903,7 @@ def monthly_humidity_boxplot_chart(
 ) -> AltairChart:
 
     _verify_monthly_boxplot_data(df, station_abbr, year)
-    months = monthly_boxplot_chart_data(df[db.REL_HUMIDITY_DAILY_MEAN])
+    months = monthly_boxplot_chart_data(df[dc.REL_HUMIDITY_DAILY_MEAN])
     return boxplot_chart(
         months,
         x_col="month_name",
@@ -947,7 +948,7 @@ def monthly_sunshine_boxplot_chart(
 ) -> AltairChart:
 
     _verify_monthly_boxplot_data(df, station_abbr, year)
-    months = monthly_boxplot_chart_data(df[db.SUNSHINE_DAILY_MINUTES] / 60.0)
+    months = monthly_boxplot_chart_data(df[dc.SUNSHINE_DAILY_MINUTES] / 60.0)
     return boxplot_chart(
         months,
         x_col="month_name",
@@ -967,11 +968,11 @@ class TempFacet(BaseModel):
     @classmethod
     def from_name(cls, facet: str) -> "TempFacet":
         if facet == "min":
-            return cls(column=db.TEMP_DAILY_MIN, color=_C["SkyBlue"], facet="min")
+            return cls(column=dc.TEMP_DAILY_MIN, color=_C["SkyBlue"], facet="min")
         elif facet == "max":
-            return cls(column=db.TEMP_DAILY_MAX, color=_C["CoralRed"], facet="max")
+            return cls(column=dc.TEMP_DAILY_MAX, color=_C["CoralRed"], facet="max")
         elif facet in ("mean", "avg"):
-            return cls(column=db.TEMP_DAILY_MEAN, color=_C["Apricot"], facet="avg")
+            return cls(column=dc.TEMP_DAILY_MEAN, color=_C["Apricot"], facet="avg")
         else:
             raise ValueError(f"Invalid facet: {facet} (should be min/mean/avg/max)")
 
@@ -992,7 +993,7 @@ def monthly_temp_boxplot_chart(
 
     tf = TempFacet.from_name(facet)
     # Calculate min/max across min/mean/max temperatures to have equal y-scales.
-    temps = df[[db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX]]
+    temps = df[[dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX]]
     y_min = temps.to_numpy().min()
     y_max = temps.to_numpy().max()
 
@@ -1031,7 +1032,7 @@ def monthly_temp_anomaly_chart(
     ]
 
     # Join, keep data only for months where `months` has data (left join).
-    join_key = months.index.map(db.ts_month)
+    join_key = months.index.map(dc.ts_month)
     data = months.join(ref_stats, on=join_key, how="left")
 
     data = data.reset_index(names="month_num")
@@ -1060,7 +1061,7 @@ def monthly_raindays_bar_chart(
     df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
 ) -> AltairChart:
 
-    ser = df[db.PRECIP_DAILY_MM]
+    ser = df[dc.PRECIP_DAILY_MM]
     rainday = (ser >= 1.0).astype(float)
 
     # Sum daily precipitation for each month.
@@ -1068,12 +1069,12 @@ def monthly_raindays_bar_chart(
     months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
 
     # Get percentiles for monthly precipitation from reference data.
-    ref_stats = df_ref.loc[(station_abbr, db.DX_RAIN_DAYS_ANNUAL_COUNT)][
+    ref_stats = df_ref.loc[(station_abbr, dc.DX_RAIN_DAYS_ANNUAL_COUNT)][
         ["p25_value", "mean_value", "p75_value"]
     ]
     # Join, keep data only for months where `months` has data (left join).
     # Conform the index to the ("%02d") format used in ref_stats.
-    join_key = months.index.map(db.ts_month)
+    join_key = months.index.map(dc.ts_month)
     data = months.join(ref_stats, on=join_key, how="left")
 
     data = data.reset_index(names="month_num")
@@ -1094,7 +1095,7 @@ def monthly_sunny_days_bar_chart(
     df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
 ) -> AltairChart:
 
-    ser = df[db.SUNSHINE_DAILY_PCT_OF_MAX]
+    ser = df[dc.SUNSHINE_DAILY_PCT_OF_MAX]
     sunny_day = (ser >= 80).astype(float)
 
     # Sum daily precipitation for each month.
@@ -1102,12 +1103,12 @@ def monthly_sunny_days_bar_chart(
     months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
 
     # Get percentiles for monthly precipitation from reference data.
-    ref_stats = df_ref.loc[(station_abbr, db.DX_SUNNY_DAYS_ANNUAL_COUNT)][
+    ref_stats = df_ref.loc[(station_abbr, dc.DX_SUNNY_DAYS_ANNUAL_COUNT)][
         ["p25_value", "mean_value", "p75_value"]
     ]
     # Join, keep data only for months where `months` has data (left join).
     # Conform the index to the ("%02d") format used in ref_stats.
-    join_key = months.index.map(db.ts_month)
+    join_key = months.index.map(dc.ts_month)
     data = months.join(ref_stats, on=join_key, how="left")
 
     data = data.reset_index(names="month_num")
@@ -1128,19 +1129,19 @@ def monthly_precipitation_bar_chart(
     df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
 ) -> AltairChart:
 
-    ser = df[db.PRECIP_DAILY_MM]
+    ser = df[dc.PRECIP_DAILY_MM]
 
     # Sum daily precipitation for each month.
     months = ser.groupby(ser.index.month).agg([("value", "sum")])
     months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
 
     # Get percentiles for monthly precipitation from reference data.
-    ref_stats = df_ref.loc[(station_abbr, db.DX_PRECIP_TOTAL)][
+    ref_stats = df_ref.loc[(station_abbr, dc.DX_PRECIP_TOTAL)][
         ["p25_value", "mean_value", "p75_value"]
     ]
     # Join, keep data only for months where `months` has data (left join).
     # Conform the index to the ("%02d") format used in ref_stats.
-    join_key = months.index.map(db.ts_month)
+    join_key = months.index.map(dc.ts_month)
     data = months.join(ref_stats, on=join_key, how="left")
 
     data = data.reset_index(names="month_num")
@@ -1215,14 +1216,14 @@ def drywet_spells_bar_chart_data(
     _verify_annual_data(df, station_abbr, year)
     # Ensure dates are contiguous, fill with nan.
     # Add one day at the end to include the last spell:
-    df = df[[db.PRECIP_DAILY_MM, db.SUNSHINE_DAILY_PCT_OF_MAX]]
+    df = df[[dc.PRECIP_DAILY_MM, dc.SUNSHINE_DAILY_PCT_OF_MAX]]
 
     if df.count().eq(0).any():
         raise NoDataError("Missing required data for dry/wet spells")
 
     # Classification follows the drywet_grid_chart rules, but can be simpler:
-    precip = df[db.PRECIP_DAILY_MM]
-    sun_pct = df[db.SUNSHINE_DAILY_PCT_OF_MAX]
+    precip = df[dc.PRECIP_DAILY_MM]
+    sun_pct = df[dc.SUNSHINE_DAILY_PCT_OF_MAX]
 
     is_dry = precip < 0.2
     is_rainy = precip >= 1.0
@@ -1332,8 +1333,8 @@ def drywet_grid_chart(df: pd.DataFrame, station_abbr: str, year: int) -> AltairC
     _verify_annual_data(df, station_abbr, year)
 
     # Copy columns we need. We'll add more below.
-    precip = df[db.PRECIP_DAILY_MM]
-    sun_pct = df[db.SUNSHINE_DAILY_PCT_OF_MAX]
+    precip = df[dc.PRECIP_DAILY_MM]
+    sun_pct = df[dc.SUNSHINE_DAILY_PCT_OF_MAX]
     d = pd.DataFrame(
         {
             "sunshine_pct": sun_pct,
@@ -1679,11 +1680,11 @@ def daily_atm_pressure_line_chart(
 ) -> AltairChart:
 
     pnorm = atm.pressure_normals_qfe(
-        df[db.TEMP_HOURLY_MEAN], station.height_masl, from_date
+        df[dc.TEMP_HOURLY_MEAN], station.height_masl, from_date
     )
     date_str = from_date.strftime("%a, %d %b %Y")
 
-    ser = df[db.ATM_PRESSURE_HOURLY_MEAN]
+    ser = df[dc.ATM_PRESSURE_HOURLY_MEAN]
     # The 90th percentile daily span of min/max hourly pressure is
     # slightly below 10 hPa. Add 10 hPa "padding" so the band
     # does not fill the whole chart.
@@ -1713,7 +1714,7 @@ def daily_gust_peak_bar_chart(
     date_str = from_date.strftime("%a, %d %b %Y")
 
     return daily_bar_chart(
-        df[db.GUST_PEAK_HOURLY_MAX] * 3.6,
+        df[dc.GUST_PEAK_HOURLY_MAX] * 3.6,
         y_title="Peak speed (km/h)",
         title=f"Max. hourly gust peak speed (km/h) on {date_str}",
         color=_C["Teal"],
@@ -1727,7 +1728,7 @@ def daily_wind_speed_bar_chart(
     date_str = from_date.strftime("%a, %d %b %Y")
 
     return daily_bar_chart(
-        df[db.WIND_SPEED_HOURLY_MEAN] * 3.6,
+        df[dc.WIND_SPEED_HOURLY_MEAN] * 3.6,
         y_title="Wind speed (km/h)",
         title=f"Average hourly wind speed (km/h) on {date_str}",
         color=_C["Tan"],
@@ -1741,7 +1742,7 @@ def daily_sunshine_bar_chart(
     date_str = from_date.strftime("%a, %d %b %Y")
 
     return daily_bar_chart(
-        df[db.SUNSHINE_HOURLY_MINUTES],
+        df[dc.SUNSHINE_HOURLY_MINUTES],
         y_title="Sunshine (minutes)",
         title=f"Sunshine minutes on {date_str}",
         y_domain=[0, 60],
@@ -1781,8 +1782,8 @@ def daily_temp_precip_chart(
     # Work with a copy to avoid modifying the original DataFrame
     df_prep = df.copy().rename(
         columns={
-            db.PRECIP_HOURLY_MM: precip_mm,
-            db.TEMP_HOURLY_MEAN: temp_mean,
+            dc.PRECIP_HOURLY_MM: precip_mm,
+            dc.TEMP_HOURLY_MEAN: temp_mean,
         }
     )
 
@@ -1979,47 +1980,6 @@ def daily_temp_precip_chart(
     return chart
 
 
-def create_annual_chart(
-    chart_type: str,
-    df: pd.DataFrame,
-    station_abbr: str,
-    period: str = PERIOD_ALL,
-    window: int | None = None,
-) -> AltairChart:
-    if window is None:
-        # Simplify treatment of window inside the module
-        window = 1
-
-    if chart_type == "temperature":
-        return temperature_chart(
-            df, station_abbr=station_abbr, period=period, window=window
-        )
-    elif chart_type == "precipitation":
-        return precipitation_chart(
-            df, station_abbr=station_abbr, period=period, window=window
-        )
-    elif chart_type == "temperature_deviation":
-        return temperature_deviation_chart(
-            df, station_abbr=station_abbr, period=period, window=window
-        )
-    elif chart_type == "raindays":
-        return raindays_chart(df, station_abbr=station_abbr, period=period)
-    elif chart_type == "sunshine":
-        return sunshine_chart(df, station_abbr=station_abbr, period=period)
-    elif chart_type == "sunny_days":
-        return sunny_days_chart(df, station_abbr=station_abbr, period=period)
-    elif chart_type == "summer_days":
-        return summer_days_chart(df, station_abbr=station_abbr, period=period)
-    elif chart_type == "frost_days":
-        return frost_days_chart(df, station_abbr=station_abbr, period=period)
-    elif chart_type == "rainiest_day":
-        return rainiest_day_chart(df, station_abbr=station_abbr, period=period)
-    elif chart_type == "max_snow_height":
-        return none
-    else:
-        raise ValueError(f"Invalid chart type: {chart_type}")
-
-
 def station_stats(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> models.StationStats:
@@ -2030,7 +1990,7 @@ def station_stats(
     _verify_period(df, period)
 
     df = df[
-        [db.TEMP_DAILY_MIN, db.TEMP_DAILY_MEAN, db.TEMP_DAILY_MAX, db.PRECIP_DAILY_MM]
+        [dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX, dc.PRECIP_DAILY_MM]
     ]
     first_date = df.index.min().to_pydatetime().date()
     last_date = df.index.max().to_pydatetime().date()
@@ -2040,16 +2000,16 @@ def station_stats(
     )
 
     # pydantic JSON serialization does not like numpy, so lots of conversions here.
-    df_m = annual_agg(df[[db.TEMP_DAILY_MEAN]], "mean")
-    temp_dm = df_m[db.TEMP_DAILY_MEAN].dropna()
+    df_m = annual_agg(df[[dc.TEMP_DAILY_MEAN]], "mean")
+    temp_dm = df_m[dc.TEMP_DAILY_MEAN].dropna()
     if not temp_dm.empty:
         result.coldest_year = int(temp_dm.idxmin())
         result.coldest_year_temp = float(temp_dm.min())
         result.warmest_year = int(temp_dm.idxmax())
         result.warmest_year_temp = float(temp_dm.max())
 
-    df_s = annual_agg(df[[db.PRECIP_DAILY_MM]], "sum")
-    precip = df_s[db.PRECIP_DAILY_MM].dropna()
+    df_s = annual_agg(df[[dc.PRECIP_DAILY_MM]], "sum")
+    precip = df_s[dc.PRECIP_DAILY_MM].dropna()
     if not precip.empty:
         result.driest_year = int(precip.idxmin())
         result.driest_year_precip_mm = float(precip.min())
@@ -2058,8 +2018,8 @@ def station_stats(
 
     if not temp_dm.empty:
         try:
-            coeffs, _ = polyfit_columns(df_m[[db.TEMP_DAILY_MEAN]], deg=1)
-            result.annual_temp_increase = float(coeffs[db.TEMP_DAILY_MEAN].iloc[1])
+            coeffs, _ = polyfit_columns(df_m[[dc.TEMP_DAILY_MEAN]], deg=1)
+            result.annual_temp_increase = float(coeffs[dc.TEMP_DAILY_MEAN].iloc[1])
         except ValueError:
             # Could not fit a curve
             pass
@@ -2087,7 +2047,7 @@ def station_period_stats(s: pd.Series) -> models.StationPeriodStats:
         )
 
     def _key(k: str) -> str:
-        if d := db.VARIABLE_API_NAMES.get(k):
+        if d := dc.VARIABLE_API_NAMES.get(k):
             return d
         return k
 

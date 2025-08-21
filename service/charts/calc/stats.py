@@ -1,8 +1,8 @@
 import pandas as pd
 
 
-from . import db
-from . import models
+from service.charts import models
+from service.charts.db import constants as dc
 
 
 def daily_measurements(
@@ -36,13 +36,13 @@ def year_highlights(
 ) -> models.StationYearHighlights:
 
     # Temp. range
-    td = df[db.TEMP_DAILY_MAX] - df[db.TEMP_DAILY_MIN]
+    td = df[dc.TEMP_DAILY_MAX] - df[dc.TEMP_DAILY_MIN]
     max_daily_temp_range_date = td.idxmax()
-    max_daily_temp_range_min = df.loc[max_daily_temp_range_date, db.TEMP_DAILY_MIN]
-    max_daily_temp_range_max = df.loc[max_daily_temp_range_date, db.TEMP_DAILY_MAX]
+    max_daily_temp_range_min = df.loc[max_daily_temp_range_date, dc.TEMP_DAILY_MIN]
+    max_daily_temp_range_max = df.loc[max_daily_temp_range_date, dc.TEMP_DAILY_MAX]
 
     # Frost days
-    fd = df[db.TEMP_DAILY_MIN]
+    fd = df[dc.TEMP_DAILY_MIN]
     fd = fd[fd < 0]
 
     h1 = fd[fd.index.month <= 6]
@@ -59,12 +59,12 @@ def year_highlights(
         first_frost_day = None
 
     # Sunshine hours
-    sh = df[db.SUNSHINE_DAILY_MINUTES] / 60.0
+    sh = df[dc.SUNSHINE_DAILY_MINUTES] / 60.0
     max_daily_sunshine_hours_date = sh.idxmax()
     max_daily_sunshine_hours = sh.loc[max_daily_sunshine_hours_date]
 
     # Snow depth
-    sd = df[db.SNOW_DEPTH_DAILY_CM].dropna()
+    sd = df[dc.SNOW_DEPTH_DAILY_CM].dropna()
     if len(sd) > 0:
         max_snow_depth_cm = sd.max()
         snow_days = (sd >= 1.0).sum()

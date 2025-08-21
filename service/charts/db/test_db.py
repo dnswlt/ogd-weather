@@ -1,18 +1,21 @@
-import os
+from pathlib import Path
 import unittest
 import datetime
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
+
+from service.charts import models
+from service.charts.base.errors import StationNotFoundError
+from service.charts.testutils import PandasTestCase
+
 from . import db
-from . import models
-from .errors import StationNotFoundError
-from .testhelpers import PandasTestCase
+from . import constants as dc
 
 
 def _testdata_dir():
-    return os.path.join(os.path.dirname(__file__), "testdata")
+    return Path(__file__).resolve().parent / "../testdata"
 
 
 class TestDb(unittest.TestCase):
@@ -232,8 +235,8 @@ class TestDbStationVarAvailability(TestDb):
                 return {
                     "station_abbr": stn,
                     "reference_timestamp": dt,
-                    db.TEMP_DAILY_MIN: t,
-                    db.PRECIP_DAILY_MM: p,
+                    dc.TEMP_DAILY_MIN: t,
+                    dc.PRECIP_DAILY_MM: p,
                 }
 
             conn = self.engine.connect()
@@ -255,10 +258,10 @@ class TestDbStationVarAvailability(TestDb):
             ber = {m.variable: m for m in ber_list}
             # Has many variables, but at least the two we use in the test should be present.
             self.assertGreaterEqual(len(ber), 2)
-            self.assertEqual(ber[db.TEMP_DAILY_MIN].value_count, 3)
-            self.assertEqual(ber[db.PRECIP_DAILY_MM].value_count, 2)
-            self.assertIn("Niederschlag", ber[db.PRECIP_DAILY_MM].description.de)
-            self.assertEqual(ber[db.TEMP_DAILY_MIN].group.en, "temperature")
+            self.assertEqual(ber[dc.TEMP_DAILY_MIN].value_count, 3)
+            self.assertEqual(ber[dc.PRECIP_DAILY_MM].value_count, 2)
+            self.assertIn("Niederschlag", ber[dc.PRECIP_DAILY_MM].description.de)
+            self.assertEqual(ber[dc.TEMP_DAILY_MIN].group.en, "temperature")
 
             zer_list = db.read_measurement_infos(conn, "ZER")
             zer = {m.variable: m for m in zer_list}
@@ -327,8 +330,8 @@ class TestDbDaily(TestDb):
         self.assertIsInstance(df, pd.DataFrame)
         self.assertFalse(df.empty)
         self.assertEqual(len(df), 13)  # 12 months in 2023 + 1 in 2024
-        self.assertIn(db.TEMP_DAILY_MEAN, df.columns)
-        self.assertIn(db.PRECIP_DAILY_MM, df.columns)
+        self.assertIn(dc.TEMP_DAILY_MEAN, df.columns)
+        self.assertIn(dc.PRECIP_DAILY_MM, df.columns)
         self.assertEqual(df.index.name, "reference_timestamp")
         self.assertEqual(df.index.dtype, "datetime64[ns]")
 
@@ -375,11 +378,11 @@ class TestDbDaily(TestDb):
 
     def test_read_daily_historical_specific_columns(self):
         df = db.read_daily_measurements(
-            self.conn, station_abbr="ABO", columns=[db.TEMP_DAILY_MEAN]
+            self.conn, station_abbr="ABO", columns=[dc.TEMP_DAILY_MEAN]
         )
-        self.assertIn(db.TEMP_DAILY_MEAN, df.columns)
-        self.assertNotIn(db.PRECIP_DAILY_MM, df.columns)
-        self.assertEqual(set(df.columns), {db.TEMP_DAILY_MEAN, "station_abbr"})
+        self.assertIn(dc.TEMP_DAILY_MEAN, df.columns)
+        self.assertNotIn(dc.PRECIP_DAILY_MM, df.columns)
+        self.assertEqual(set(df.columns), {dc.TEMP_DAILY_MEAN, "station_abbr"})
 
 
 class TestDbHourly(TestDb):
@@ -439,10 +442,10 @@ class TestDbHourly(TestDb):
         self.assertIsInstance(df, pd.DataFrame)
         self.assertFalse(df.empty)
         self.assertEqual(len(df), 4)  # to_date is exclusive
-        self.assertIn(db.TEMP_HOURLY_MEAN, df.columns)
-        self.assertIn(db.TEMP_HOURLY_MAX, df.columns)
-        self.assertIn(db.TEMP_HOURLY_MIN, df.columns)
-        self.assertIn(db.PRECIP_HOURLY_MM, df.columns)
+        self.assertIn(dc.TEMP_HOURLY_MEAN, df.columns)
+        self.assertIn(dc.TEMP_HOURLY_MAX, df.columns)
+        self.assertIn(dc.TEMP_HOURLY_MIN, df.columns)
+        self.assertIn(dc.PRECIP_HOURLY_MM, df.columns)
         self.assertEqual(df.index.name, "reference_timestamp")
         self.assertEqual(df.index.dtype, "datetime64[ns, UTC]")
         self.assertTrue(df.index.is_monotonic_increasing)
@@ -494,9 +497,9 @@ class TestCreateDb(unittest.TestCase):
         )
         with engine.connect() as conn:
             columns = [
-                db.TEMP_DAILY_MAX,
-                db.PRECIP_DAILY_MM,
-                db.ATM_PRESSURE_DAILY_MEAN,
+                dc.TEMP_DAILY_MAX,
+                dc.PRECIP_DAILY_MM,
+                dc.ATM_PRESSURE_DAILY_MEAN,
             ]
             df = db.read_daily_measurements(
                 conn,
@@ -591,7 +594,7 @@ class TestCreateDb(unittest.TestCase):
                 table_updated_time=now,
             ),
         )
-        columns = [db.TEMP_HOURLY_MAX, db.PRECIP_HOURLY_MM, db.GUST_PEAK_HOURLY_MAX]
+        columns = [dc.TEMP_HOURLY_MAX, dc.PRECIP_HOURLY_MM, dc.GUST_PEAK_HOURLY_MAX]
         with engine.connect() as conn:
             df = db.read_hourly_measurements(
                 conn,
@@ -622,9 +625,9 @@ class TestCreateDb(unittest.TestCase):
             ),
         )
         columns = [
-            db.TEMP_MONTHLY_MEAN,
-            db.PRECIP_MONTHLY_MM,
-            db.REL_HUMIDITY_MONTHLY_MEAN,
+            dc.TEMP_MONTHLY_MEAN,
+            dc.PRECIP_MONTHLY_MM,
+            dc.REL_HUMIDITY_MONTHLY_MEAN,
         ]
         with engine.connect() as conn:
             df = db.read_monthly_measurements(
@@ -657,9 +660,9 @@ class TestCreateDb(unittest.TestCase):
         )
         with engine.connect() as conn:
             columns = [
-                db.PRECIP_DAILY_MM,
-                db.SNOW_DEPTH_MANUAL_DAILY_CM,
-                db.FRESH_SNOW_MANUAL_DAILY_CM,
+                dc.PRECIP_DAILY_MM,
+                dc.SNOW_DEPTH_MANUAL_DAILY_CM,
+                dc.FRESH_SNOW_MANUAL_DAILY_CM,
             ]
             df = db.read_daily_manual_measurements(
                 conn,
@@ -744,8 +747,8 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             return {
                 "station_abbr": stn,
                 "reference_timestamp": dt,
-                db.TEMP_DAILY_MIN: t,
-                db.PRECIP_DAILY_MM: p,
+                dc.TEMP_DAILY_MIN: t,
+                dc.PRECIP_DAILY_MM: p,
             }
 
         conn = self.engine.connect()
@@ -764,9 +767,9 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         # Read data
         df = db.read_var_summary_stats_all(
             conn,
-            db.AGG_NAME_REF_1991_2020,
+            dc.AGG_NAME_REF_1991_2020,
             station_abbr="BER",
-            variables=[db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
+            variables=[dc.TEMP_DAILY_MIN, dc.PRECIP_DAILY_MM],
         )
 
         self.assertEqual(len(df), 2)
@@ -788,11 +791,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 "value_count",
             ],
         )
-        t = df.loc["BER", db.TEMP_DAILY_MIN]
+        t = df.loc["BER", dc.TEMP_DAILY_MIN]
         self.assertAlmostEqual(t["mean_value"], 5.0)
         self.assertEqual(t["min_value_date"], "1991-01-02")
         self.assertEqual(t["max_value_date"], "2001-06-03")
-        p = df.loc["BER", db.PRECIP_DAILY_MM]
+        p = df.loc["BER", dc.PRECIP_DAILY_MM]
         self.assertEqual(p["min_value"], 0.5)
         self.assertEqual(p["max_value_date"], "1991-01-02")
         self.assertEqual(p["value_sum"], 2.0)
@@ -826,7 +829,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
     def test_derived_summer_days(self):
         # Insert daily data.
         self._insert_var(
-            db.TEMP_DAILY_MAX,
+            dc.TEMP_DAILY_MAX,
             [
                 ("BER", "1991-07-01", 24.9),
                 ("BER", "1991-07-02", 25.1),
@@ -839,11 +842,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, dc.AGG_NAME_REF_1991_2020)
 
         self.assertGreaterEqual(len(df), 1)
 
-        s = df.loc[("BER", db.DX_SUMMER_DAYS_ANNUAL_COUNT)]
+        s = df.loc[("BER", dc.DX_SUMMER_DAYS_ANNUAL_COUNT)]
         self.assertAlmostEqual(
             s["mean_value"], 2.0, msg="2 years with data, 4 summer days."
         )
@@ -858,7 +861,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
     def test_derived_frost_days(self):
         # Insert daily data.
         self._insert_var(
-            db.TEMP_DAILY_MIN,
+            dc.TEMP_DAILY_MIN,
             [
                 ("BER", "1991-01-01", 0.5),
                 ("BER", "1992-02-02", -1),
@@ -869,17 +872,17 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, dc.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
-        fd = df.loc["BER", db.DX_FROST_DAYS_ANNUAL_COUNT]
+        fd = df.loc["BER", dc.DX_FROST_DAYS_ANNUAL_COUNT]
         self.assertEqual(fd["min_value"], 0.0)
         self.assertEqual(fd["max_value"], 2.0)
 
     def test_derived_tropical_nights(self):
         # Insert daily data.
         self._insert_var(
-            db.TEMP_DAILY_MIN,
+            dc.TEMP_DAILY_MIN,
             [
                 ("LUG", "1991-07-01", 21),
                 ("LUG", "1992-07-01", 19),
@@ -890,10 +893,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, dc.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
-        fd = df.loc["LUG", db.DX_TROPICAL_NIGHTS_ANNUAL_COUNT]
+        fd = df.loc["LUG", dc.DX_TROPICAL_NIGHTS_ANNUAL_COUNT]
         self.assertEqual(fd["min_value"], 0.0)
         self.assertEqual(fd["max_value"], 1.0)
         self.assertEqual(fd["max_value_date"], "1991-01-01")
@@ -902,7 +905,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         # Test that the "virtual" column "date_range" is included
         # and has the total min and max date as extremal points.
         self._insert_var(
-            db.TEMP_DAILY_MIN,
+            dc.TEMP_DAILY_MIN,
             [
                 ("LUG", "1991-01-01", 21),
                 ("LUG", "1992-07-01", 19),
@@ -913,10 +916,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, dc.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
-        fd = df.loc["LUG", db.DX_SOURCE_DATE_RANGE]
+        fd = df.loc["LUG", dc.DX_SOURCE_DATE_RANGE]
         self.assertAlmostEqual(fd["min_value"], 7670.0)  # Days since epoch
         self.assertEqual(fd["min_value_date"], "1991-01-01")
         self.assertAlmostEqual(fd["max_value"], 18627.0)
@@ -925,7 +928,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
     def test_derived_sunny_days(self):
         # Insert daily data.
         self._insert_var(
-            db.SUNSHINE_DAILY_MINUTES,
+            dc.SUNSHINE_DAILY_MINUTES,
             [
                 ("BER", "1991-06-01", 8 * 60),
                 ("BER", "1991-06-02", 5.8 * 60),
@@ -944,10 +947,10 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, dc.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
-        fd = df.loc["BER", db.DX_SUNNY_DAYS_ANNUAL_COUNT]
+        fd = df.loc["BER", dc.DX_SUNNY_DAYS_ANNUAL_COUNT]
         self.assertEqual(fd["min_value"], 0.0)
         self.assertEqual(fd["max_value"], 3.0)
         # This is annual granularity, so expect 1 value per year
@@ -963,7 +966,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         # from which the derived metric is ... derived, then we
         # should not have 0, but NA.
         self._insert_var(
-            db.SUNSHINE_DAILY_MINUTES,
+            dc.SUNSHINE_DAILY_MINUTES,
             [
                 # BER has zeros sunny days
                 ("BER", "1991-06-01", 0),
@@ -977,11 +980,11 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_var_summary_stats_all(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_all(conn, dc.AGG_NAME_REF_1991_2020)
 
         # BER
         self.assertTrue("BER" in df.index)
-        ber = df.loc["BER", db.DX_SUNNY_DAYS_ANNUAL_COUNT]
+        ber = df.loc["BER", dc.DX_SUNNY_DAYS_ANNUAL_COUNT]
         self.assertEqual(ber["min_value"], 0.0)
         self.assertEqual(ber["max_value"], 0.0)
         self.assertEqual(ber["value_count"], 1)  # Data for 1 year
@@ -992,7 +995,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
     def test_derived_precipitation_total(self):
         # Insert daily data.
         self._insert_var(
-            db.PRECIP_DAILY_MM,
+            dc.PRECIP_DAILY_MM,
             [
                 ("BER", "1991-06-01", 15),
                 ("BER", "1991-06-02", 0),
@@ -1010,17 +1013,17 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         db.recreate_climate_normals_stats_tables(self.engine)
         # Read data
         with self.engine.begin() as conn:
-            df = db.read_var_summary_stats_month(conn, db.AGG_NAME_REF_1991_2020)
+            df = db.read_var_summary_stats_month(conn, dc.AGG_NAME_REF_1991_2020)
 
         # Check summary stats
-        pt = df.loc["BER", db.DX_PRECIP_TOTAL, db.ts_month(6)]
+        pt = df.loc["BER", dc.DX_PRECIP_TOTAL, dc.ts_month(6)]
         self.assertEqual(pt["min_value"], 0.0)
         # Sum of precipitation in given month, so should be 125 from 1991:
         self.assertEqual(pt["max_value"], 125.0)
         self.assertEqual(pt["max_value_date"], "1991-01-01")
 
     def test_create_select_agg_not_exist(self):
-        self._insert_var(db.TEMP_DAILY_MIN, [("BER", "1991-01-01", -3)])
+        self._insert_var(dc.TEMP_DAILY_MIN, [("BER", "1991-01-01", -3)])
         db.recreate_climate_normals_stats_tables(self.engine)
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(
@@ -1031,7 +1034,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
     def test_create_select_nan(self):
         # Insert daily data. PRECIP_DAILY_MM is always empty.
         self._insert_vars(
-            [db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
+            [dc.TEMP_DAILY_MIN, dc.PRECIP_DAILY_MM],
             [
                 ("BER", "1991-01-01", 10, None),
                 ("BER", "1991-01-02", 10, None),
@@ -1043,19 +1046,19 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         # Read data
         with self.engine.begin() as conn:
             df = db.read_var_summary_stats_all(
-                conn, db.AGG_NAME_REF_1991_2020, station_abbr="BER"
+                conn, dc.AGG_NAME_REF_1991_2020, station_abbr="BER"
             )
 
         # Should return data for TEMP_DAILY_MIN and derived metrics.
         self.assertGreaterEqual(len(df), 1)
 
         vars = df.loc["BER"].index.get_level_values(0).unique().to_list()
-        self.assertIn(db.TEMP_DAILY_MIN, vars)
-        self.assertNotIn(db.PRECIP_DAILY_MM, vars)
+        self.assertIn(dc.TEMP_DAILY_MIN, vars)
+        self.assertNotIn(dc.PRECIP_DAILY_MM, vars)
 
     def test_create_select_single_month(self):
         self._insert_vars(
-            [db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
+            [dc.TEMP_DAILY_MIN, dc.PRECIP_DAILY_MM],
             [
                 ("BER", "1991-01-01", 10, None),
                 ("BER", "1991-01-02", 11, None),
@@ -1070,20 +1073,20 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             df = db.read_summary_stats(
                 conn,
                 table=db.var_summary_stats_month.sa_table,
-                agg_name=db.AGG_NAME_REF_1991_2020,
+                agg_name=dc.AGG_NAME_REF_1991_2020,
                 station_abbr="BER",
-                variables=[db.TEMP_DAILY_MIN],
+                variables=[dc.TEMP_DAILY_MIN],
                 time_slices=["01"],
             )
         self.assertEqual(len(df), 1)
-        var = df.loc[("BER", db.TEMP_DAILY_MIN, db.ts_month(1))]
+        var = df.loc[("BER", dc.TEMP_DAILY_MIN, dc.ts_month(1))]
         self.assertEqual(var["min_value"], 10)
         self.assertEqual(var["max_value"], 12)
         self.assertEqual(var["value_count"], 3)
 
     def test_create_select_all_months(self):
         self._insert_vars(
-            [db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
+            [dc.TEMP_DAILY_MIN, dc.PRECIP_DAILY_MM],
             [
                 ("BER", "1980-01-01", 10, None),
                 ("ABO", "1991-12-31", 10, 100),
@@ -1101,18 +1104,18 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
             df = db.read_summary_stats(
                 conn,
                 table=db.var_summary_stats_month.sa_table,
-                agg_name=db.AGG_NAME_REF_1991_2020,
-                variables=[db.TEMP_DAILY_MIN, db.PRECIP_DAILY_MM],
+                agg_name=dc.AGG_NAME_REF_1991_2020,
+                variables=[dc.TEMP_DAILY_MIN, dc.PRECIP_DAILY_MM],
             )
         self.assertEqual(len(df), 4)
-        var = df.loc[("ABO", db.PRECIP_DAILY_MM, db.ts_month(12))]
+        var = df.loc[("ABO", dc.PRECIP_DAILY_MM, dc.ts_month(12))]
         self.assertEqual(var["min_value"], 100)
         self.assertEqual(var["max_value"], 100)
         self.assertEqual(var["value_count"], 1)
         # The three other results are (choosing min_value arbitrarily):
-        self.assertIn("min_value", df.loc[("BER", db.TEMP_DAILY_MIN, db.ts_month(1))])
-        self.assertIn("min_value", df.loc[("BER", db.TEMP_DAILY_MIN, db.ts_month(6))])
-        self.assertIn("min_value", df.loc[("ABO", db.TEMP_DAILY_MIN, db.ts_month(12))])
+        self.assertIn("min_value", df.loc[("BER", dc.TEMP_DAILY_MIN, dc.ts_month(1))])
+        self.assertIn("min_value", df.loc[("BER", dc.TEMP_DAILY_MIN, dc.ts_month(6))])
+        self.assertIn("min_value", df.loc[("ABO", dc.TEMP_DAILY_MIN, dc.ts_month(12))])
 
 
 class TestHelpers(unittest.TestCase):
@@ -1121,7 +1124,7 @@ class TestHelpers(unittest.TestCase):
         def _col(name):
             return db.TABLE_DAILY_MEASUREMENTS.sa_table.columns[name]
 
-        self.assertEqual(db._column_to_dtype(_col(db.PRECIP_DAILY_MM)), float)
+        self.assertEqual(db._column_to_dtype(_col(dc.PRECIP_DAILY_MM)), float)
         self.assertEqual(db._column_to_dtype(_col("station_abbr")), str)
         int_col = db.sa_table_smn_meta_parameters.columns["parameter_decimals"]
         self.assertEqual(db._column_to_dtype(int_col), int)

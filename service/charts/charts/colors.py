@@ -1,6 +1,5 @@
 import altair as alt
 from itertools import cycle, islice
-
 import pandas as pd
 
 

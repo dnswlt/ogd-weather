@@ -14,12 +14,14 @@ import re
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-from . import geo
-from . import models
-from . import sql_queries
+from service.charts import geo
+from service.charts import models
+from service.charts.base.errors import StationNotFoundError
+from service.charts.models import LocalizedString
 
-from .models import LocalizedString
-from .errors import StationNotFoundError
+from . import sql_queries
+from . import constants as dc
+
 
 logger = logging.getLogger("db")
 
@@ -115,102 +117,6 @@ class DataTableSpec:
         return self.primary_key + self.measurements
 
 
-# Filename for the sqlite3 database.
-DATABASE_FILENAME = "swissmetnet.sqlite"
-
-# Column names for weather measurements.
-
-# Temperature
-TEMP_HOURLY_MIN = "tre200hn"
-TEMP_HOURLY_MEAN = "tre200h0"
-TEMP_HOURLY_MAX = "tre200hx"
-TEMP_DAILY_MIN = "tre200dn"
-TEMP_DAILY_MEAN = "tre200d0"
-TEMP_DAILY_MAX = "tre200dx"
-TEMP_MONTHLY_MIN = "tre200mn"
-TEMP_MONTHLY_MEAN = "tre200m0"
-TEMP_MONTHLY_MAX = "tre200mx"
-
-# Precipitation
-PRECIP_HOURLY_MM = "rre150h0"
-PRECIP_DAILY_MM = "rre150d0"
-PRECIP_MONTHLY_MM = "rre150m0"
-
-# Wind
-WIND_SPEED_HOURLY_MEAN = "fkl010h0"
-WIND_SPEED_DAILY_MEAN = "fkl010d0"
-WIND_SPEED_MONTHLY_MEAN = "fkl010m0"
-
-WIND_DIRECTION_HOURLY_MEAN = "dkl010h0"
-WIND_DIRECTION_DAILY_MEAN = "dkl010d0"
-
-GUST_PEAK_HOURLY_MAX = "fkl010h1"
-GUST_PEAK_DAILY_MAX = "fkl010d1"
-GUST_PEAK_MONTHLY_MAX = "fkl010m1"
-
-# Atmospheric pressure
-ATM_PRESSURE_DAILY_MEAN = "prestad0"
-ATM_PRESSURE_HOURLY_MEAN = "prestah0"
-ATM_PRESSURE_MONTHLY_MEAN = "prestam0"
-
-# Humidity
-REL_HUMIDITY_HOURLY_MEAN = "ure200h0"
-REL_HUMIDITY_DAILY_MEAN = "ure200d0"
-REL_HUMIDITY_MONTHLY_MEAN = "ure200m0"
-
-# Sunshine
-SUNSHINE_HOURLY_MINUTES = "sre000h0"
-SUNSHINE_DAILY_MINUTES = "sre000d0"
-SUNSHINE_MONTHLY_MINUTES = "sre000m0"
-
-SUNSHINE_DAILY_PCT_OF_MAX = "sremaxdv"
-
-# Snow
-# According to https://opendatadocs.meteoswiss.ch/general/faq
-# the official snow depth measurement is the manual one (as of Aug 2025).
-SNOW_DEPTH_DAILY_CM = "htoautd0"
-SNOW_DEPTH_MANUAL_DAILY_CM = "hto000d0"
-FRESH_SNOW_MANUAL_DAILY_CM = "hns000d0"
-
-# Map SwissMetNet parameter names to readable names to use at the API level
-# (e.g. when returning summary stats for variables).
-VARIABLE_API_NAMES = {
-    TEMP_DAILY_MIN: "temperature_daily_min",
-    TEMP_DAILY_MAX: "temperature_daily_max",
-    TEMP_DAILY_MEAN: "temperature_daily_mean",
-    PRECIP_DAILY_MM: "precipitation_daily_millimeters",
-    WIND_SPEED_DAILY_MEAN: "wind_speed_daily_mean",
-    WIND_DIRECTION_DAILY_MEAN: "wind_direction_daily_mean",
-    SUNSHINE_DAILY_MINUTES: "sunshine_daily_minutes",
-    GUST_PEAK_DAILY_MAX: "gust_peak_daily_max",
-    ATM_PRESSURE_DAILY_MEAN: "atm_pressure_daily_mean",
-    REL_HUMIDITY_DAILY_MEAN: "rel_humidity_daily_mean",
-    SUNSHINE_DAILY_MINUTES: "sunshine_daily_minutes",
-    SUNSHINE_DAILY_PCT_OF_MAX: "sunshine_daily_pct_of_max",
-    SNOW_DEPTH_DAILY_CM: "snow_depth_daily_cm",
-}
-
-# Derived metric names (prefix DX_):
-DX_SUNNY_DAYS_ANNUAL_COUNT = "sunny_days_annual_count"
-DX_SUMMER_DAYS_ANNUAL_COUNT = "summer_days_annual_count"
-DX_RAIN_DAYS_ANNUAL_COUNT = "rain_days_annual_count"
-DX_FROST_DAYS_ANNUAL_COUNT = "frost_days_annual_count"
-DX_TROPICAL_NIGHTS_ANNUAL_COUNT = "tropical_nights_annual_count"
-DX_GROWING_DEGREE_DAYS_ANNUAL_SUM = "growing_degree_days_annual_sum"
-
-DX_SUNNY_DAYS_MONTHLY_COUNT = "sunny_days_monthly_count"
-DX_SUMMER_DAYS_MONTHLY_COUNT = "summer_days_monthly_count"
-DX_FROST_DAYS_MONTHLY_COUNT = "frost_days_monthly_count"
-DX_TROPICAL_NIGHTS_MONTHLY_COUNT = "tropical_nights_monthly_count"
-DX_GROWING_DEGREE_DAYS_MONTHLY_SUM = "growing_degree_days_monthly_sum"
-
-# Total precipitation per given time slice and year.
-# E.g., in monthly summary stats for the 1991-2020 reference
-# period, this derived metric holds the monthly precipitation.
-DX_PRECIP_TOTAL = "dx_precip_total"
-
-DX_SOURCE_DATE_RANGE = "source_date_range"
-
 # Table definitions
 
 TABLE_HOURLY_MEASUREMENTS = DataTableSpec(
@@ -223,16 +129,16 @@ TABLE_HOURLY_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        TEMP_HOURLY_MEAN,
-        TEMP_HOURLY_MIN,
-        TEMP_HOURLY_MAX,
-        PRECIP_HOURLY_MM,
-        GUST_PEAK_HOURLY_MAX,
-        ATM_PRESSURE_HOURLY_MEAN,
-        REL_HUMIDITY_HOURLY_MEAN,
-        SUNSHINE_HOURLY_MINUTES,
-        WIND_SPEED_HOURLY_MEAN,
-        WIND_DIRECTION_HOURLY_MEAN,
+        dc.TEMP_HOURLY_MEAN,
+        dc.TEMP_HOURLY_MIN,
+        dc.TEMP_HOURLY_MAX,
+        dc.PRECIP_HOURLY_MM,
+        dc.GUST_PEAK_HOURLY_MAX,
+        dc.ATM_PRESSURE_HOURLY_MEAN,
+        dc.REL_HUMIDITY_HOURLY_MEAN,
+        dc.SUNSHINE_HOURLY_MINUTES,
+        dc.WIND_SPEED_HOURLY_MEAN,
+        dc.WIND_DIRECTION_HOURLY_MEAN,
     ],
 )
 
@@ -246,18 +152,18 @@ TABLE_DAILY_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        TEMP_DAILY_MEAN,
-        TEMP_DAILY_MIN,
-        TEMP_DAILY_MAX,
-        PRECIP_DAILY_MM,
-        GUST_PEAK_DAILY_MAX,
-        ATM_PRESSURE_DAILY_MEAN,
-        REL_HUMIDITY_DAILY_MEAN,
-        SUNSHINE_DAILY_MINUTES,
-        SUNSHINE_DAILY_PCT_OF_MAX,
-        WIND_SPEED_DAILY_MEAN,
-        WIND_DIRECTION_DAILY_MEAN,
-        SNOW_DEPTH_DAILY_CM,
+        dc.TEMP_DAILY_MEAN,
+        dc.TEMP_DAILY_MIN,
+        dc.TEMP_DAILY_MAX,
+        dc.PRECIP_DAILY_MM,
+        dc.GUST_PEAK_DAILY_MAX,
+        dc.ATM_PRESSURE_DAILY_MEAN,
+        dc.REL_HUMIDITY_DAILY_MEAN,
+        dc.SUNSHINE_DAILY_MINUTES,
+        dc.SUNSHINE_DAILY_PCT_OF_MAX,
+        dc.WIND_SPEED_DAILY_MEAN,
+        dc.WIND_DIRECTION_DAILY_MEAN,
+        dc.SNOW_DEPTH_DAILY_CM,
     ],
 )
 
@@ -271,9 +177,9 @@ TABLE_DAILY_MANUAL_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        PRECIP_DAILY_MM,
-        SNOW_DEPTH_MANUAL_DAILY_CM,
-        FRESH_SNOW_MANUAL_DAILY_CM,
+        dc.PRECIP_DAILY_MM,
+        dc.SNOW_DEPTH_MANUAL_DAILY_CM,
+        dc.FRESH_SNOW_MANUAL_DAILY_CM,
     ],
 )
 
@@ -287,15 +193,15 @@ TABLE_MONTHLY_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        TEMP_MONTHLY_MIN,
-        TEMP_MONTHLY_MEAN,
-        TEMP_MONTHLY_MAX,
-        PRECIP_MONTHLY_MM,
-        WIND_SPEED_MONTHLY_MEAN,
-        GUST_PEAK_MONTHLY_MAX,
-        ATM_PRESSURE_MONTHLY_MEAN,
-        REL_HUMIDITY_MONTHLY_MEAN,
-        SUNSHINE_MONTHLY_MINUTES,
+        dc.TEMP_MONTHLY_MIN,
+        dc.TEMP_MONTHLY_MEAN,
+        dc.TEMP_MONTHLY_MAX,
+        dc.PRECIP_MONTHLY_MM,
+        dc.WIND_SPEED_MONTHLY_MEAN,
+        dc.GUST_PEAK_MONTHLY_MAX,
+        dc.ATM_PRESSURE_MONTHLY_MEAN,
+        dc.REL_HUMIDITY_MONTHLY_MEAN,
+        dc.SUNSHINE_MONTHLY_MINUTES,
     ],
 )
 
@@ -309,7 +215,7 @@ TABLE_MONTHLY_MANUAL_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        PRECIP_MONTHLY_MM,
+        dc.PRECIP_MONTHLY_MM,
     ],
 )
 
@@ -431,13 +337,6 @@ sa_table_x_nearby_stations = sa.Table(
 )
 
 
-# Aggregation names in STATION_VAR_SUMMARY_STATS_TABLE_NAME
-AGG_NAME_REF_1991_2020 = "ref_1991_2020"
-
-# Time slice value for aggregations that have no actual time slice.
-TS_ALL = "*"
-
-
 class VarSummaryStatsTable:
 
     def __init__(self, name: str, time_slice: str) -> None:
@@ -479,7 +378,7 @@ class VarSummaryStatsTable:
 
     @classmethod
     def _ts_month(cls, d: pd.DataFrame) -> pd.Series:
-        return pd.to_datetime(d["reference_timestamp"]).dt.month.map(ts_month)
+        return pd.to_datetime(d["reference_timestamp"]).dt.month.map(dc.ts_month)
 
     @classmethod
     def _ts_all(cls, d: pd.DataFrame) -> pd.Series:
@@ -496,11 +395,6 @@ var_summary_stats_month = VarSummaryStatsTable(
     name="x_station_var_summary_stats_month",
     time_slice="month",
 )
-
-
-def ts_month(month: int) -> str:
-    """Returns the time_slice string for the given month."""
-    return f"{month:02d}"
 
 
 def agg_none(func, items):
@@ -936,7 +830,7 @@ def recreate_reference_period_stats(
         insert_summary_stats_from_daily_measurements(
             conn,
             stats_table=stats_table,
-            agg_name=AGG_NAME_REF_1991_2020,
+            agg_name=dc.AGG_NAME_REF_1991_2020,
             from_date=datetime.datetime(1991, 1, 1),
             to_date=datetime.datetime(2021, 1, 1),
             daily_measurements=daily_measurements,
@@ -1049,14 +943,14 @@ def insert_summary_stats_from_daily_measurements(
     # This derived variable can be used to determine the overall time range
     # over which data was aggregated.
     delta_days = pd.to_datetime(df["reference_timestamp"]) - pd.Timestamp("1970-01-01")
-    df[DX_SOURCE_DATE_RANGE] = delta_days / pd.Timedelta(days=1)
+    df[dc.DX_SOURCE_DATE_RANGE] = delta_days / pd.Timedelta(days=1)
 
     # Summary stats across the whole period for all daily vars.
     params = _var_summary_stats(
         df,
         agg_name=agg_name,
         date_col="reference_timestamp",
-        var_cols=daily_vars + [DX_SOURCE_DATE_RANGE],
+        var_cols=daily_vars + [dc.DX_SOURCE_DATE_RANGE],
         granularity="daily",
     )
 
@@ -1070,48 +964,48 @@ def insert_summary_stats_from_daily_measurements(
     # are derived from other daily variables and then summed up.
     # The solution respects NAs, i.e. if no data was available at all
     # for a given variable, it won't have summary stats.
-    dc = pd.DataFrame(
+    df_gen = pd.DataFrame(
         {
             "station_abbr": df["station_abbr"],
             "time_slice": df["time_slice"],
             "year": df["reference_timestamp"].str[:4] + "-01-01",
             # Day count metrics
-            DX_SUMMER_DAYS_ANNUAL_COUNT: _day_count(
-                df[TEMP_DAILY_MAX], df[TEMP_DAILY_MAX] >= 25
+            dc.DX_SUMMER_DAYS_ANNUAL_COUNT: _day_count(
+                df[dc.TEMP_DAILY_MAX], df[dc.TEMP_DAILY_MAX] >= 25
             ),
-            DX_FROST_DAYS_ANNUAL_COUNT: _day_count(
-                df[TEMP_DAILY_MIN], df[TEMP_DAILY_MIN] < 0
+            dc.DX_FROST_DAYS_ANNUAL_COUNT: _day_count(
+                df[dc.TEMP_DAILY_MIN], df[dc.TEMP_DAILY_MIN] < 0
             ),
-            DX_RAIN_DAYS_ANNUAL_COUNT: _day_count(
-                df[PRECIP_DAILY_MM], df[PRECIP_DAILY_MM] >= 1.0
+            dc.DX_RAIN_DAYS_ANNUAL_COUNT: _day_count(
+                df[dc.PRECIP_DAILY_MM], df[dc.PRECIP_DAILY_MM] >= 1.0
             ),
-            DX_SUNNY_DAYS_ANNUAL_COUNT: _day_count(
-                df[SUNSHINE_DAILY_MINUTES], df[SUNSHINE_DAILY_MINUTES] >= 6 * 60
+            dc.DX_SUNNY_DAYS_ANNUAL_COUNT: _day_count(
+                df[dc.SUNSHINE_DAILY_MINUTES], df[dc.SUNSHINE_DAILY_MINUTES] >= 6 * 60
             ),
-            DX_TROPICAL_NIGHTS_ANNUAL_COUNT: _day_count(
-                df[TEMP_DAILY_MIN], df[TEMP_DAILY_MIN] >= 20
+            dc.DX_TROPICAL_NIGHTS_ANNUAL_COUNT: _day_count(
+                df[dc.TEMP_DAILY_MIN], df[dc.TEMP_DAILY_MIN] >= 20
             ),
             # Other derived metrics
-            DX_GROWING_DEGREE_DAYS_ANNUAL_SUM: (
-                0.5 * (df[TEMP_DAILY_MEAN].clip(upper=30) - 10).clip(lower=0)
+            dc.DX_GROWING_DEGREE_DAYS_ANNUAL_SUM: (
+                0.5 * (df[dc.TEMP_DAILY_MEAN].clip(upper=30) - 10).clip(lower=0)
             ),
-            DX_PRECIP_TOTAL: df[PRECIP_DAILY_MM],
+            dc.DX_PRECIP_TOTAL: df[dc.PRECIP_DAILY_MM],
         }
     )
     key_columns = ["station_abbr", "year", "time_slice"]
-    # All variables defined in dc:
-    dc_vars = [c for c in dc.columns if c not in key_columns]
+    # All variables defined in df_gen:
+    df_gen_vars = [c for c in df_gen.columns if c not in key_columns]
 
     # Sum the 0/1 daily values to get day counts by year, retaining NaNs.
-    dcy = dc.groupby(key_columns)[dc_vars].sum(min_count=1).reset_index()
+    df_y = df_gen.groupby(key_columns)[df_gen_vars].sum(min_count=1).reset_index()
     # Now aggregate away the year (for each station) to compute summary stats
     # (same as above for plain daily variables).
     params.extend(
         _var_summary_stats(
-            dcy,
+            df_y,
             agg_name=agg_name,
             date_col="year",
-            var_cols=dc_vars,
+            var_cols=df_gen_vars,
             granularity="annual",
         )
     )
@@ -1473,9 +1367,9 @@ def read_daily_manual_measurements(
     """
     if columns is None:
         columns = [
-            PRECIP_DAILY_MM,
-            SNOW_DEPTH_MANUAL_DAILY_CM,
-            FRESH_SNOW_MANUAL_DAILY_CM,
+            dc.PRECIP_DAILY_MM,
+            dc.SNOW_DEPTH_MANUAL_DAILY_CM,
+            dc.FRESH_SNOW_MANUAL_DAILY_CM,
         ]
 
     _validate_column_names(columns)
@@ -1527,7 +1421,12 @@ def read_daily_measurements(
     The returned DataFrame has a datetime (reference_timestamp) index.
     """
     if columns is None:
-        columns = [TEMP_DAILY_MEAN, TEMP_DAILY_MIN, TEMP_DAILY_MAX, PRECIP_DAILY_MM]
+        columns = [
+            dc.TEMP_DAILY_MEAN,
+            dc.TEMP_DAILY_MIN,
+            dc.TEMP_DAILY_MAX,
+            dc.PRECIP_DAILY_MM,
+        ]
 
     _validate_column_names(columns)
 
@@ -1574,7 +1473,12 @@ def read_hourly_measurements(
     limit: int = -1,
 ) -> pd.DataFrame:
     if columns is None:
-        columns = [TEMP_HOURLY_MIN, TEMP_HOURLY_MEAN, TEMP_HOURLY_MAX, PRECIP_HOURLY_MM]
+        columns = [
+            dc.TEMP_HOURLY_MIN,
+            dc.TEMP_HOURLY_MEAN,
+            dc.TEMP_HOURLY_MAX,
+            dc.PRECIP_HOURLY_MM,
+        ]
 
     _validate_column_names(columns)
 
@@ -1627,10 +1531,10 @@ def read_monthly_measurements(
     """
     if columns is None:
         columns = [
-            TEMP_MONTHLY_MIN,
-            TEMP_MONTHLY_MEAN,
-            TEMP_MONTHLY_MAX,
-            PRECIP_MONTHLY_MM,
+            dc.TEMP_MONTHLY_MIN,
+            dc.TEMP_MONTHLY_MEAN,
+            dc.TEMP_MONTHLY_MAX,
+            dc.PRECIP_MONTHLY_MM,
         ]
 
     _validate_column_names(columns)
@@ -1695,7 +1599,7 @@ def read_var_summary_stats_all(
     if df.empty:
         return df
     # Drop the constant '*' time_slice dimension.
-    return df.xs(TS_ALL, level="time_slice")
+    return df.xs(dc.TS_ALL, level="time_slice")
 
 
 def read_var_summary_stats_month(
@@ -1709,7 +1613,7 @@ def read_var_summary_stats_month(
         conn,
         table=var_summary_stats_month.sa_table,
         agg_name=agg_name,
-        time_slices=[ts_month(m) for m in months] if months else None,
+        time_slices=[dc.ts_month(m) for m in months] if months else None,
         station_abbr=station_abbr,
         variables=variables,
     )

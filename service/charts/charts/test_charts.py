@@ -7,9 +7,9 @@ import unittest
 
 
 from . import charts
-from . import db
-from .errors import NoDataError
-from .testhelpers import PandasTestCase
+from service.charts.db import constants as dc
+from service.charts.base.errors import NoDataError
+from service.charts.testutils import PandasTestCase
 
 
 class TestStationNumDays(PandasTestCase):
@@ -48,7 +48,7 @@ class TestStationNumDays(PandasTestCase):
             pd.DataFrame(
                 {
                     "station_abbr": ["BER"] * len(times),
-                    db.TEMP_DAILY_MIN: temp,
+                    dc.TEMP_DAILY_MIN: temp,
                 }
             ),
             "BER",
@@ -127,10 +127,10 @@ class TestStationStats(PandasTestCase):
             columns=[
                 "reference_timestamp",
                 "station_abbr",
-                db.TEMP_DAILY_MIN,
-                db.TEMP_DAILY_MEAN,
-                db.TEMP_DAILY_MAX,
-                db.PRECIP_DAILY_MM,
+                dc.TEMP_DAILY_MIN,
+                dc.TEMP_DAILY_MEAN,
+                dc.TEMP_DAILY_MAX,
+                dc.PRECIP_DAILY_MM,
             ],
         )
         df = df.set_index("reference_timestamp")
@@ -151,10 +151,10 @@ class TestStationStats(PandasTestCase):
             columns=[
                 "reference_timestamp",
                 "station_abbr",
-                db.TEMP_DAILY_MIN,
-                db.TEMP_DAILY_MEAN,
-                db.TEMP_DAILY_MAX,
-                db.PRECIP_DAILY_MM,
+                dc.TEMP_DAILY_MIN,
+                dc.TEMP_DAILY_MEAN,
+                dc.TEMP_DAILY_MAX,
+                dc.PRECIP_DAILY_MM,
             ],
         )
         df = df.set_index("reference_timestamp")
@@ -179,7 +179,7 @@ class TestTimelineYearsChartData(PandasTestCase):
             ],
             columns=[
                 "reference_timestamp",
-                db.PRECIP_DAILY_MM,
+                dc.PRECIP_DAILY_MM,
             ],
         )
         df = df.set_index("reference_timestamp")
@@ -191,12 +191,12 @@ class TestTimelineYearsChartData(PandasTestCase):
         self.assertColumnNames(data_long, ["year", "measurement", "value"])
         self.assertSetEqual(
             set(data_long["measurement"].unique()),
-            set([db.PRECIP_DAILY_MM]),
+            set([dc.PRECIP_DAILY_MM]),
         )
-        values = data_long[data_long["measurement"] == db.PRECIP_DAILY_MM]["value"]
+        values = data_long[data_long["measurement"] == dc.PRECIP_DAILY_MM]["value"]
         self.assertSeriesValuesEqual(values, [6, 0, 12])
 
-        trend = trend_long[trend_long["measurement"] == db.PRECIP_DAILY_MM]["value"]
+        trend = trend_long[trend_long["measurement"] == dc.PRECIP_DAILY_MM]["value"]
         self.assertSeriesValuesEqual(trend, [3, 6, 9])
 
 
@@ -206,7 +206,7 @@ class TestStationPeriodStats(unittest.TestCase):
         df = pd.DataFrame(
             [
                 {
-                    "variable": db.TEMP_DAILY_MIN,
+                    "variable": dc.TEMP_DAILY_MIN,
                     "min_value": -15.0,
                     "min_value_date": "1995-01-10",
                     "mean_value": 5.0,
@@ -222,7 +222,7 @@ class TestStationPeriodStats(unittest.TestCase):
                     "value_count": 1000,
                 },
                 {
-                    "variable": db.TEMP_DAILY_MAX,
+                    "variable": dc.TEMP_DAILY_MAX,
                     "min_value": -5.0,
                     "min_value_date": "1995-02-02",
                     "mean_value": 15.0,
@@ -352,8 +352,8 @@ class TestDryWetSpellsChartData(PandasTestCase):
             columns=[
                 "reference_timestamp",
                 "station_abbr",
-                db.PRECIP_DAILY_MM,
-                db.SUNSHINE_DAILY_PCT_OF_MAX,
+                dc.PRECIP_DAILY_MM,
+                dc.SUNSHINE_DAILY_PCT_OF_MAX,
             ],
         )
         df["reference_timestamp"] = pd.to_datetime(df["reference_timestamp"])
