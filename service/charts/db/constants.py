@@ -1,3 +1,5 @@
+"""Contains database and OGD SwissMeteo source file constants."""
+
 # Filename for the sqlite3 database.
 DATABASE_FILENAME = "swissmetnet.sqlite"
 

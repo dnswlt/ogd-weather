@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from .env import PgConnectionInfo
+from .dbconn import PgConnectionInfo
 
 
 # Optional helper to start from a clean slate

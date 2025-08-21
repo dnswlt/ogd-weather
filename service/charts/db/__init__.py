@@ -1,7 +1,5 @@
 from .db import (
     UpdateStatus,
-    DataTableSpec,
-    VarSummaryStatsTable,
     insert_csv_metadata,
     insert_csv_data,
     save_update_status,
@@ -18,16 +16,12 @@ from .db import (
     read_summary_stats,
     read_var_summary_stats_all,
     read_var_summary_stats_month,
-    sa_table_smn_meta_parameters,
-    sa_table_smn_meta_stations,
-    sa_table_update_status,
-    sa_table_x_nearby_stations,
-    sa_table_x_station_data_summary,
-    sa_table_x_station_var_availability,
     table_stats,
 )
-from .env import (
-    PgConnectionInfo,
+
+from .schema import (
+    DataTableSpec,
+    VarSummaryStatsTable,
 )
 
 __all__ = [
@@ -57,6 +51,4 @@ __all__ = [
     "sa_table_x_station_data_summary",
     "sa_table_x_station_var_availability",
     "table_stats",
-    # env
-    "PgConnectionInfo",
 ]

@@ -3,7 +3,7 @@ import logging
 import sqlalchemy as sa
 from typing import Any
 
-from service.charts.db import env
+from service.charts.db.dbconn import PgConnectionInfo
 
 
 logger = logging.getLogger("bootstrap")
@@ -30,9 +30,7 @@ def _create_engine(
     return engine
 
 
-def bootstrap_postgres(
-    pgconn: env.PgConnectionInfo, master_secret: str | dict[str, Any]
-):
+def bootstrap_postgres(pgconn: PgConnectionInfo, master_secret: str | dict[str, Any]):
     if isinstance(master_secret, str):
         master_secret = json.loads(master_secret)
 

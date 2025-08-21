@@ -1,4 +1,4 @@
-"""Helpers for dealing with environment variables.
+"""Helpers for dealing with database connections.
 
 Especially relevant for Cloud deployments, where most parameters
 will be provided as env vars.

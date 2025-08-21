@@ -21,7 +21,7 @@ from service.charts.base.errors import NoDataError, StationNotFoundError
 from service.charts.calc import stats
 from service.charts.charts import vega
 from service.charts.db import constants as dc
-from service.charts.db import env
+from service.charts.db.dbconn import PgConnectionInfo
 
 
 logger = logging.getLogger("app")
@@ -32,16 +32,16 @@ def _pg_user(conn_str: str) -> str:
     return urlparse(conn_str).username
 
 
-def _get_pgconn_from_env():
+def _get_pgconn_from_env() -> PgConnectionInfo | None:
     """Uses OGD_ environment variables to create a PgConnectionInfo.
 
     Returns None if the required environment variables are not set.
     """
     if "OGD_POSTGRES_ROLE_SECRET" in os.environ:
-        return env.PgConnectionInfo.from_env(secret_var="OGD_POSTGRES_ROLE_SECRET")
+        return PgConnectionInfo.from_env(secret_var="OGD_POSTGRES_ROLE_SECRET")
 
     if any(os.getenv(v) for v in ["OGD_POSTGRES_URL", "OGD_DB_HOST"]):
-        return env.PgConnectionInfo.from_env()
+        return PgConnectionInfo.from_env()
 
     return None
 

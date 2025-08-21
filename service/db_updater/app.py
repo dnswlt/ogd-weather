@@ -12,8 +12,9 @@ from urllib.parse import urlparse
 
 from service.charts.base import logging_config as _  # configure logging
 
+from service.charts.db.dbconn import PgConnectionInfo
 from service.charts.db import db
-from service.charts.db import env
+from service.charts.db import schema as ds
 from service.charts.db import constants as dc
 
 from .bootstrap import bootstrap_postgres
@@ -200,15 +201,15 @@ def import_into_db(
     """
 
     measurement_tables = {
-        ("ch.meteoschweiz.ogd-smn", "h"): db.TABLE_HOURLY_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-smn", "d"): db.TABLE_DAILY_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-smn", "m"): db.TABLE_MONTHLY_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-nime", "d"): db.TABLE_DAILY_MANUAL_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-nime", "m"): db.TABLE_MONTHLY_MANUAL_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-smn", "h"): ds.TABLE_HOURLY_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-smn", "d"): ds.TABLE_DAILY_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-smn", "m"): ds.TABLE_MONTHLY_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-nime", "d"): ds.TABLE_DAILY_MANUAL_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-nime", "m"): ds.TABLE_MONTHLY_MANUAL_MEASUREMENTS,
     }
     metadata_tables = {
-        "ogd-smn_meta_parameters.csv": db.sa_table_smn_meta_parameters,
-        "ogd-smn_meta_stations.csv": db.sa_table_smn_meta_stations,
+        "ogd-smn_meta_parameters.csv": ds.sa_table_smn_meta_parameters,
+        "ogd-smn_meta_stations.csv": ds.sa_table_smn_meta_stations,
     }
 
     table_spec = measurement_tables.get((resource.parent_id, resource.interval))
@@ -405,12 +406,12 @@ def main():
         parser.error("--base-dir is required if $OGD_BASE_DIR is not set.")
 
     if args.postgres_url:
-        pgconn = env.PgConnectionInfo.from_url(args.postgres_url)
+        pgconn = PgConnectionInfo.from_url(args.postgres_url)
     elif "OGD_POSTGRES_ROLE_SECRET" in os.environ:
         # If PG specific env vars are set, use them
-        pgconn = env.PgConnectionInfo.from_env(secret_var="OGD_POSTGRES_ROLE_SECRET")
+        pgconn = PgConnectionInfo.from_env(secret_var="OGD_POSTGRES_ROLE_SECRET")
     elif any(os.getenv(v) for v in ["OGD_POSTGRES_URL", "OGD_DB_HOST"]):
-        pgconn = env.PgConnectionInfo.from_env()
+        pgconn = PgConnectionInfo.from_env()
     else:
         pgconn = None  # => local sqlite
 
@@ -451,7 +452,7 @@ def main():
     # Drop old data if requested.
     if force_recreate:
         logger.warning("Dropping existing data from all tables.")
-        db.metadata.drop_all(bind=engine)
+        ds.metadata.drop_all(bind=engine)
 
     if force_update:
         logger.info("--force-update was set, forcing data update for all assets")
@@ -464,7 +465,7 @@ def main():
         insert_mode = "merge"
 
     # Create tables if needed.
-    db.metadata.create_all(engine)
+    ds.metadata.create_all(engine)
 
     # Fetch CSV URLs.
     csvs = []

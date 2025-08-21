@@ -12,6 +12,7 @@ from service.charts.testutils import PandasTestCase
 
 from . import db
 from . import constants as dc
+from . import schema as ds
 
 
 def _testdata_dir():
@@ -24,7 +25,7 @@ class TestDb(unittest.TestCase):
         cls.engine = sa.create_engine("sqlite:///:memory:", future=True)
 
         # Create all tables for tests
-        db.metadata.create_all(cls.engine)
+        ds.metadata.create_all(cls.engine)
 
 
 class TestDbStations(TestDb):
@@ -106,7 +107,7 @@ class TestDbStations(TestDb):
 
         with cls.engine.begin() as conn:
             conn.execute(
-                sa.insert(db.sa_table_x_station_data_summary),
+                sa.insert(ds.sa_table_x_station_data_summary),
                 stations_data,
             )
 
@@ -219,7 +220,7 @@ class TestDbStationVarAvailability(TestDb):
         db.insert_csv_metadata(
             _testdata_dir(),
             cls.engine,
-            db.sa_table_smn_meta_parameters,
+            ds.sa_table_smn_meta_parameters,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_meta_parameters.csv",
@@ -241,7 +242,7 @@ class TestDbStationVarAvailability(TestDb):
 
             conn = self.engine.connect()
             conn.execute(
-                sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table),
+                sa.insert(ds.TABLE_DAILY_MEASUREMENTS.sa_table),
                 [
                     p("BER", "1991-01-01", -3, 0.5),
                     p("BER", "1991-01-02", -4, 1.5),
@@ -321,7 +322,7 @@ class TestDbDaily(TestDb):
         ]
         with cls.engine.begin() as conn:
             conn.execute(
-                sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table),
+                sa.insert(ds.TABLE_DAILY_MEASUREMENTS.sa_table),
                 records,
             )
 
@@ -431,7 +432,7 @@ class TestDbHourly(TestDb):
         ]
         with cls.engine.begin() as conn:
             conn.execute(
-                sa.insert(db.TABLE_HOURLY_MEASUREMENTS.sa_table),
+                sa.insert(ds.TABLE_HOURLY_MEASUREMENTS.sa_table),
                 records,
             )
 
@@ -482,12 +483,12 @@ class TestCreateDb(unittest.TestCase):
 
     def test_create_daily(self):
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now()
         db.insert_csv_data(
             _testdata_dir(),
             engine,
-            db.TABLE_DAILY_MEASUREMENTS,
+            ds.TABLE_DAILY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_vis_d_recent.csv",
@@ -514,12 +515,12 @@ class TestCreateDb(unittest.TestCase):
 
     def test_create_daily_append(self):
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now()
         db.insert_csv_data(
             _testdata_dir(),
             engine,
-            db.TABLE_DAILY_MEASUREMENTS,
+            ds.TABLE_DAILY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_vis_d_recent.csv",
@@ -532,14 +533,14 @@ class TestCreateDb(unittest.TestCase):
     def test_create_daily_append_twice_failure(self):
         # Inserting the same data twice should fail in "append" mode.
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now()
 
         def _insert(update_id, mode):
             db.insert_csv_data(
                 _testdata_dir(),
                 engine,
-                db.TABLE_DAILY_MEASUREMENTS,
+                ds.TABLE_DAILY_MEASUREMENTS,
                 db.UpdateStatus(
                     id=update_id,
                     href="file:///ogd-smn_vis_d_recent.csv",
@@ -562,14 +563,14 @@ class TestCreateDb(unittest.TestCase):
 
     def test_create_daily_merge_failure(self):
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now()
         # insert_mode="merge" only works for Postgres and should fail for sqlite.
         with self.assertRaises(ValueError):
             db.insert_csv_data(
                 _testdata_dir(),
                 engine,
-                db.TABLE_DAILY_MEASUREMENTS,
+                ds.TABLE_DAILY_MEASUREMENTS,
                 db.UpdateStatus(
                     id=None,
                     href="file:///ogd-smn_vis_d_recent.csv",
@@ -581,12 +582,12 @@ class TestCreateDb(unittest.TestCase):
 
     def test_create_hourly(self):
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now()
         db.insert_csv_data(
             _testdata_dir(),
             engine,
-            db.TABLE_HOURLY_MEASUREMENTS,
+            ds.TABLE_HOURLY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_vis_h_recent.csv",
@@ -611,12 +612,12 @@ class TestCreateDb(unittest.TestCase):
 
     def test_create_monthly(self):
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now()
         db.insert_csv_data(
             _testdata_dir(),
             engine,
-            db.TABLE_MONTHLY_MEASUREMENTS,
+            ds.TABLE_MONTHLY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_vis_m.csv",
@@ -645,12 +646,12 @@ class TestCreateDb(unittest.TestCase):
 
     def test_create_daily_manual(self):
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now()
         db.insert_csv_data(
             _testdata_dir(),
             engine,
-            db.TABLE_DAILY_MANUAL_MEASUREMENTS,
+            ds.TABLE_DAILY_MANUAL_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-nime_abo_d_recent.csv",
@@ -677,12 +678,12 @@ class TestCreateDb(unittest.TestCase):
 
     def test_create_metadata_stations(self):
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now(datetime.timezone.utc)
         db.insert_csv_metadata(
             _testdata_dir(),
             engine,
-            db.sa_table_smn_meta_stations,
+            ds.sa_table_smn_meta_stations,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_meta_stations.csv",
@@ -701,12 +702,12 @@ class TestCreateDb(unittest.TestCase):
 
     def test_recreate_nearby_stations(self):
         engine = sa.create_engine("sqlite:///:memory:")
-        db.metadata.create_all(engine)
+        ds.metadata.create_all(engine)
         now = datetime.datetime.now(datetime.timezone.utc)
         db.insert_csv_metadata(
             _testdata_dir(),
             engine,
-            db.sa_table_smn_meta_stations,
+            ds.sa_table_smn_meta_stations,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-smn_meta_stations.csv",
@@ -736,7 +737,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         self.engine = sa.create_engine("sqlite:///:memory:")
 
         # Create all tables for tests
-        db.metadata.create_all(self.engine)
+        ds.metadata.create_all(self.engine)
 
     def test_recreate_empty(self):
         db.recreate_climate_normals_stats_tables(self.engine)
@@ -753,7 +754,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
 
         conn = self.engine.connect()
         conn.execute(
-            sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table),
+            sa.insert(ds.TABLE_DAILY_MEASUREMENTS.sa_table),
             [
                 p("BER", "1991-01-01", -3, 0.5),
                 p("BER", "1991-01-02", -4, 1.5),
@@ -812,7 +813,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 }
                 for (stn, dt, val) in params
             ]
-            conn.execute(sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table), records)
+            conn.execute(sa.insert(ds.TABLE_DAILY_MEASUREMENTS.sa_table), records)
 
     def _insert_vars(self, var_cols: list[str], params: list[tuple]) -> str:
         with self.engine.begin() as conn:
@@ -824,7 +825,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 }
                 for (stn, dt, *vals) in params
             ]
-            conn.execute(sa.insert(db.TABLE_DAILY_MEASUREMENTS.sa_table), records)
+            conn.execute(sa.insert(ds.TABLE_DAILY_MEASUREMENTS.sa_table), records)
 
     def test_derived_summer_days(self):
         # Insert daily data.
@@ -1072,7 +1073,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         with self.engine.begin() as conn:
             df = db.read_summary_stats(
                 conn,
-                table=db.var_summary_stats_month.sa_table,
+                table=ds.var_summary_stats_month.sa_table,
                 agg_name=dc.AGG_NAME_REF_1991_2020,
                 station_abbr="BER",
                 variables=[dc.TEMP_DAILY_MIN],
@@ -1103,7 +1104,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
         with self.engine.begin() as conn:
             df = db.read_summary_stats(
                 conn,
-                table=db.var_summary_stats_month.sa_table,
+                table=ds.var_summary_stats_month.sa_table,
                 agg_name=dc.AGG_NAME_REF_1991_2020,
                 variables=[dc.TEMP_DAILY_MIN, dc.PRECIP_DAILY_MM],
             )
@@ -1122,11 +1123,11 @@ class TestHelpers(unittest.TestCase):
 
     def test_column_to_dtype(self):
         def _col(name):
-            return db.TABLE_DAILY_MEASUREMENTS.sa_table.columns[name]
+            return ds.TABLE_DAILY_MEASUREMENTS.sa_table.columns[name]
 
         self.assertEqual(db._column_to_dtype(_col(dc.PRECIP_DAILY_MM)), float)
         self.assertEqual(db._column_to_dtype(_col("station_abbr")), str)
-        int_col = db.sa_table_smn_meta_parameters.columns["parameter_decimals"]
+        int_col = ds.sa_table_smn_meta_parameters.columns["parameter_decimals"]
         self.assertEqual(db._column_to_dtype(int_col), int)
         # Unsupported type should raise ValueError:
         with self.assertRaises(ValueError):
