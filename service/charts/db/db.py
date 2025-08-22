@@ -592,10 +592,15 @@ def _read_all_daily_measurements(
             dtype={
                 "station_abbr": str,
                 "reference_timestamp": str,
-                **{v: float for v in daily_vars},
+                **{v: np.float32 for v in daily_vars},
             },
         )
-    logger.info("Read %d rows from %s", len(df), ds.TABLE_DAILY_MEASUREMENTS.name)
+    logger.info(
+        "Read %d rows from %s (%.1f MiB)",
+        len(df),
+        ds.TABLE_DAILY_MEASUREMENTS.name,
+        df.memory_usage().sum() / (1 << 20),
+    )
     return df
 
 

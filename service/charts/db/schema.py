@@ -3,6 +3,8 @@
 import pandas as pd
 import sqlalchemy as sa
 
+from service.charts.base.errors import SchemaValidationError
+
 from . import constants as dc
 
 # SQLAlchemy pattern: have a global 'metadata' variable that holds all table defs.
@@ -229,7 +231,7 @@ TABLE_ANNUAL_MAN_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        dc.PRECIP_MONTHLY_MM,
+        dc.PRECIP_ANNUAL_MM,
         dc.FRESH_SNOW_MAN_ANNUAL_CM,
         dc.SNOW_DEPTH_MAN_ANNUAL_CM,
     ],
@@ -442,3 +444,67 @@ var_summary_stats_month = VarSummaryStatsTable(
     name="x_station_var_summary_stats_month",
     time_slice="month",
 )
+
+
+def validate_schema(engine: sa.Engine, allow_missing_tables=True):
+    """
+    Validates that the database schema matches the SQLAlchemy MetaData.
+
+    Args:
+        engine: the sqlalchemy engine to use
+        allow_missing: if True, do not fail if a table is missing in the database,
+            but present in the schema (e.g., if it will be created during an update).
+
+    Raises:
+        SchemaValidationError: If there is a mismatch.
+    """
+    inspector = sa.inspect(engine)
+    db_tables = inspector.get_table_names()
+
+    # Step 1: Check for missing tables in the database
+    missing_tables = set()
+    for table_name in metadata.tables:
+        if table_name not in db_tables:
+            if allow_missing_tables:
+                missing_tables.add(table_name)
+            else:
+                raise SchemaValidationError(
+                    f"Table '{table_name}' is defined in the schema "
+                    "but does not exist in the database."
+                )
+
+    # Step 2: Check for missing/mismatched columns in existing tables
+    for table_name, table in metadata.tables.items():
+        if table_name in missing_tables:
+            continue
+
+        db_columns_info = inspector.get_columns(table_name)
+        db_columns = {col["name"]: col for col in db_columns_info}
+
+        for col_name, column in table.columns.items():
+            if col_name not in db_columns:
+                raise SchemaValidationError(
+                    f"Column '{col_name}' in table '{table_name}' is defined "
+                    "in the schema but not in the database."
+                )
+
+            # Compare column types (this is the trickiest part)
+            db_col_type = db_columns[col_name]["type"]
+            code_col_type = column.type
+
+            # Using str() comparison is often good enough for common types.
+            # For 100% accuracy, you might need more complex dialect-specific logic.
+            if not isinstance(db_col_type, type(code_col_type)):
+                # A simple fallback for when types don't match directly
+                if str(code_col_type).upper() not in str(db_col_type).upper():
+                    raise SchemaValidationError(
+                        f"Column '{col_name}' in table '{table_name}' has a type mismatch. "
+                        f"Schema: {code_col_type}, DB: {db_col_type}"
+                    )
+
+            # Compare nullability
+            if column.nullable != db_columns[col_name]["nullable"]:
+                raise SchemaValidationError(
+                    f"Column '{col_name}' in table '{table_name}' has a nullability mismatch. "
+                    f"Schema: nullable={column.nullable}, DB: nullable={db_columns[col_name]['nullable']}"
+                )

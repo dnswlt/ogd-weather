@@ -12,8 +12,9 @@ from urllib.parse import urlparse
 
 from service.charts.base import logging_config as _  # configure logging
 
+from service.charts.base.errors import SchemaValidationError
 from service.charts.db.dbconn import PgConnectionInfo
-from service.charts.db import db
+from service.charts.db import db, schema
 from service.charts.db import schema as ds
 from service.charts.db import constants as dc
 
@@ -450,6 +451,18 @@ def main():
         engine = sa.create_engine(f"sqlite:///{db_path}", echo=args.verbose)
 
     logger.info("Using DB engine '%s'", engine.name)
+
+    try:
+        schema.validate_schema(engine=engine, allow_missing_tables=True)
+        logger.info("Successfully validated the DB schema.")
+    except SchemaValidationError as e:
+        logger.error(
+            "Schema mismatch detected: %s."
+            " Consider running with --force-recreate. "
+            " NOTE that this will DROP ALL DATA from the database.",
+            str(e),
+        )
+        return
 
     if args.recreate_views:
         # Only recreate views, then exit.

@@ -4,3 +4,7 @@ class StationNotFoundError(ValueError):
 
 class NoDataError(ValueError):
     """Raised when a request is valid, but no data is available."""
+
+
+class SchemaValidationError(Exception):
+    """Custom exception for sqlalchemy schema mismatch."""
