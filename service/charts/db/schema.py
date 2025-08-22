@@ -128,9 +128,9 @@ TABLE_DAILY_HOM_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        dc.TEMP_DAILY_HOM_MIN,
-        dc.TEMP_DAILY_HOM_MEAN,
-        dc.TEMP_DAILY_HOM_MAX,
+        dc.TEMP_HOM_DAILY_MIN,
+        dc.TEMP_HOM_DAILY_MEAN,
+        dc.TEMP_HOM_DAILY_MAX,
     ],
 )
 
@@ -156,6 +156,7 @@ TABLE_MONTHLY_MEASUREMENTS = DataTableSpec(
     ],
 )
 
+
 TABLE_MONTHLY_MAN_MEASUREMENTS = DataTableSpec(
     name="ogd_nime_monthly",
     primary_key=[
@@ -167,6 +168,8 @@ TABLE_MONTHLY_MAN_MEASUREMENTS = DataTableSpec(
     },
     measurements=[
         dc.PRECIP_MONTHLY_MM,
+        dc.SNOW_DEPTH_MAN_MONTHLY_CM,
+        dc.FRESH_SNOW_MAN_MONTHLY_CM,
     ],
 )
 
@@ -180,9 +183,86 @@ TABLE_MONTHLY_HOM_MEASUREMENTS = DataTableSpec(
         "reference_timestamp": "%d.%m.%Y %H:%M",
     },
     measurements=[
-        dc.TEMP_DAILY_HOM_MIN,
-        dc.TEMP_DAILY_HOM_MEAN,
-        dc.TEMP_DAILY_HOM_MAX,
+        dc.TEMP_HOM_MONTHLY_MIN,
+        dc.TEMP_HOM_MONTHLY_MEAN,
+        dc.TEMP_HOM_MONTHLY_MAX,
+        dc.TEMP_HOM_MONTHLY_MEAN_OF_DAILY_MAX,
+        dc.TEMP_HOM_MONTHLY_MEAN_OF_DAILY_MIN,
+        dc.FROST_DAYS_HOM_MONTHLY_COUNT,
+        dc.ICE_DAYS_HOM_MONTHLY_COUNT,
+        dc.TROPICAL_NIGHTS_HOM_MONTHLY_COUNT,
+        dc.HEAT_DAYS_HOM_MONTHLY_COUNT,
+        dc.VERY_HOT_DAYS_HOM_MONTHLY_COUNT,
+        dc.PRECIP_HOM_MONTHLY_MM,
+        dc.WIND_SPEED_HOM_MONTHLY_MEAN,
+        dc.ATM_PRESSURE_HOM_MONTHLY_MEAN,
+        dc.SUNSHINE_HOM_MONTHLY_MINUTES,
+        dc.GLOBAL_RADIATION_HOM_MONTHLY_MEAN,
+        dc.HEATING_DEGREE_DAYS_SIA_HOM_MONTHLY_SUM,
+        dc.COOLING_DEGREE_DAYS_HOM_MONTHLY_SUM,
+    ],
+)
+
+# This table is not used at the moment, we only include it
+# for consistency, so all measurement types have d/m/y tables.
+TABLE_ANNUAL_MEASUREMENTS = DataTableSpec(
+    name="ogd_smn_annual",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        dc.PRECIP_ANNUAL_MM,
+    ],
+)
+
+TABLE_ANNUAL_MAN_MEASUREMENTS = DataTableSpec(
+    name="ogd_nime_annual",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        dc.PRECIP_MONTHLY_MM,
+        dc.FRESH_SNOW_MAN_ANNUAL_CM,
+        dc.SNOW_DEPTH_MAN_ANNUAL_CM,
+    ],
+)
+
+TABLE_ANNUAL_HOM_MEASUREMENTS = DataTableSpec(
+    name="ogd_nbcn_annual",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        dc.TEMP_HOM_ANNUAL_MIN,
+        dc.TEMP_HOM_ANNUAL_MEAN,
+        dc.TEMP_HOM_ANNUAL_MAX,
+        dc.TEMP_HOM_ANNUAL_MEAN_OF_DAILY_MIN,
+        dc.TEMP_HOM_ANNUAL_MEAN_OF_DAILY_MAX,
+        dc.FROST_DAYS_HOM_ANNUAL_COUNT,
+        dc.ICE_DAYS_HOM_ANNUAL_COUNT,
+        dc.TROPICAL_NIGHTS_HOM_ANNUAL_COUNT,
+        dc.SUMMER_DAYS_HOM_ANNUAL_COUNT,
+        dc.HEAT_DAYS_HOM_ANNUAL_COUNT,
+        dc.VERY_HOT_DAYS_HOM_ANNUAL_COUNT,
+        dc.PRECIP_HOM_ANNUAL_MM,
+        dc.WIND_SPEED_HOM_ANNUAL_MEAN,
+        dc.ATM_PRESSURE_HOM_ANNUAL_MEAN,
+        dc.SUNSHINE_HOM_ANNUAL_MINUTES,
+        dc.GLOBAL_RADIATION_HOM_ANNUAL_MEAN,
+        dc.HEATING_DEGREE_DAYS_SIA_HOM_ANNUAL_SUM,
+        dc.COOLING_DEGREE_DAYS_HOM_ANNUAL_SUM,
     ],
 )
 

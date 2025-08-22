@@ -17,7 +17,7 @@ def match_csv_resource(href: str, filter_re: str | None = None) -> HrefMatch | N
     # focusing on historical data anyway.
 
     mo = re.search(
-        r".*_(?P<interval>d|h|m)(_(?P<freq>historical|historical_(?P<years>\d+-\d+)|recent|now__DISABLED__))?.csv$",
+        r".*_(?P<interval>d|h|m|y)(_(?P<freq>historical|historical_(?P<years>\d+-\d+)|recent|now__DISABLED__))?.csv$",
         href,
     )
     if mo is None:

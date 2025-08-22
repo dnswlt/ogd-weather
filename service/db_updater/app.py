@@ -18,7 +18,7 @@ from service.charts.db import schema as ds
 from service.charts.db import constants as dc
 
 from .bootstrap import bootstrap_postgres
-from .smn import match_csv_resource
+from . import smn
 
 OGD_SNM_URL = (
     "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-smn"
@@ -28,7 +28,30 @@ OGD_NIME_URL = (
     "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-nime"
 )
 
+OGD_NBCN_URL = (
+    "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-nbcn"
+)
+
 UPDATE_STATUS_TABLE_NAME = "update_status"
+
+MEASUREMENT_TABLES = {
+    ("ch.meteoschweiz.ogd-smn", "h"): ds.TABLE_HOURLY_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-smn", "d"): ds.TABLE_DAILY_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-smn", "m"): ds.TABLE_MONTHLY_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-smn", "y"): ds.TABLE_ANNUAL_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-nime", "d"): ds.TABLE_DAILY_MAN_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-nime", "m"): ds.TABLE_MONTHLY_MAN_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-nime", "y"): ds.TABLE_ANNUAL_MAN_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-nbcn", "d"): ds.TABLE_DAILY_HOM_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-nbcn", "m"): ds.TABLE_MONTHLY_HOM_MEASUREMENTS,
+    ("ch.meteoschweiz.ogd-nbcn", "y"): ds.TABLE_ANNUAL_HOM_MEASUREMENTS,
+}
+
+METADATA_TABLES = {
+    "ogd-smn_meta_parameters.csv": ds.sa_table_smn_meta_parameters,
+    "ogd-smn_meta_stations.csv": ds.sa_table_smn_meta_stations,
+}
+
 
 _NOOP_SENTINEL = object()
 
@@ -127,8 +150,11 @@ def fetch_data_csv_resources(
     resources = []
     for asset in assets:
         href = asset["href"]
-        match = match_csv_resource(href, filter_re)
-        if not match:
+        match = smn.match_csv_resource(href, filter_re)
+        if match is None:
+            continue
+        if (parent_id, match.interval) not in MEASUREMENT_TABLES:
+            logger.info("Ignoring %s: no matching measurement table exists", href)
             continue
         if match.years and match.years[0] < 1990 and match.interval == "h":
             # Only download hourly historical data from 1990 onwards.
@@ -200,19 +226,7 @@ def import_into_db(
     Assumes that the file has already been downloaded to `weather_dir`.
     """
 
-    measurement_tables = {
-        ("ch.meteoschweiz.ogd-smn", "h"): ds.TABLE_HOURLY_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-smn", "d"): ds.TABLE_DAILY_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-smn", "m"): ds.TABLE_MONTHLY_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-nime", "d"): ds.TABLE_DAILY_MAN_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-nime", "m"): ds.TABLE_MONTHLY_MAN_MEASUREMENTS,
-    }
-    metadata_tables = {
-        "ogd-smn_meta_parameters.csv": ds.sa_table_smn_meta_parameters,
-        "ogd-smn_meta_stations.csv": ds.sa_table_smn_meta_stations,
-    }
-
-    table_spec = measurement_tables.get((resource.parent_id, resource.interval))
+    table_spec = MEASUREMENT_TABLES.get((resource.parent_id, resource.interval))
     if table_spec is not None:
         db.insert_csv_data(
             weather_dir,
@@ -223,7 +237,7 @@ def import_into_db(
         )
     elif resource.is_meta:
         csv_file = resource.status.filename()
-        table = metadata_tables.get(csv_file)
+        table = METADATA_TABLES.get(csv_file)
         if table is None:
             logger.warning("Ignoring unknown metadata CSV file %s", csv_file)
             return
@@ -471,8 +485,10 @@ def main():
     csvs = []
     csvs.extend(fetch_data_csv_resources(OGD_SNM_URL, args.csv_filter))
     csvs.extend(fetch_data_csv_resources(OGD_NIME_URL, args.csv_filter))
+    csvs.extend(fetch_data_csv_resources(OGD_NBCN_URL, args.csv_filter))
     csvs.extend(fetch_metadata_csv_resources(OGD_SNM_URL))
     csvs.extend(fetch_metadata_csv_resources(OGD_NIME_URL))
+    csvs.extend(fetch_metadata_csv_resources(OGD_NBCN_URL))
 
     statuses = db.read_update_status(engine)
     logger.debug("Fetched %d update statuses from DB", len(statuses))
