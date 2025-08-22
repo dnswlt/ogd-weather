@@ -63,7 +63,7 @@ CHART_TYPE_COLUMNS = {
     "summer_days": [dc.TEMP_DAILY_MAX],
     "frost_days": [dc.TEMP_DAILY_MIN],
     "rainiest_day": [dc.PRECIP_DAILY_MM],
-    "max_snow_height": [dc.SNOW_DEPTH_MANUAL_DAILY_CM],
+    "max_snow_height": [dc.SNOW_DEPTH_MAN_DAILY_CM],
 }
 
 # Short names for the color palettes, for concise code.
@@ -539,9 +539,9 @@ def rainiest_day_chart(
 def max_snow_depth_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_timeline_data(df, [dc.SNOW_DEPTH_MANUAL_DAILY_CM], station_abbr, period)
+    _verify_timeline_data(df, [dc.SNOW_DEPTH_MAN_DAILY_CM], station_abbr, period)
 
-    data = pd.DataFrame({"snow depth (cm)": df[dc.SNOW_DEPTH_MANUAL_DAILY_CM]})
+    data = pd.DataFrame({"snow depth (cm)": df[dc.SNOW_DEPTH_MAN_DAILY_CM]})
     data_long, trend_long = timeline_years_chart_data(data, "max")
 
     title = f"Max. snow depth in {period_to_title(period)}, by year".strip()
@@ -558,9 +558,9 @@ def max_snow_depth_chart(
 def max_fresh_snow_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_timeline_data(df, [dc.FRESH_SNOW_MANUAL_DAILY_CM], station_abbr, period)
+    _verify_timeline_data(df, [dc.FRESH_SNOW_MAN_DAILY_CM], station_abbr, period)
 
-    data = pd.DataFrame({"snow depth (cm)": df[dc.FRESH_SNOW_MANUAL_DAILY_CM]})
+    data = pd.DataFrame({"snow depth (cm)": df[dc.FRESH_SNOW_MAN_DAILY_CM]})
     data_long, trend_long = timeline_years_chart_data(data, "max")
 
     title = f"Max. daily fresh snow in {period_to_title(period)}, by year".strip()
@@ -577,9 +577,9 @@ def max_fresh_snow_chart(
 def snow_days_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_day_count_data(df, station_abbr, period, dc.SNOW_DEPTH_MANUAL_DAILY_CM)
+    _verify_day_count_data(df, station_abbr, period, dc.SNOW_DEPTH_MAN_DAILY_CM)
     return day_count_chart(
-        predicate=df[dc.SNOW_DEPTH_MANUAL_DAILY_CM] >= 1,
+        predicate=df[dc.SNOW_DEPTH_MAN_DAILY_CM] >= 1,
         period=period,
         title="Number of snow days (≥ 1 cm snow depth)",
         palette=colors.Tab20("AshGray"),
@@ -589,9 +589,9 @@ def snow_days_chart(
 def fresh_snow_days_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
-    _verify_day_count_data(df, station_abbr, period, dc.FRESH_SNOW_MANUAL_DAILY_CM)
+    _verify_day_count_data(df, station_abbr, period, dc.FRESH_SNOW_MAN_DAILY_CM)
     return day_count_chart(
-        predicate=df[dc.FRESH_SNOW_MANUAL_DAILY_CM] >= 1,
+        predicate=df[dc.FRESH_SNOW_MAN_DAILY_CM] >= 1,
         period=period,
         title="Number of days on which it snowed (> 0 cm fresh snow)",
         palette=colors.Tab20("Teal"),

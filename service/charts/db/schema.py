@@ -102,7 +102,7 @@ TABLE_DAILY_MEASUREMENTS = DataTableSpec(
     ],
 )
 
-TABLE_DAILY_MANUAL_MEASUREMENTS = DataTableSpec(
+TABLE_DAILY_MAN_MEASUREMENTS = DataTableSpec(
     name="ogd_nime_daily",
     primary_key=[
         "station_abbr",
@@ -113,8 +113,24 @@ TABLE_DAILY_MANUAL_MEASUREMENTS = DataTableSpec(
     },
     measurements=[
         dc.PRECIP_DAILY_MM,
-        dc.SNOW_DEPTH_MANUAL_DAILY_CM,
-        dc.FRESH_SNOW_MANUAL_DAILY_CM,
+        dc.SNOW_DEPTH_MAN_DAILY_CM,
+        dc.FRESH_SNOW_MAN_DAILY_CM,
+    ],
+)
+
+TABLE_DAILY_HOM_MEASUREMENTS = DataTableSpec(
+    name="ogd_nbcn_daily",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        dc.TEMP_DAILY_HOM_MIN,
+        dc.TEMP_DAILY_HOM_MEAN,
+        dc.TEMP_DAILY_HOM_MAX,
     ],
 )
 
@@ -140,7 +156,7 @@ TABLE_MONTHLY_MEASUREMENTS = DataTableSpec(
     ],
 )
 
-TABLE_MONTHLY_MANUAL_MEASUREMENTS = DataTableSpec(
+TABLE_MONTHLY_MAN_MEASUREMENTS = DataTableSpec(
     name="ogd_nime_monthly",
     primary_key=[
         "station_abbr",
@@ -151,6 +167,22 @@ TABLE_MONTHLY_MANUAL_MEASUREMENTS = DataTableSpec(
     },
     measurements=[
         dc.PRECIP_MONTHLY_MM,
+    ],
+)
+
+TABLE_MONTHLY_HOM_MEASUREMENTS = DataTableSpec(
+    name="ogd_nbcn_monthly",
+    primary_key=[
+        "station_abbr",
+        "reference_timestamp",
+    ],
+    date_format={
+        "reference_timestamp": "%d.%m.%Y %H:%M",
+    },
+    measurements=[
+        dc.TEMP_DAILY_HOM_MIN,
+        dc.TEMP_DAILY_HOM_MEAN,
+        dc.TEMP_DAILY_HOM_MAX,
     ],
 )
 

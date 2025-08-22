@@ -204,8 +204,8 @@ def import_into_db(
         ("ch.meteoschweiz.ogd-smn", "h"): ds.TABLE_HOURLY_MEASUREMENTS,
         ("ch.meteoschweiz.ogd-smn", "d"): ds.TABLE_DAILY_MEASUREMENTS,
         ("ch.meteoschweiz.ogd-smn", "m"): ds.TABLE_MONTHLY_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-nime", "d"): ds.TABLE_DAILY_MANUAL_MEASUREMENTS,
-        ("ch.meteoschweiz.ogd-nime", "m"): ds.TABLE_MONTHLY_MANUAL_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-nime", "d"): ds.TABLE_DAILY_MAN_MEASUREMENTS,
+        ("ch.meteoschweiz.ogd-nime", "m"): ds.TABLE_MONTHLY_MAN_MEASUREMENTS,
     }
     metadata_tables = {
         "ogd-smn_meta_parameters.csv": ds.sa_table_smn_meta_parameters,

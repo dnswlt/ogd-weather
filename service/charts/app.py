@@ -286,20 +286,20 @@ async def get_annual_chart(
         df = _read_daily([dc.PRECIP_DAILY_MM])
         chart = charts.rainiest_day_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "max_snow_height":
-        df = _read_daily_manual([dc.SNOW_DEPTH_MANUAL_DAILY_CM])
+        df = _read_daily_manual([dc.SNOW_DEPTH_MAN_DAILY_CM])
         chart = charts.max_snow_depth_chart(
             df, station_abbr=station_abbr, period=period
         )
     elif chart_type == "snow_days":
-        df = _read_daily_manual([dc.SNOW_DEPTH_MANUAL_DAILY_CM])
+        df = _read_daily_manual([dc.SNOW_DEPTH_MAN_DAILY_CM])
         chart = charts.snow_days_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "max_fresh_snow":
-        df = _read_daily_manual([dc.FRESH_SNOW_MANUAL_DAILY_CM])
+        df = _read_daily_manual([dc.FRESH_SNOW_MAN_DAILY_CM])
         chart = charts.max_fresh_snow_chart(
             df, station_abbr=station_abbr, period=period
         )
     elif chart_type == "fresh_snow_days":
-        df = _read_daily_manual([dc.FRESH_SNOW_MANUAL_DAILY_CM])
+        df = _read_daily_manual([dc.FRESH_SNOW_MAN_DAILY_CM])
         chart = charts.fresh_snow_days_chart(
             df, station_abbr=station_abbr, period=period
         )

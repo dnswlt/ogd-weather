@@ -651,7 +651,7 @@ class TestCreateDb(unittest.TestCase):
         db.insert_csv_data(
             _testdata_dir(),
             engine,
-            ds.TABLE_DAILY_MANUAL_MEASUREMENTS,
+            ds.TABLE_DAILY_MAN_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
                 href="file:///ogd-nime_abo_d_recent.csv",
@@ -662,8 +662,8 @@ class TestCreateDb(unittest.TestCase):
         with engine.connect() as conn:
             columns = [
                 dc.PRECIP_DAILY_MM,
-                dc.SNOW_DEPTH_MANUAL_DAILY_CM,
-                dc.FRESH_SNOW_MANUAL_DAILY_CM,
+                dc.SNOW_DEPTH_MAN_DAILY_CM,
+                dc.FRESH_SNOW_MAN_DAILY_CM,
             ]
             df = db.read_daily_manual_measurements(
                 conn,

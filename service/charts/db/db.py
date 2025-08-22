@@ -1048,8 +1048,8 @@ def read_daily_manual_measurements(
     if columns is None:
         columns = [
             dc.PRECIP_DAILY_MM,
-            dc.SNOW_DEPTH_MANUAL_DAILY_CM,
-            dc.FRESH_SNOW_MANUAL_DAILY_CM,
+            dc.SNOW_DEPTH_MAN_DAILY_CM,
+            dc.FRESH_SNOW_MAN_DAILY_CM,
         ]
 
     _validate_column_names(columns)
@@ -1057,7 +1057,7 @@ def read_daily_manual_measurements(
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""
         SELECT {', '.join(select_columns)}
-        FROM {ds.TABLE_DAILY_MANUAL_MEASUREMENTS.name}
+        FROM {ds.TABLE_DAILY_MAN_MEASUREMENTS.name}
     """
     # Filter by station.
     filters = ["station_abbr = :station_abbr"]
