@@ -73,14 +73,7 @@ class UpdateStatus(BaseModel):
         self.etag = etag
 
 
-def agg_none(func, items):
-    """Apply func (e.g. min or max) to items, ignoring None.
-    Returns None if all values are None."""
-    filtered = [x for x in items if x is not None]
-    return func(filtered) if filtered else None
-
-
-def normalize_timestamp(series: pd.Series) -> pd.Series:
+def _normalize_timestamp(series: pd.Series) -> pd.Series:
     """Normalizes a datetime Series for DB storage.
 
     - If all times are midnight, returns only "YYYY-MM-DD".
@@ -203,7 +196,7 @@ def insert_csv_data(
     df = df[columns]  # Reorder columns to match the order in table_spec.
     # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
     for col in table_spec.date_format.keys():
-        df[col] = normalize_timestamp(df[col])
+        df[col] = _normalize_timestamp(df[col])
 
     start_time = time.time()
     # Insert rows, ignoring duplicates
@@ -405,7 +398,7 @@ def recreate_views(engine: sa.Engine) -> None:
 def recreate_climate_normals_stats_tables(engine: sa.Engine):
     logger.info("Reading daily measurements (1991-2020) from DB")
     daily_measurements = _read_all_daily_measurements(
-        engine, datetime.datetime(1991, 1, 1), datetime.datetime(2021, 1, 1)
+        engine, datetime.date(1991, 1, 1), datetime.date(2021, 1, 1)
     )
     logger.info("Recreating reference period (1991-2020) 'all' stats")
     recreate_reference_period_stats(
@@ -511,8 +504,8 @@ def recreate_reference_period_stats(
             conn,
             stats_table=stats_table,
             agg_name=dc.AGG_NAME_REF_1991_2020,
-            from_date=datetime.datetime(1991, 1, 1),
-            to_date=datetime.datetime(2021, 1, 1),
+            from_date=datetime.date(1991, 1, 1),
+            to_date=datetime.date(2021, 1, 1),
             daily_measurements=daily_measurements,
         )
 
@@ -571,8 +564,8 @@ def _var_summary_stats(
 
 def _read_all_daily_measurements(
     engine: sa.Engine,
-    from_date: datetime.datetime,
-    to_date: datetime.datetime,
+    from_date: datetime.date,
+    to_date: datetime.date,
 ):
     """Reads ALL ROWS from ds.TABLE_DAILY_MEASUREMENTS in the range [from_date, to_date) into memory."""
     daily_vars = ds.TABLE_DAILY_MEASUREMENTS.measurements
@@ -582,8 +575,8 @@ def _read_all_daily_measurements(
             reference_timestamp,
             {', '.join(daily_vars)}
         FROM {ds.TABLE_DAILY_MEASUREMENTS.name}
-        WHERE reference_timestamp >= '{utc_datestr(from_date)}' 
-            AND reference_timestamp < '{utc_datestr(to_date)}'
+        WHERE reference_timestamp >= '{_utc_datestr(from_date)}' 
+            AND reference_timestamp < '{_utc_datestr(to_date)}'
     """
     with engine.begin() as conn:
         df = pd.read_sql_query(
@@ -608,8 +601,8 @@ def insert_summary_stats_from_daily_measurements(
     conn: sa.Connection,
     stats_table: ds.VarSummaryStatsTable,
     agg_name: str,
-    from_date: datetime.datetime,
-    to_date: datetime.datetime,
+    from_date: datetime.date,
+    to_date: datetime.date,
     daily_measurements: pd.DataFrame | None = None,
 ) -> None:
     """Inserts summary stats for the given reference period into the given stats_table."""
@@ -999,7 +992,7 @@ def _sql_filter_by_period(period: str) -> str:
     raise ValueError(f"Invalid period {period} for SQL filter")
 
 
-def utc_timestr(d: datetime.datetime) -> str:
+def _utc_timestr(d: datetime.datetime) -> str:
     """Returns the given datetime as a UTC time string in ISO format.
 
     Example: "2025-03-31 23:59:59Z"
@@ -1012,14 +1005,14 @@ def utc_timestr(d: datetime.datetime) -> str:
     return d.strftime("%Y-%m-%d %H:%M:%SZ")
 
 
-def utc_datestr(d: datetime.datetime) -> str:
-    """Returns the given datetime as a UTC date string in ISO format.
+def _utc_datestr(d: datetime.datetime | datetime.date) -> str:
+    """Returns the given date or datetime as a UTC date string in ISO format.
 
     Example: "2025-03-31"
 
     If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
     """
-    if d.tzinfo is not None:
+    if isinstance(d, datetime.datetime) and d.tzinfo is not None:
         # datetime.UTC is only available since Python 3.11
         d = d.astimezone(datetime.timezone.utc)
     return d.strftime("%Y-%m-%d")
@@ -1038,107 +1031,66 @@ def _validate_column_names(columns: list[str]) -> None:
         raise ValueError(f"Invalid columns: {','.join(columns)}")
 
 
-def read_daily_manual_measurements(
+def _read_measurements_table(
     conn: sa.Connection,
+    table_spec: ds.DataTableSpec,
     station_abbr: str,
-    columns: list[str] | None = None,
+    from_date: datetime.datetime | datetime.date | None,
+    to_date: datetime.datetime | datetime.date | None,
     period: str | None = None,
-    from_year: int | None = None,
-    to_year: int | None = None,
+    columns: list[str] | None = None,
+    limit: int = -1,
 ) -> pd.DataFrame:
-    """Returns daily measurements matching the provided filters.
+    """Reads rows from the specified monthly measurements table.
 
-    The returned DataFrame has a datetime (reference_timestamp) index.
+    Args:
+        table_spec: the table to read data from.
+        from_date: inclusive lower bound of the time range to read.
+        to_date: exclusive upper bound of the time range to read.
+        period: a string indicating the month or season to read. Valid values:
+            ['1', '2', ..., '12', 'spring', 'summer', 'autumn', 'winter', 'all']
+        columns: the measurement columns to read. If None, all measurement
+            columns of table_spec are read.
+
+    Returns:
+        A pd.DataFrame with a "reference_timestamp" index of type datetime.
     """
     if columns is None:
-        columns = [
-            dc.PRECIP_DAILY_MM,
-            dc.SNOW_DEPTH_MAN_DAILY_CM,
-            dc.FRESH_SNOW_MAN_DAILY_CM,
-        ]
+        columns = table_spec.measurements
 
     _validate_column_names(columns)
 
     select_columns = ["station_abbr", "reference_timestamp"] + columns
     sql = f"""
         SELECT {', '.join(select_columns)}
-        FROM {ds.TABLE_DAILY_MAN_MEASUREMENTS.name}
+        FROM {table_spec.name}
     """
     # Filter by station.
     filters = ["station_abbr = :station_abbr"]
     params = {"station_abbr": station_abbr}
 
+    if isinstance(from_date, datetime.datetime):
+        filters.append(f"reference_timestamp >= '{_utc_timestr(from_date)}'")
+    elif isinstance(from_date, datetime.date):
+        filters.append(f"reference_timestamp >= '{_utc_datestr(from_date)}'")
+
+    if isinstance(to_date, datetime.datetime):
+        filters.append(f"reference_timestamp < '{_utc_timestr(to_date)}'")
+    elif isinstance(to_date, datetime.date):
+        filters.append(f"reference_timestamp < '{_utc_datestr(to_date)}'")
+
     if period is not None:
         filters.append(_sql_filter_by_period(period))
 
-    if from_year is not None:
-        filters.append(f"date(reference_timestamp) >= date('{from_year:04d}-01-01')")
-    if to_year is not None:
-        filters.append(f"date(reference_timestamp) < date('{to_year+1:04d}-01-01')")
-
-    # Filter out any row that has only NULL measurements.
+    # Filter out rows that have only NULL measurements.
     if columns:
         non_null = " OR ".join(f"{c} IS NOT NULL" for c in columns)
         filters.append(f"({non_null})")
 
     sql += " WHERE " + " AND ".join(filters)
     sql += " ORDER BY reference_timestamp ASC"
-
-    return pd.read_sql_query(
-        sa.text(sql),
-        conn,
-        params=params,
-        parse_dates=["reference_timestamp"],
-        index_col="reference_timestamp",
-    )
-
-
-def read_daily_measurements(
-    conn: sa.Connection,
-    station_abbr: str,
-    columns: list[str] | None = None,
-    period: str | None = None,
-    from_year: int | None = None,
-    to_year: int | None = None,
-) -> pd.DataFrame:
-    """Returns daily measurements matching the provided filters.
-
-    The returned DataFrame has a datetime (reference_timestamp) index.
-    """
-    if columns is None:
-        columns = [
-            dc.TEMP_DAILY_MEAN,
-            dc.TEMP_DAILY_MIN,
-            dc.TEMP_DAILY_MAX,
-            dc.PRECIP_DAILY_MM,
-        ]
-
-    _validate_column_names(columns)
-
-    select_columns = ["station_abbr", "reference_timestamp"] + columns
-    sql = f"""
-        SELECT {', '.join(select_columns)}
-        FROM {ds.TABLE_DAILY_MEASUREMENTS.name}
-    """
-    # Filter by station.
-    filters = ["station_abbr = :station_abbr"]
-    params = {"station_abbr": station_abbr}
-
-    if period is not None:
-        filters.append(_sql_filter_by_period(period))
-
-    if from_year is not None:
-        filters.append(f"date(reference_timestamp) >= date('{from_year:04d}-01-01')")
-    if to_year is not None:
-        filters.append(f"date(reference_timestamp) < date('{to_year+1:04d}-01-01')")
-
-    # Filter out any row that has only NULL measurements.
-    if columns:
-        non_null = " OR ".join(f"{c} IS NOT NULL" for c in columns)
-        filters.append(f"({non_null})")
-
-    sql += " WHERE " + " AND ".join(filters)
-    sql += " ORDER BY reference_timestamp ASC"
+    if limit > 0:
+        sql += f" LIMIT {limit}"
 
     return pd.read_sql_query(
         sa.text(sql),
@@ -1157,54 +1109,112 @@ def read_hourly_measurements(
     columns: list[str] | None = None,
     limit: int = -1,
 ) -> pd.DataFrame:
-    if columns is None:
-        columns = [
-            dc.TEMP_HOURLY_MIN,
-            dc.TEMP_HOURLY_MEAN,
-            dc.TEMP_HOURLY_MAX,
-            dc.PRECIP_HOURLY_MM,
-        ]
+    """Reads rows from the hourly measurements table.
 
-    _validate_column_names(columns)
+    Args:
+        from_date: inclusive lower bound of the time range to read.
+        to_date: exclusive upper bound of the time range to read.
+        columns: the measurement columns to read. If None, all measurement
+            columns are read.
 
-    select_columns = ["station_abbr", "reference_timestamp"] + columns
-    sql = f"""
-        SELECT {', '.join(select_columns)}
-        FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
+    Returns:
+        A pd.DataFrame with a "reference_timestamp" index of type datetime.
     """
-    # Filter by station.
-    filters = ["station_abbr = :station_abbr"]
-    params = {"station_abbr": station_abbr}
 
-    if from_date is not None:
-        filters.append(f"reference_timestamp >= '{utc_timestr(from_date)}'")
-    if to_date is not None:
-        filters.append(f"reference_timestamp < '{utc_timestr(to_date)}'")
-
-    # Filter out any row that has only NULL measurements.
-    if columns:
-        non_null = " OR ".join(f"{c} IS NOT NULL" for c in columns)
-        filters.append(f"({non_null})")
-
-    sql += " WHERE " + " AND ".join(filters)
-    sql += " ORDER BY reference_timestamp ASC"
-    if limit > 0:
-        sql += f" LIMIT {limit}"
-
-    return pd.read_sql_query(
-        sa.text(sql),
+    return _read_measurements_table(
         conn,
-        params=params,
-        parse_dates=["reference_timestamp"],
-        index_col="reference_timestamp",
+        ds.TABLE_HOURLY_MEASUREMENTS,
+        station_abbr=station_abbr,
+        from_date=from_date,
+        to_date=to_date,
+        columns=columns,
+        limit=limit,
+    )
+
+
+def read_daily_measurements(
+    conn: sa.Connection,
+    station_abbr: str,
+    columns: list[str] | None = None,
+    from_date: datetime.date | None = None,
+    to_date: datetime.date | None = None,
+    period: str | None = None,
+) -> pd.DataFrame:
+    """Returns daily measurements matching the provided filters.
+
+    The returned DataFrame has a datetime (reference_timestamp) index.
+    """
+    return _read_measurements_table(
+        conn,
+        ds.TABLE_DAILY_MEASUREMENTS,
+        station_abbr=station_abbr,
+        from_date=from_date,
+        to_date=to_date,
+        period=period,
+        columns=columns,
+    )
+
+
+def read_daily_hom_measurements(
+    conn: sa.Connection,
+    station_abbr: str,
+    columns: list[str] | None = None,
+    from_date: datetime.date | None = None,
+    to_date: datetime.date | None = None,
+    period: str | None = None,
+) -> pd.DataFrame:
+    """Returns daily measurements matching the provided filters.
+
+    The returned DataFrame has a datetime (reference_timestamp) index.
+    """
+    return _read_measurements_table(
+        conn,
+        ds.TABLE_DAILY_HOM_MEASUREMENTS,
+        station_abbr=station_abbr,
+        from_date=from_date,
+        to_date=to_date,
+        period=period,
+        columns=columns,
+    )
+
+
+def read_daily_manual_measurements(
+    conn: sa.Connection,
+    station_abbr: str,
+    columns: list[str] | None = None,
+    from_date: datetime.date | None = None,
+    to_date: datetime.date | None = None,
+    period: str | None = None,
+) -> pd.DataFrame:
+    """Reads rows from the daily manual measurements table.
+
+    Data is read in blocks of whole years. (TODO: change to daily).
+
+    Args:
+        from_year: inclusive lower bound of the time range to read.
+        to_year: inclusive upper bound of the time range to read.
+        columns: the measurement columns to read. If None, all measurement
+            columns are read.
+
+    Returns:
+        A pd.DataFrame with a "reference_timestamp" index of type datetime.
+    """
+    return _read_measurements_table(
+        conn,
+        ds.TABLE_DAILY_MAN_MEASUREMENTS,
+        station_abbr=station_abbr,
+        from_date=from_date,
+        to_date=to_date,
+        period=period,
+        columns=columns,
     )
 
 
 def read_monthly_measurements(
     conn: sa.Connection,
     station_abbr: str,
-    from_date: datetime.datetime,
-    to_date: datetime.datetime,
+    from_date: datetime.date | None = None,
+    to_date: datetime.date | None = None,
     columns: list[str] | None = None,
     limit: int = -1,
 ) -> pd.DataFrame:
@@ -1213,47 +1223,71 @@ def read_monthly_measurements(
     Args:
         from_date: inclusive lower bound of the time range to read.
         to_date: exclusive upper bound of the time range to read.
+        columns: the measurement columns to read. If None, all measurement
+            columns are read.
     """
-    if columns is None:
-        columns = [
-            dc.TEMP_MONTHLY_MIN,
-            dc.TEMP_MONTHLY_MEAN,
-            dc.TEMP_MONTHLY_MAX,
-            dc.PRECIP_MONTHLY_MM,
-        ]
-
-    _validate_column_names(columns)
-
-    select_columns = ["station_abbr", "reference_timestamp"] + columns
-    sql = f"""
-        SELECT {', '.join(select_columns)}
-        FROM {ds.TABLE_MONTHLY_MEASUREMENTS.name}
-    """
-    # Filter by station.
-    filters = ["station_abbr = :station_abbr"]
-    params = {"station_abbr": station_abbr}
-
-    if from_date is not None:
-        filters.append(f"reference_timestamp >= '{utc_datestr(from_date)}'")
-    if to_date is not None:
-        filters.append(f"reference_timestamp < '{utc_datestr(to_date)}'")
-
-    # Filter out any row that has only NULL measurements.
-    if columns:
-        non_null = " OR ".join(f"{c} IS NOT NULL" for c in columns)
-        filters.append(f"({non_null})")
-
-    sql += " WHERE " + " AND ".join(filters)
-    sql += " ORDER BY reference_timestamp ASC"
-    if limit > 0:
-        sql += f" LIMIT {limit}"
-
-    return pd.read_sql_query(
-        sa.text(sql),
+    return _read_measurements_table(
         conn,
-        params=params,
-        parse_dates=["reference_timestamp"],
-        index_col="reference_timestamp",
+        ds.TABLE_MONTHLY_MEASUREMENTS,
+        station_abbr=station_abbr,
+        from_date=from_date,
+        to_date=to_date,
+        columns=columns,
+        limit=limit,
+    )
+
+
+def read_monthly_hom_measurements(
+    conn: sa.Connection,
+    station_abbr: str,
+    from_date: datetime.date | None = None,
+    to_date: datetime.date | None = None,
+    columns: list[str] | None = None,
+    limit: int = -1,
+) -> pd.DataFrame:
+    """Reads rows from the monthly homogenous measurements table.
+
+    Args:
+        from_date: inclusive lower bound of the time range to read.
+        to_date: exclusive upper bound of the time range to read.
+        columns: the measurement columns to read. If None, all measurement
+            columns are read.
+    """
+    return _read_measurements_table(
+        conn,
+        ds.TABLE_MONTHLY_HOM_MEASUREMENTS,
+        station_abbr=station_abbr,
+        from_date=from_date,
+        to_date=to_date,
+        columns=columns,
+        limit=limit,
+    )
+
+
+def read_annual_hom_measurements(
+    conn: sa.Connection,
+    station_abbr: str,
+    from_date: datetime.date | None = None,
+    to_date: datetime.date | None = None,
+    columns: list[str] | None = None,
+    limit: int = -1,
+) -> pd.DataFrame:
+    """Reads rows from the monthly homogenous measurements table.
+
+    Args:
+        from_date: inclusive lower bound of the time range to read.
+        to_date: exclusive upper bound of the time range to read.
+        columns: the measurement columns to read. If None, all measurement
+            columns are read.
+    """
+    return _read_measurements_table(
+        conn,
+        ds.TABLE_ANNUAL_HOM_MEASUREMENTS,
+        station_abbr=station_abbr,
+        from_date=from_date,
+        to_date=to_date,
+        columns=columns,
+        limit=limit,
     )
 
 

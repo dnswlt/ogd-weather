@@ -110,6 +110,37 @@ def _bad_request(detail: str) -> HTTPException:
     )
 
 
+def _int_or_none(n: str | None) -> int | None:
+    if n is None:
+        return None
+    try:
+        return int(n)
+    except ValueError:
+        raise _bad_request(f"not a number: {n}")
+
+
+def _date_from_year(year: str | None, dy=0) -> datetime.date | None:
+    """Tries to parse year as an int and returns 1 Jan of that year.
+
+    Args:
+        year: the year to parse.
+        dy: the number of years to add to the parsed year.
+
+    Returns:
+        The parsed date or None if year is None.
+
+    Raises:
+        HTTPException if year is not a valid int.
+    """
+    if year is None or year == "":
+        return None
+    try:
+        y = int(year) + dy
+    except ValueError:
+        raise _bad_request(f"not a number: {year}")
+    return datetime.date(y, 1, 1)
+
+
 def _daily_range(date: str) -> tuple[datetime.datetime, datetime.datetime]:
     try:
         d = datetime.date.fromisoformat(date)
@@ -225,8 +256,8 @@ async def get_annual_chart(
     period = _period_default(period)
 
     station_abbr = station_abbr.upper()
-    from_year_int = int(from_year) if from_year and from_year.isdigit() else None
-    to_year_int = int(to_year) if to_year and to_year.isdigit() else None
+    from_date = _date_from_year(from_year)
+    to_date = _date_from_year(to_year, dy=1)
     # Internal code treats window=None as "no window"
     window_int = int(window) if window and window.isdigit() else 1
 
@@ -237,8 +268,8 @@ async def get_annual_chart(
                 station_abbr,
                 period=period,
                 columns=columns,
-                from_year=from_year_int,
-                to_year=to_year_int,
+                from_date=from_date,
+                to_date=to_date,
             )
 
     def _read_daily_manual(columns):
@@ -248,8 +279,8 @@ async def get_annual_chart(
                 station_abbr,
                 period=period,
                 columns=columns,
-                from_year=from_year_int,
-                to_year=to_year_int,
+                from_date=from_date,
+                to_date=to_date,
             )
 
     if chart_type == "temperature":
@@ -328,8 +359,8 @@ async def get_year_chart(
                 conn,
                 station_abbr,
                 columns=columns,
-                from_year=year,
-                to_year=year,
+                from_date=datetime.date(year, 1, 1),
+                to_date=datetime.date(year + 1, 1, 1),
             )
             if df.empty:
                 raise NoDataError(f"No data for {columns} in year {year}")
@@ -479,8 +510,8 @@ async def get_year_highlights(
                 dc.SUNSHINE_DAILY_MINUTES,
                 dc.SNOW_DEPTH_DAILY_CM,
             ],
-            from_year=year,
-            to_year=year,
+            from_date=datetime.datetime(year, 1, 1),
+            to_date=datetime.datetime(year + 1, 1, 1),
         )
         if df.empty:
             raise NoDataError(f"No data for {station_abbr} in year {year}")
@@ -599,9 +630,8 @@ async def get_summary(
 ):
     period = _period_default(period)
     station_abbr = station_abbr.upper()
-
-    from_year_int = int(from_year) if from_year and from_year.isdigit() else None
-    to_year_int = int(to_year) if to_year and to_year.isdigit() else None
+    from_date = _date_from_year(from_year)
+    to_date = _date_from_year(to_year, dy=1)
 
     with app.state.engine.begin() as conn:
         df = db.read_daily_measurements(
@@ -614,8 +644,8 @@ async def get_summary(
                 dc.TEMP_DAILY_MAX,
                 dc.PRECIP_DAILY_MM,
             ],
-            from_year=from_year_int,
-            to_year=to_year_int,
+            from_date=from_date,
+            to_date=to_date,
         )
         stats = charts.station_stats(df, station_abbr, period=period)
         station = db.read_station(conn, station_abbr)

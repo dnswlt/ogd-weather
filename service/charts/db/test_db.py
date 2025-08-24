@@ -351,18 +351,25 @@ class TestDbDaily(TestDb):
         self.assertEqual(len(df), 13)  # All data for ABO
 
     def test_read_daily_historical_with_from_year(self):
-        df = db.read_daily_measurements(self.conn, station_abbr="ABO", from_year=2024)
+        df = db.read_daily_measurements(
+            self.conn, station_abbr="ABO", from_date=datetime.date(2024, 1, 1)
+        )
         self.assertEqual(len(df), 1)  # Only 2024-01-01
         self.assertTrue(all(df.index.year >= 2024))
 
     def test_read_daily_historical_with_to_year(self):
-        df = db.read_daily_measurements(self.conn, station_abbr="ABO", to_year=2023)
+        df = db.read_daily_measurements(
+            self.conn, station_abbr="ABO", to_date=datetime.date(2024, 1, 1)
+        )
         self.assertEqual(len(df), 12)  # All of 2023
         self.assertTrue(all(df.index.year <= 2023))
 
     def test_read_daily_historical_with_from_and_to_year(self):
         df = db.read_daily_measurements(
-            self.conn, station_abbr="ABO", from_year=2023, to_year=2023
+            self.conn,
+            station_abbr="ABO",
+            from_date=datetime.date(2023, 1, 1),
+            to_date=datetime.date(2024, 1, 1),
         )
         self.assertEqual(len(df), 12)  # All of 2023
         self.assertTrue(all(df.index.year == 2023))
@@ -634,8 +641,8 @@ class TestCreateDb(unittest.TestCase):
             df = db.read_monthly_measurements(
                 conn,
                 "VIS",
-                from_date=datetime.datetime(2020, 1, 1),
-                to_date=datetime.datetime(2021, 1, 1),
+                from_date=datetime.date(2020, 1, 1),
+                to_date=datetime.date(2021, 1, 1),
                 columns=columns,
             )
         self.assertEqual(len(df), 12)
@@ -671,6 +678,143 @@ class TestCreateDb(unittest.TestCase):
                 columns=columns,
             )
         self.assertGreaterEqual(len(df), 200)
+        self.assertTrue(
+            (df[columns].sum() > 0).all(),
+            "All measurement columns should have some nonzero values.",
+        )
+
+    def test_create_daily_hom(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        ds.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            ds.TABLE_DAILY_HOM_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-nbcn_ber_d_recent.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+        with engine.connect() as conn:
+            columns = [
+                dc.TEMP_HOM_DAILY_MIN,
+                dc.TEMP_HOM_DAILY_MEAN,
+                dc.TEMP_HOM_DAILY_MEAN_DEV_FROM_NORM_9120,
+            ]
+            df = db.read_daily_hom_measurements(
+                conn,
+                "BER",
+                columns=columns,
+                from_date=datetime.date(2025, 1, 1),
+                to_date=datetime.date(2025, 7, 1),
+            )
+        self.assertEqual(len(df), 181)
+        self.assertTrue(
+            (df[columns].sum() > 0).all(),
+            "All measurement columns should have some nonzero values.",
+        )
+
+    def test_create_daily_hom(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        ds.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            ds.TABLE_DAILY_HOM_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-nbcn_ber_d_recent.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+        with engine.connect() as conn:
+            columns = [
+                dc.TEMP_HOM_DAILY_MIN,
+                dc.TEMP_HOM_DAILY_MEAN,
+                dc.TEMP_HOM_DAILY_MEAN_DEV_FROM_NORM_9120,
+            ]
+            df = db.read_daily_hom_measurements(
+                conn,
+                "BER",
+                columns=columns,
+                from_date=datetime.date(2025, 1, 1),
+                to_date=datetime.date(2025, 7, 1),
+            )
+        self.assertEqual(len(df), 181)  # Should have data for 181 days.
+        self.assertTrue(
+            (df[columns].sum() > 0).all(),
+            "All measurement columns should have some nonzero values.",
+        )
+
+    def test_create_monthly_hom(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        ds.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            ds.TABLE_MONTHLY_HOM_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-nbcn_ber_m.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+        with engine.connect() as conn:
+            columns = [
+                dc.TEMP_HOM_MONTHLY_MEAN,
+                dc.PRECIP_HOM_MONTHLY_MM,
+                dc.SUNSHINE_HOM_MONTHLY_MINUTES,
+                dc.HEATING_DEGREE_DAYS_SIA_HOM_MONTHLY_SUM,
+            ]
+            df = db.read_monthly_hom_measurements(
+                conn,
+                "BER",
+                columns=columns,
+                from_date=datetime.date(2025, 1, 1),
+                to_date=datetime.date(2025, 7, 1),
+            )
+        self.assertEqual(len(df), 6)  # Should have data for 6 months.
+        self.assertTrue(
+            (df[columns].sum() > 0).all(),
+            "All measurement columns should have some nonzero values.",
+        )
+
+    def test_create_annual_hom(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        ds.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            ds.TABLE_ANNUAL_HOM_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-nbcn_ber_y.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
+        with engine.connect() as conn:
+            columns = [
+                dc.TEMP_HOM_ANNUAL_MAX,
+                dc.TEMP_HOM_ANNUAL_MEAN_OF_DAILY_MAX,
+                dc.FROST_DAYS_HOM_ANNUAL_COUNT,
+            ]
+            df = db.read_annual_hom_measurements(
+                conn,
+                "BER",
+                columns=columns,
+                from_date=datetime.date(1980, 1, 1),
+                to_date=datetime.date(2020, 1, 1),
+            )
+        self.assertEqual(len(df), 40)  # Should have data for 40 years.
         self.assertTrue(
             (df[columns].sum() > 0).all(),
             "All measurement columns should have some nonzero values.",
