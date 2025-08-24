@@ -88,7 +88,37 @@ def test_integration_import_ogd_data(tmp_path):
     assert set(
         [dc.TEMP_DAILY_MAX, dc.PRECIP_DAILY_MM, dc.SUNSHINE_DAILY_MINUTES]
     ).issubset(set(df_daily.columns))
-    # Expect no row has only empty data
+    # Expect all rows have some non-empty data
     assert (
         (df_daily[ds.TABLE_DAILY_MEASUREMENTS.measurements] > 0).any(axis=1).all()
     ), "Found measurement rows with only zero values"
+
+    # Expect an entry in the update_log table.
+    with engine.begin() as conn:
+        log_entry = db.read_latest_update_log_entry(conn)
+    assert log_entry is not None
+    # args are not very meaningful for an integration test, but should be non-empty
+    assert len(log_entry.args) > 1
+    # update_time should be close to "now".
+    assert abs(
+        datetime.datetime.now(tz=datetime.timezone.utc) - log_entry.update_time
+    ) < datetime.timedelta(minutes=5)
+    # Should have imported some files
+    assert log_entry.imported_files_count >= 9
+
+    # Check that several tables have data.
+    def row_count(sa_table) -> int:
+        count_query = sa.select(sa.func.count()).select_from(sa_table)
+        return int(conn.scalar(count_query))
+
+    with engine.begin() as conn:
+        assert row_count(ds.TABLE_ANNUAL_HOM_MEASUREMENTS.sa_table) > 0
+        assert row_count(ds.TABLE_MONTHLY_HOM_MEASUREMENTS.sa_table) > 0
+        assert row_count(ds.TABLE_DAILY_HOM_MEASUREMENTS.sa_table) > 0
+        assert row_count(ds.TABLE_ANNUAL_MAN_MEASUREMENTS.sa_table) > 0
+        assert row_count(ds.TABLE_MONTHLY_MAN_MEASUREMENTS.sa_table) > 0
+        assert row_count(ds.TABLE_DAILY_MAN_MEASUREMENTS.sa_table) > 0
+        assert row_count(ds.sa_table_smn_meta_stations) > 0
+        assert row_count(ds.sa_table_nime_meta_stations) > 0
+        assert row_count(ds.sa_table_nbcn_meta_stations) > 0
+        assert row_count(ds.sa_table_x_station_var_availability) > 0

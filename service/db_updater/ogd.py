@@ -4,6 +4,7 @@ import logging
 import os
 import queue
 import re
+import sys
 import time
 from pydantic import BaseModel
 import requests
@@ -51,6 +52,10 @@ MEASUREMENT_TABLES = {
 METADATA_TABLES = {
     "ogd-smn_meta_parameters.csv": ds.sa_table_smn_meta_parameters,
     "ogd-smn_meta_stations.csv": ds.sa_table_smn_meta_stations,
+    "ogd-nime_meta_parameters.csv": ds.sa_table_nime_meta_parameters,
+    "ogd-nime_meta_stations.csv": ds.sa_table_nime_meta_stations,
+    "ogd-nbcn_meta_parameters.csv": ds.sa_table_nbcn_meta_parameters,
+    "ogd-nbcn_meta_stations.csv": ds.sa_table_nbcn_meta_stations,
 }
 
 
@@ -218,7 +223,13 @@ def fetch_data_csv_resources(
 def fetch_metadata_csv_resources(base_url: str) -> list[CsvResource]:
     """Fetch URLs of metadata CSV resources ("assets")."""
     resources = []
-    ignored_metadata_files = set(["ogd-smn_meta_datainventory.csv"])
+    ignored_metadata_files = set(
+        [
+            "ogd-smn_meta_datainventory.csv",
+            "ogd-nime_meta_datainventory.csv",
+            "ogd-nbcn_meta_datainventory.csv",
+        ]
+    )
 
     # Fetch parent resource to get its ID
     # (we could just use the last part of the URL)
@@ -453,6 +464,17 @@ def run_import(
         db.recreate_views(engine)
     else:
         logger.info("No new CSV files imported, won't update views.")
+
+    db.add_update_log_entry(
+        engine,
+        db.UpdateLogEntry(
+            update_time=datetime.datetime.fromtimestamp(
+                started_time, tz=datetime.timezone.utc
+            ),
+            imported_files_count=import_count,
+            args=sys.argv,
+        ),
+    )
 
     logger.info("Done. DB %s updated in %.1fs.", engine.url, time.time() - started_time)
 

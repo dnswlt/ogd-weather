@@ -3,6 +3,7 @@
 import datetime
 import io
 import itertools
+import json
 import logging
 import os
 import time
@@ -71,6 +72,14 @@ class UpdateStatus(BaseModel):
         self.table_updated_time = table_updated_time
         self.resource_updated_time = resource_updated_time
         self.etag = etag
+
+
+class UpdateLogEntry(BaseModel):
+    """Represents a row in the update_log table."""
+
+    update_time: datetime.datetime
+    imported_files_count: int
+    args: list[str]
 
 
 def _normalize_timestamp(series: pd.Series) -> pd.Series:
@@ -378,6 +387,39 @@ def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
             )
 
     return statuses
+
+
+def add_update_log_entry(engine: sa.Engine, entry: UpdateLogEntry) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            sa.insert(ds.sa_table_update_log).values(
+                update_time=entry.update_time.isoformat(),
+                imported_files_count=entry.imported_files_count,
+                args=json.dumps(entry.args),
+            )
+        )
+
+
+def read_latest_update_log_entry(conn: sa.Connection) -> UpdateLogEntry:
+    cur = conn.execute(
+        sa.text(
+            f"""
+            SELECT
+                update_time,
+                imported_files_count,
+                args
+            FROM {ds.sa_table_update_log.name}
+            ORDER BY update_time DESC
+            LIMIT 1
+            """
+        )
+    )
+    row = cur.mappings().one()
+    return UpdateLogEntry(
+        update_time=datetime.datetime.fromisoformat(row["update_time"]),
+        imported_files_count=row["imported_files_count"],
+        args=json.loads(row["args"]),
+    )
 
 
 def recreate_views(engine: sa.Engine) -> None:

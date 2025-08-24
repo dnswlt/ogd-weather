@@ -272,53 +272,65 @@ TABLE_ANNUAL_HOM_MEASUREMENTS = DataTableSpec(
 )
 
 
-sa_table_smn_meta_stations = sa.Table(
-    "ogd_smn_meta_stations",
-    metadata,
-    sa.Column("station_abbr", sa.Text, primary_key=True),
-    sa.Column("station_name", sa.Text),
-    sa.Column("station_canton", sa.Text),
-    sa.Column("station_wigos_id", sa.Text),
-    sa.Column("station_type_de", sa.Text),
-    sa.Column("station_type_fr", sa.Text),
-    sa.Column("station_type_it", sa.Text),
-    sa.Column("station_type_en", sa.Text),
-    sa.Column("station_dataowner", sa.Text),
-    sa.Column("station_data_since", sa.Text),
-    sa.Column("station_height_masl", sa.REAL),
-    sa.Column("station_height_barometer_masl", sa.REAL),
-    sa.Column("station_coordinates_lv95_east", sa.REAL),
-    sa.Column("station_coordinates_lv95_north", sa.REAL),
-    sa.Column("station_coordinates_wgs84_lat", sa.REAL),
-    sa.Column("station_coordinates_wgs84_lon", sa.REAL),
-    sa.Column("station_exposition_de", sa.Text),
-    sa.Column("station_exposition_fr", sa.Text),
-    sa.Column("station_exposition_it", sa.Text),
-    sa.Column("station_exposition_en", sa.Text),
-    sa.Column("station_url_de", sa.Text),
-    sa.Column("station_url_fr", sa.Text),
-    sa.Column("station_url_it", sa.Text),
-    sa.Column("station_url_en", sa.Text),
-)
+def sa_table_meta_stations(station_type: str) -> sa.Table:
+    return sa.Table(
+        f"ogd_{station_type}_meta_stations",
+        metadata,
+        sa.Column("station_abbr", sa.Text, primary_key=True),
+        sa.Column("station_name", sa.Text),
+        sa.Column("station_canton", sa.Text),
+        sa.Column("station_wigos_id", sa.Text),
+        sa.Column("station_type_de", sa.Text),
+        sa.Column("station_type_fr", sa.Text),
+        sa.Column("station_type_it", sa.Text),
+        sa.Column("station_type_en", sa.Text),
+        sa.Column("station_dataowner", sa.Text),
+        sa.Column("station_data_since", sa.Text),
+        sa.Column("station_height_masl", sa.REAL),
+        sa.Column("station_height_barometer_masl", sa.REAL),
+        sa.Column("station_coordinates_lv95_east", sa.REAL),
+        sa.Column("station_coordinates_lv95_north", sa.REAL),
+        sa.Column("station_coordinates_wgs84_lat", sa.REAL),
+        sa.Column("station_coordinates_wgs84_lon", sa.REAL),
+        sa.Column("station_exposition_de", sa.Text),
+        sa.Column("station_exposition_fr", sa.Text),
+        sa.Column("station_exposition_it", sa.Text),
+        sa.Column("station_exposition_en", sa.Text),
+        sa.Column("station_url_de", sa.Text),
+        sa.Column("station_url_fr", sa.Text),
+        sa.Column("station_url_it", sa.Text),
+        sa.Column("station_url_en", sa.Text),
+    )
 
-sa_table_smn_meta_parameters = sa.Table(
-    "ogd_smn_meta_parameters",
-    metadata,
-    sa.Column("parameter_shortname", sa.Text, primary_key=True),
-    sa.Column("parameter_description_de", sa.Text),
-    sa.Column("parameter_description_fr", sa.Text),
-    sa.Column("parameter_description_it", sa.Text),
-    sa.Column("parameter_description_en", sa.Text),
-    sa.Column("parameter_group_de", sa.Text),
-    sa.Column("parameter_group_fr", sa.Text),
-    sa.Column("parameter_group_it", sa.Text),
-    sa.Column("parameter_group_en", sa.Text),
-    sa.Column("parameter_granularity", sa.Text),
-    sa.Column("parameter_decimals", sa.Integer),
-    sa.Column("parameter_datatype", sa.Text),
-    sa.Column("parameter_unit", sa.Text),
-)
 
+sa_table_smn_meta_stations = sa_table_meta_stations("smn")
+sa_table_nime_meta_stations = sa_table_meta_stations("nime")
+sa_table_nbcn_meta_stations = sa_table_meta_stations("nbcn")
+
+
+def sa_table_meta_parameters(station_type: str) -> sa.Table:
+    return sa.Table(
+        f"ogd_{station_type}_meta_parameters",
+        metadata,
+        sa.Column("parameter_shortname", sa.Text, primary_key=True),
+        sa.Column("parameter_description_de", sa.Text),
+        sa.Column("parameter_description_fr", sa.Text),
+        sa.Column("parameter_description_it", sa.Text),
+        sa.Column("parameter_description_en", sa.Text),
+        sa.Column("parameter_group_de", sa.Text),
+        sa.Column("parameter_group_fr", sa.Text),
+        sa.Column("parameter_group_it", sa.Text),
+        sa.Column("parameter_group_en", sa.Text),
+        sa.Column("parameter_granularity", sa.Text),
+        sa.Column("parameter_decimals", sa.Integer),
+        sa.Column("parameter_datatype", sa.Text),
+        sa.Column("parameter_unit", sa.Text),
+    )
+
+
+sa_table_smn_meta_parameters = sa_table_meta_parameters("smn")
+sa_table_nime_meta_parameters = sa_table_meta_parameters("nime")
+sa_table_nbcn_meta_parameters = sa_table_meta_parameters("nbcn")
 
 sa_table_update_status = sa.Table(
     "update_status",
@@ -330,6 +342,13 @@ sa_table_update_status = sa.Table(
     sa.Column("etag", sa.Text),
 )
 
+sa_table_update_log = sa.Table(
+    "update_log",
+    metadata,
+    sa.Column("update_time", sa.Text, primary_key=True),
+    sa.Column("imported_files_count", sa.Integer),
+    sa.Column("args", sa.Text),
+)
 
 # Derived tables / materialized views.
 # To distinguish them from SoT data and mark them as derived,

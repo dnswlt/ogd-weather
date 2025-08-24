@@ -44,7 +44,7 @@ test-charts:
 
 test-integration:
 	@echo "--- Running integration tests for Python service/db_updater ---"
-	pytest -m integration service/db_updater
+	pytest -m integration -o log_cli=true --log-cli-level=INFO service/db_updater
 
 
 ## Local Dev =========================================================
