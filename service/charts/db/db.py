@@ -149,28 +149,20 @@ def insert_csv_data(
 
     *  The UpdateStatus DB table is updated in the same transaction.
 
-    :param base_dir:
-    The directory in which CSV files are expected.
-
-    :param engine:
-    The SQLAlchemy engine.
-
-    :param table_spec:
-    The table to insert/upsert data into.
-
-    :param update:
-    Information about the CSV file to insert. Also used to update the status_update table.
-
-    :param mode:
-    The insert mode; must be one of
-
-        * "append" - Appends all CSV rows directly to the destination table.
-            This ignores existing rows and will fail if duplicate primary keys
-            are found.
-        * "merge" - Inserts or updates all CSV rows. Existing rows with the
-            same primary key will be updated.
-        * "insert_missing" - Only inserts CSV rows whose primary keys do not exist
-            in the table yet.
+    Args:
+        base_dir: the directory in which CSV files are expected.
+        engine: the SQLAlchemy engine.
+        table_spec: the table to insert/upsert data into.
+        update: information about the CSV file to insert. Also used to update
+            the status_update table.
+        mode: the insert mode; must be one of
+            * "append" - Appends all CSV rows directly to the destination table.
+                This ignores existing rows and will fail if duplicate primary keys
+                are found.
+            * "merge" - Inserts or updates all CSV rows. Existing rows with the
+                same primary key will be updated.
+            * "insert_missing" - Only inserts CSV rows whose primary keys do not exist
+                in the table yet.
     """
 
     if insert_mode not in ("append", "merge", "insert_missing"):

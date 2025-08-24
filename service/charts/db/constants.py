@@ -1,7 +1,7 @@
 """Contains database and OGD SwissMeteo source file constants."""
 
 # Filename for the sqlite3 database.
-DATABASE_FILENAME = "swissmetnet.sqlite"
+SQLITE_DB_FILENAME = "swissmetnet.sqlite"
 
 # Column names for weather measurements.
 

@@ -23,7 +23,7 @@ CLUSTER = weather-cluster
 .PHONY: aws-login aws-build aws-push aws-redeploy aws-roll aws-update-db
 
 ## Local testing =====================================================
-.PHONY: test test-api test-db-updater test-charts
+.PHONY: test test-api test-db-updater test-charts test-integration
 
 # --- General Test Commands ---
 
@@ -41,6 +41,10 @@ test-db-updater:
 test-charts:
 	@echo "--- Running tests for Python service/charts ---"
 	pytest service/charts
+
+test-integration:
+	@echo "--- Running integration tests for Python service/db_updater ---"
+	pytest -m integration service/db_updater
 
 
 ## Local Dev =========================================================

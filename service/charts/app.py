@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):
         logger.info("Successfully connected to postgres DB")
     else:
         # Use SQLite database
-        db_path = os.path.join(base_dir, dc.DATABASE_FILENAME)
+        db_path = os.path.join(base_dir, dc.SQLITE_DB_FILENAME)
         logger.info("Connecting to sqlite DB at %s", db_path)
         engine = sa.create_engine(f"sqlite:///{db_path}", echo=True)
 
