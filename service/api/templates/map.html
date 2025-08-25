@@ -10,8 +10,17 @@
     {{template "nav.html" .}}
 
     <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
-        <h1 class="text-2xl font-semibold text-center">Automatic Weather Stations</h1>
+        <h1 class="text-2xl font-semibold text-center">Weather Stations</h1>
 
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            The map below shows the locations of SwissMeteo weather stations. Stations located on crests are
+            shown as triangles; stations for which
+            <a class="text-blue-600 hover:underline"
+                href="https://opendatadocs.meteoswiss.ch/c-climate-data/c1-climate-stations_homogeneous">
+                homogenous climate data
+            </a>
+            exists are shown as squares; all other stations are shown as circles.
+        </p>
         <!-- Map -->
         <div id="map-container" class="w-full max-w-screen-lg mx-auto">
             {{template "suisse_svg.html" .}}

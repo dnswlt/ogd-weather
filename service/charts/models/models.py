@@ -36,6 +36,10 @@ class Station(BaseModel):
     temperature_max_date: date | None = None
     precipitation_min_date: date | None = None
     precipitation_max_date: date | None = None
+    temperature_hom_min_date: date | None = None
+    temperature_hom_max_date: date | None = None
+    precipitation_hom_min_date: date | None = None
+    precipitation_hom_max_date: date | None = None
 
 
 class NearbyStation(BaseModel):

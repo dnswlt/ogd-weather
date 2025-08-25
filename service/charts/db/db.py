@@ -882,7 +882,11 @@ def read_station(conn: sa.Connection, station_abbr: str) -> models.Station:
             tre200d0_min_date,
             tre200d0_max_date,
             rre150d0_min_date,
-            rre150d0_max_date
+            rre150d0_max_date,
+            ths200m0_min_date,
+            ths200m0_max_date,
+            rhs150m0_min_date,
+            rhs150m0_max_date
         FROM {ds.sa_table_x_station_data_summary.name}
         WHERE station_abbr = :station_abbr
     """
@@ -920,6 +924,10 @@ def read_station(conn: sa.Connection, station_abbr: str) -> models.Station:
         temperature_max_date=d(result["tre200d0_max_date"]),
         precipitation_min_date=d(result["rre150d0_min_date"]),
         precipitation_max_date=d(result["rre150d0_max_date"]),
+        temperature_hom_min_date=d(result["ths200m0_min_date"]),
+        temperature_hom_max_date=d(result["ths200m0_max_date"]),
+        precipitation_hom_min_date=d(result["rhs150m0_min_date"]),
+        precipitation_hom_max_date=d(result["rhs150m0_max_date"]),
     )
 
 
@@ -943,7 +951,15 @@ def read_stations(
             station_exposition_en,
             station_height_masl,
             station_coordinates_wgs84_lat,
-            station_coordinates_wgs84_lon
+            station_coordinates_wgs84_lon,
+            tre200d0_min_date,
+            tre200d0_max_date,
+            rre150d0_min_date,
+            rre150d0_max_date,
+            ths200m0_min_date,
+            ths200m0_max_date,
+            rhs150m0_min_date,
+            rhs150m0_max_date
         FROM {ds.sa_table_x_station_data_summary.name}
     """
 
@@ -975,6 +991,10 @@ def read_stations(
         sa_sql = sa_sql.bindparams(*bindparams)
     result = conn.execute(sa_sql, params).mappings().all()
 
+    # Parse possible date strings into actual dates (None stays None)
+    def d(v: str | None) -> datetime.date | None:
+        return datetime.date.fromisoformat(v) if v else None
+
     return [
         models.Station(
             abbr=row["station_abbr"],
@@ -990,6 +1010,14 @@ def read_stations(
             height_masl=row["station_height_masl"],
             coordinates_wgs84_lat=row["station_coordinates_wgs84_lat"],
             coordinates_wgs84_lon=row["station_coordinates_wgs84_lon"],
+            temperature_min_date=d(row["tre200d0_min_date"]),
+            temperature_max_date=d(row["tre200d0_max_date"]),
+            precipitation_min_date=d(row["rre150d0_min_date"]),
+            precipitation_max_date=d(row["rre150d0_max_date"]),
+            temperature_hom_min_date=d(row["ths200m0_min_date"]),
+            temperature_hom_max_date=d(row["ths200m0_max_date"]),
+            precipitation_hom_min_date=d(row["rhs150m0_min_date"]),
+            precipitation_hom_max_date=d(row["rhs150m0_max_date"]),
         )
         for row in result
     ]

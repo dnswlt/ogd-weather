@@ -71,19 +71,23 @@ type ServerStatus struct {
 }
 
 type Station struct {
-	Abbr                 string          `json:"abbr"`
-	Name                 string          `json:"name"`
-	Canton               string          `json:"canton"`
-	Typ                  string          `json:"typ"`
-	Exposition           LocalizedString `json:"exposition"`
-	URL                  LocalizedString `json:"url"`
-	HeightMASL           NullFloat64     `json:"height_masl"`
-	CoordinatesWGS84Lat  NullFloat64     `json:"coordinates_wgs84_lat"`
-	CoordinatesWGS84Lon  NullFloat64     `json:"coordinates_wgs84_lon"`
-	TemperatureMinDate   NullDate        `json:"temperature_min_date"`
-	TemperatureMaxDate   NullDate        `json:"temperature_max_date"`
-	PrecipitationMinDate NullDate        `json:"precipitation_min_date"`
-	PrecipitationMaxDate NullDate        `json:"precipitation_max_date"`
+	Abbr                    string          `json:"abbr"`
+	Name                    string          `json:"name"`
+	Canton                  string          `json:"canton"`
+	Typ                     string          `json:"typ"`
+	Exposition              LocalizedString `json:"exposition"`
+	URL                     LocalizedString `json:"url"`
+	HeightMASL              NullFloat64     `json:"height_masl"`
+	CoordinatesWGS84Lat     NullFloat64     `json:"coordinates_wgs84_lat"`
+	CoordinatesWGS84Lon     NullFloat64     `json:"coordinates_wgs84_lon"`
+	TemperatureMinDate      NullDate        `json:"temperature_min_date"`
+	TemperatureMaxDate      NullDate        `json:"temperature_max_date"`
+	PrecipitationMinDate    NullDate        `json:"precipitation_min_date"`
+	PrecipitationMaxDate    NullDate        `json:"precipitation_max_date"`
+	TemperatureHomMinDate   NullDate        `json:"temperature_hom_min_date"`
+	TemperatureHomMaxDate   NullDate        `json:"temperature_hom_max_date"`
+	PrecipitationHomMinDate NullDate        `json:"precipitation_hom_min_date"`
+	PrecipitationHomMaxDate NullDate        `json:"precipitation_hom_max_date"`
 }
 
 type StationsResponse struct {

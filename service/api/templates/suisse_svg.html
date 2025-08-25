@@ -496,10 +496,17 @@
                 fill='{{if eq $selected .Abbr}}#38BDF8{{else}}#DA291C{{end}}' />
             <title>{{.Name}} {{.Canton}} ({{.Abbr}})</title>
         </g>
+        {{else if .TemperatureHomMinDate.HasValue}}
+        <g id="station-marker-{{.Abbr}}" transform="translate({{$p.X}}, {{$p.Y}})">
+            <circle r="12" fill="transparent" pointer-events="visible" />
+            <rect class="marker-shape" x="-5" y="-5" width="10" height="10"
+                fill='{{if eq $selected .Abbr}}#38BDF8{{else}}#DA291C{{end}}' />
+            <title>{{.Name}} {{.Canton}} ({{.Abbr}})</title>
+        </g>        
         {{else}}
         <g id="station-marker-{{.Abbr}}">
             <!-- Larger invisible hit area -->
-            <circle cx="{{$p.X}}" cy="{{$p.Y}}" r="10" fill="transparent" pointer-events="visible" />
+            <circle cx="{{$p.X}}" cy="{{$p.Y}}" r="12" fill="transparent" pointer-events="visible" />
             <!-- Visible circle -->
             <circle class="marker-shape" cx="{{$p.X}}" cy="{{$p.Y}}" r="5"
                 fill='{{if eq $selected .Abbr}}#38BDF8{{else}}#DA291C{{end}}' />
