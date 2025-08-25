@@ -11,7 +11,18 @@
 
     <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
         <h1 class="text-2xl font-semibold text-center">Sunshine &amp; Rain</h1>
-
+        <div class="space-y-3">
+            <p class="text-sm text-gray-700 leading-relaxed p-2 bg-[#eaf2fa] border border-[#d1e6f5] rounded-lg">
+                This page displays data from MeteoSwiss's automatic weather stations. The data has not
+                been homogenised, so measurements from different years may not be directly comparable and
+                should not be used to draw conclusions about long-term climate trends.
+                
+                See
+                <a class="text-blue-600 hover:underline"
+                    href="https://opendatadocs.meteoswiss.ch/c-climate-data/c1-climate-stations_homogeneous">homogeneous
+                    data series</a> for details and <.
+            </p>
+        </div>
 
         <div class="space-y-3">
             <!-- Search (locations or postal codes) -->
@@ -135,7 +146,7 @@
             </div>
 
 
-            
+
             <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Precipitation</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
                 Number of rain days, i.e. days with &geq; 1 mm total precipitation,
@@ -167,7 +178,7 @@
                 <div id="precipitation-vega-chart" class="w-full overflow-hidden"></div>
             </div>
 
-                        
+
             <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Snow</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
                 Number of snow days, i.e. days with &geq; 1 cm total snow depth,
@@ -188,19 +199,19 @@
                     <button data-chart-type="snow_days" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                    hover:text-gray-800 focus:outline-none
                    aria-selected:border-blue-600 aria-selected:text-blue-600">
-                       Snow days
+                        Snow days
                     </button>
                     <!-- Snow days -->
                     <button data-chart-type="max_fresh_snow" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                    hover:text-gray-800 focus:outline-none
                    aria-selected:border-blue-600 aria-selected:text-blue-600">
-                       Fresh snow
+                        Fresh snow
                     </button>
                     <!-- Snow days -->
                     <button data-chart-type="fresh_snow_days" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                    hover:text-gray-800 focus:outline-none
                    aria-selected:border-blue-600 aria-selected:text-blue-600">
-                       Fresh snow days
+                        Fresh snow days
                     </button>
                 </div>
 
