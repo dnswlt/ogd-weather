@@ -1250,6 +1250,7 @@ def read_monthly_measurements(
     from_date: datetime.date | None = None,
     to_date: datetime.date | None = None,
     columns: list[str] | None = None,
+    period: str | None = None,
     limit: int = -1,
 ) -> pd.DataFrame:
     """Reads rows from the monthly measurements table.
@@ -1259,6 +1260,8 @@ def read_monthly_measurements(
         to_date: exclusive upper bound of the time range to read.
         columns: the measurement columns to read. If None, all measurement
             columns are read.
+        period: the period to read data for
+            (1..12 for a single month, "spring", "summer", etc., or "all")
     """
     return _read_measurements_table(
         conn,
@@ -1267,6 +1270,7 @@ def read_monthly_measurements(
         from_date=from_date,
         to_date=to_date,
         columns=columns,
+        period=period,
         limit=limit,
     )
 
@@ -1277,6 +1281,7 @@ def read_monthly_hom_measurements(
     from_date: datetime.date | None = None,
     to_date: datetime.date | None = None,
     columns: list[str] | None = None,
+    period: str | None = None,
     limit: int = -1,
 ) -> pd.DataFrame:
     """Reads rows from the monthly homogenous measurements table.
@@ -1286,6 +1291,8 @@ def read_monthly_hom_measurements(
         to_date: exclusive upper bound of the time range to read.
         columns: the measurement columns to read. If None, all measurement
             columns are read.
+        period: the period to read data for
+            (1..12 for a single month, "spring", "summer", etc., or "all")
     """
     return _read_measurements_table(
         conn,
@@ -1294,6 +1301,7 @@ def read_monthly_hom_measurements(
         from_date=from_date,
         to_date=to_date,
         columns=columns,
+        period=period,
         limit=limit,
     )
 

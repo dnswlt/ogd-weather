@@ -9,7 +9,6 @@ __all__ = [
     "Palette",
     "Tab20",
     # charts
-    "CHART_TYPE_COLUMNS",
     "MONTH_NAMES",
     "PERIOD_ALL",
     "SEASON_NAMES",
@@ -50,7 +49,6 @@ __all__ = [
     "monthly_temp_boxplot_chart",
     "period_to_title",
     "polyfit_columns",
-    "precipitation_chart",
     "raindays_chart",
     "rainiest_day_chart",
     "rolling_mean",
@@ -60,7 +58,5 @@ __all__ = [
     "summer_days_chart",
     "sunny_days_chart",
     "sunshine_chart",
-    "temperature_chart",
-    "temperature_deviation_chart",
     "timeline_years_chart_data",
 ]

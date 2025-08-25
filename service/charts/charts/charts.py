@@ -14,10 +14,10 @@ from service.charts.db import constants as dc
 from service.charts import models
 
 from . import colors
+from . import transform as tf
 
 AltairChart: TypeAlias = Union[alt.Chart, alt.LayerChart]
 
-PERIOD_ALL = "all"
 
 VEGA_LEGEND_LABELS = {
     dc.TEMP_DAILY_MEAN: "temp mean",
@@ -52,19 +52,12 @@ SEASON_NAMES = {
     "winter": "Winter (Dec-Feb)",
 }
 
-# Measurement colums to load, by chart type.
-CHART_TYPE_COLUMNS = {
-    "temperature": [dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX],
-    "temperature_deviation": [dc.TEMP_DAILY_MEAN],
-    "precipitation": [dc.PRECIP_DAILY_MM],
-    "raindays": [dc.PRECIP_DAILY_MM],
-    "sunshine": [dc.SUNSHINE_DAILY_MINUTES],
-    "sunny_days": [dc.SUNSHINE_DAILY_MINUTES],
-    "summer_days": [dc.TEMP_DAILY_MAX],
-    "frost_days": [dc.TEMP_DAILY_MIN],
-    "rainiest_day": [dc.PRECIP_DAILY_MM],
-    "max_snow_height": [dc.SNOW_DEPTH_MAN_DAILY_CM],
-}
+PERIOD_ALL = "all"
+
+VALID_PERIODS = set(
+    [str(i) for i in range(1, 13)] + list(SEASON_NAMES.keys()) + [PERIOD_ALL]
+)
+
 
 # Short names for the color palettes, for concise code.
 _C = colors.COLORS_TABLEAU20
@@ -161,59 +154,6 @@ _SEASONS = {
     "autumn": [9, 10, 11],
     "winter": [12, 1, 2],
 }
-
-
-def annual_agg(df, func):
-    """Returns a DataFrame with one row per year containing average values."""
-    df_y = df.groupby(df.index.year).agg(func)
-    df_y.index.name = "year"
-    return df_y
-
-
-def long_format(df: pd.DataFrame, id_cols: list[str] | None = None) -> pd.DataFrame:
-    index_name = df.index.name
-    return df.reset_index().melt(
-        id_vars=[index_name] + (id_cols or []),
-        var_name="measurement",
-        value_name="value",
-    )
-
-
-def rolling_mean(df: pd.DataFrame, window: int = 5):
-    """Compute rolling mean. Drop initial rows that don't have enough periods."""
-    return df.rolling(window=window, min_periods=window).mean()
-
-
-def polyfit_columns(
-    df: pd.DataFrame, deg: int = 1
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fits a Polynomial (degree deg) to each column of df using numpy.polynomial.
-
-    Returns:
-        - A DataFrame of coefficients (per column, highest degree last)
-        - A DataFrame of trend values (same shape as df)
-    """
-    trend = {}
-    coeffs = {}
-
-    for col in df.columns:
-        vals = df[col].dropna()
-        x = vals.index.values
-        y = vals.values
-
-        # Fit polynomial to column
-        if len(x) < deg + 1:
-            raise ValueError(
-                f"Cannot fit degree-{deg} polynomial to only {len(x)} point(s) in column '{col}'"
-            )
-        p = np.polynomial.Polynomial.fit(x, y, deg=deg).convert()
-        y_fit = p(x)
-
-        trend[col] = pd.Series(y_fit, index=vals.index)
-        coeffs[col] = p.coef
-
-    coeffs_df = pd.DataFrame(coeffs)  # shape: (deg+1, num_columns)
-    return coeffs_df, pd.concat(trend, axis=1)
 
 
 def _year_to_dt(df: pd.DataFrame) -> pd.DataFrame:
@@ -383,12 +323,12 @@ def day_count_chart_data(
 
     data = pd.DataFrame({"# days": predicate.astype(int)})
 
-    data_m = annual_agg(data, "sum")
-    data_long = long_format(data_m).dropna()
+    data_m = tf.annual_agg(data, "sum")
+    data_long = tf.long_format(data_m).dropna()
 
     try:
-        _, trend = polyfit_columns(data_m)
-        trend_long = long_format(trend).dropna()
+        _, trend = tf.polyfit_columns(data_m)
+        trend_long = tf.long_format(trend).dropna()
     except ValueError:
         trend_long = None
 
@@ -465,36 +405,6 @@ def summer_days_chart(
     )
 
 
-def timeline_years_chart_data(
-    df: pd.DataFrame, agg_func, window: int = 1
-) -> tuple[pd.DataFrame, pd.DataFrame | None]:
-    """Prepares long data for a timeline chart with a trendline.
-
-    Both returned data frames use a "year":int index.
-
-    Args:
-        - df: The (possibly multi-column) input data. Must have a datetime index.
-        - agg_func: the aggregation function to use, e.g. "sum", or np.sum.
-    Returns:
-        - The long-format data aggregated from df.
-        - The long-format trendline.
-    """
-
-    data = annual_agg(df, agg_func)
-    if window > 1:
-        # Rolling window for smoothing the data.
-        data = rolling_mean(data, window)
-    data_long = long_format(data).dropna()
-
-    try:
-        _, trend = polyfit_columns(data, deg=1)
-        trend_long = long_format(trend).dropna()
-    except ValueError:
-        trend_long = None
-
-    return data_long, trend_long
-
-
 def sunshine_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
@@ -502,7 +412,7 @@ def sunshine_chart(
 
     sunshine = df[dc.SUNSHINE_DAILY_MINUTES] / 60.0
     data = pd.DataFrame({"sunshine (h)": sunshine})
-    data_long, trend_long = timeline_years_chart_data(data, "mean")
+    data_long, trend_long = tf.timeline_years_chart_data(data, "mean")
 
     title = (
         f"Mean daily hours of sunshine in {period_to_title(period)}, by year".strip()
@@ -523,7 +433,7 @@ def rainiest_day_chart(
     _verify_timeline_data(df, [dc.PRECIP_DAILY_MM], station_abbr, period)
 
     data = pd.DataFrame({"precip (mm)": df[dc.PRECIP_DAILY_MM]})
-    data_long, trend_long = timeline_years_chart_data(data, "max")
+    data_long, trend_long = tf.timeline_years_chart_data(data, "max")
 
     title = f"Max daily amount of rain in {period_to_title(period)}, by year".strip()
     return annual_timeline_chart(
@@ -542,7 +452,7 @@ def max_snow_depth_chart(
     _verify_timeline_data(df, [dc.SNOW_DEPTH_MAN_DAILY_CM], station_abbr, period)
 
     data = pd.DataFrame({"snow depth (cm)": df[dc.SNOW_DEPTH_MAN_DAILY_CM]})
-    data_long, trend_long = timeline_years_chart_data(data, "max")
+    data_long, trend_long = tf.timeline_years_chart_data(data, "max")
 
     title = f"Max. snow depth in {period_to_title(period)}, by year".strip()
     return annual_timeline_chart(
@@ -561,7 +471,7 @@ def max_fresh_snow_chart(
     _verify_timeline_data(df, [dc.FRESH_SNOW_MAN_DAILY_CM], station_abbr, period)
 
     data = pd.DataFrame({"snow depth (cm)": df[dc.FRESH_SNOW_MAN_DAILY_CM]})
-    data_long, trend_long = timeline_years_chart_data(data, "max")
+    data_long, trend_long = tf.timeline_years_chart_data(data, "max")
 
     title = f"Max. daily fresh snow in {period_to_title(period)}, by year".strip()
     return annual_timeline_chart(
@@ -598,23 +508,26 @@ def fresh_snow_days_chart(
     )
 
 
-def temperature_chart(
+def hom_annual_temperature_chart(
     df: pd.DataFrame,
     station_abbr: str,
     period: str = PERIOD_ALL,
     window: int = 1,
 ) -> AltairChart:
-    columns = [dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX]
+
+    columns = [tf.TEMP_MEAN_OF_DAILY_MIN, tf.TEMP_MEAN, tf.TEMP_MEAN_OF_DAILY_MAX]
     _verify_timeline_data(df, columns, station_abbr, period)
 
+    # Rename columns to have user-friendly names.
     data = pd.DataFrame(
         {
-            "temp (min)": df[dc.TEMP_DAILY_MIN],
-            "temp (mean)": df[dc.TEMP_DAILY_MEAN],
-            "temp (max)": df[dc.TEMP_DAILY_MAX],
+            "temp (min)": df[tf.TEMP_MEAN_OF_DAILY_MIN],
+            "temp (mean)": df[tf.TEMP_MEAN],
+            "temp (max)": df[tf.TEMP_MEAN_OF_DAILY_MAX],
         }
     )
-    data_long, trend_long = timeline_years_chart_data(data, "mean", window)
+
+    data_long, trend_long = tf.timeline_years_chart_data(data, "mean", window)
 
     if data_long.empty:
         raise NoDataError(f"No aggregated temperature data for {station_abbr}")
@@ -632,16 +545,21 @@ def temperature_chart(
     )
 
 
-def precipitation_chart(
+def hom_precipitation_chart(
     df: pd.DataFrame,
     station_abbr: str,
     period: str = PERIOD_ALL,
     window: int | None = None,
 ) -> AltairChart:
-    _verify_timeline_data(df, [dc.PRECIP_DAILY_MM], station_abbr, period)
+    _verify_timeline_data(df, [tf.PRECIP_MM], station_abbr, period)
 
-    data = pd.DataFrame({"precip (mm)": df[dc.PRECIP_DAILY_MM]})
-    data_long, trend_long = timeline_years_chart_data(data, "sum", window)
+    data = pd.DataFrame(
+        {
+            "precip (mm)": df[tf.PRECIP_MM],
+        }
+    )
+
+    data_long, trend_long = tf.timeline_years_chart_data(data, "sum", window)
 
     window_info = f"({window}y rolling avg.)" if window else ""
     title = f"Total precipitation in {period_to_title(period)}, by year {window_info}".strip()
@@ -654,7 +572,7 @@ def precipitation_chart(
     )
 
 
-def temperature_deviation_chart(
+def hom_temperature_deviation_chart(
     df: pd.DataFrame,
     station_abbr: str,
     period: str = PERIOD_ALL,
@@ -666,13 +584,13 @@ def temperature_deviation_chart(
         raise NoDataError(f"No temperature data for {station_abbr}")
     _verify_period(df, period)
 
-    data = df[CHART_TYPE_COLUMNS["temperature_deviation"]]
+    data = df[[tf.TEMP_MEAN]]
 
-    data_m = annual_agg(data, "mean")
+    data_m = tf.annual_agg(data, "mean")
     if window and window > 1:
-        data_m = rolling_mean(data_m, window=window)
+        data_m = tf.rolling_mean(data_m, window=window)
 
-    data_long = long_format(data_m).dropna()
+    data_long = tf.long_format(data_m).dropna()
 
     if data_long.empty:
         raise NoDataError(f"No aggregate temperature data for {station_abbr}")
@@ -2000,7 +1918,7 @@ def station_stats(
     )
 
     # pydantic JSON serialization does not like numpy, so lots of conversions here.
-    df_m = annual_agg(df[[dc.TEMP_DAILY_MEAN]], "mean")
+    df_m = tf.annual_agg(df[[dc.TEMP_DAILY_MEAN]], "mean")
     temp_dm = df_m[dc.TEMP_DAILY_MEAN].dropna()
     if not temp_dm.empty:
         result.coldest_year = int(temp_dm.idxmin())
@@ -2008,7 +1926,7 @@ def station_stats(
         result.warmest_year = int(temp_dm.idxmax())
         result.warmest_year_temp = float(temp_dm.max())
 
-    df_s = annual_agg(df[[dc.PRECIP_DAILY_MM]], "sum")
+    df_s = tf.annual_agg(df[[dc.PRECIP_DAILY_MM]], "sum")
     precip = df_s[dc.PRECIP_DAILY_MM].dropna()
     if not precip.empty:
         result.driest_year = int(precip.idxmin())
@@ -2018,7 +1936,7 @@ def station_stats(
 
     if not temp_dm.empty:
         try:
-            coeffs, _ = polyfit_columns(df_m[[dc.TEMP_DAILY_MEAN]], deg=1)
+            coeffs, _ = tf.polyfit_columns(df_m[[dc.TEMP_DAILY_MEAN]], deg=1)
             result.annual_temp_increase = float(coeffs[dc.TEMP_DAILY_MEAN].iloc[1])
         except ValueError:
             # Could not fit a curve

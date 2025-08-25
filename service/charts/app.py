@@ -20,6 +20,7 @@ from service.charts import models
 from service.charts.base.errors import NoDataError, StationNotFoundError
 from service.charts.calc import stats
 from service.charts.charts import vega
+from service.charts.charts import transform as tf
 from service.charts.db import constants as dc
 from service.charts.db.dbconn import PgConnectionInfo
 
@@ -98,9 +99,18 @@ app = FastAPI(lifespan=lifespan)
 
 
 def _period_default(period: str | None) -> str:
-    if period:
-        return period
-    return charts.PERIOD_ALL
+    """Checks that the given period is valid (or None) and returns it or the default period.
+
+    Raises:
+        HTTPException (400 Bad Request) if the period is invalid.
+    """
+    if period is None:
+        return charts.PERIOD_ALL
+
+    if period not in charts.VALID_PERIODS:
+        _bad_request(f"Invalid period: {period}")
+
+    return period
 
 
 def _bad_request(detail: str) -> HTTPException:
@@ -283,22 +293,7 @@ async def get_annual_chart(
                 to_date=to_date,
             )
 
-    if chart_type == "temperature":
-        df = _read_daily([dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX])
-        chart = charts.temperature_chart(
-            df, station_abbr=station_abbr, period=period, window=window_int
-        )
-    elif chart_type == "precipitation":
-        df = _read_daily([dc.PRECIP_DAILY_MM])
-        chart = charts.precipitation_chart(
-            df, station_abbr=station_abbr, period=period, window=window_int
-        )
-    elif chart_type == "temperature_deviation":
-        df = _read_daily([dc.TEMP_DAILY_MEAN])
-        chart = charts.temperature_deviation_chart(
-            df, station_abbr=station_abbr, period=period, window=window_int
-        )
-    elif chart_type == "raindays":
+    if chart_type == "raindays":
         df = _read_daily([dc.PRECIP_DAILY_MM])
         chart = charts.raindays_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "sunshine":
@@ -336,6 +331,90 @@ async def get_annual_chart(
         )
     else:
         raise ValueError(f"Invalid chart type: {chart_type}")
+
+    return _vega_chart(request, {chart_type: chart})
+
+
+@app.get("/stations/{station_abbr}/charts/trends/{chart_type}")
+async def get_trends_chart(
+    request: Request,
+    station_abbr: str,
+    chart_type: str,
+    period: str | None = None,
+    from_year: str | None = None,
+    to_year: str | None = None,
+    window: str | None = None,
+):
+    """Endpoint for annual trends based on homogenous data."""
+    period = _period_default(period)
+
+    station_abbr = station_abbr.upper()
+    from_date = _date_from_year(from_year)
+    to_date = _date_from_year(to_year, dy=1)
+
+    window_int = int(window) if window and window.isdigit() else 1
+
+    def _read_hom(columns_m, columns_y):
+        with app.state.engine.begin() as conn:
+            if period == charts.PERIOD_ALL:
+                df = db.read_annual_hom_measurements(
+                    conn,
+                    station_abbr,
+                    columns=columns_y,
+                    from_date=from_date,
+                    to_date=to_date,
+                )
+            else:
+                df = db.read_monthly_hom_measurements(
+                    conn,
+                    station_abbr,
+                    columns=columns_m,
+                    from_date=from_date,
+                    to_date=to_date,
+                    period=period,
+                )
+        return tf.timeless_column_names(df)
+
+    if chart_type == "temperature":
+        df = _read_hom(
+            [
+                dc.TEMP_HOM_MONTHLY_MEAN_OF_DAILY_MIN,
+                dc.TEMP_HOM_MONTHLY_MEAN,
+                dc.TEMP_HOM_MONTHLY_MEAN_OF_DAILY_MAX,
+            ],
+            [
+                dc.TEMP_HOM_ANNUAL_MEAN_OF_DAILY_MIN,
+                dc.TEMP_HOM_ANNUAL_MEAN,
+                dc.TEMP_HOM_ANNUAL_MEAN_OF_DAILY_MAX,
+            ],
+        )
+        chart = charts.hom_annual_temperature_chart(
+            tf.timeless_column_names(df),
+            station_abbr=station_abbr,
+            period=period,
+            window=window_int,
+        )
+    elif chart_type == "temperature_deviation":
+        df = _read_hom(
+            [dc.TEMP_HOM_MONTHLY_MEAN],
+            [dc.TEMP_HOM_ANNUAL_MEAN],
+        )
+        chart = charts.hom_temperature_deviation_chart(
+            df, station_abbr=station_abbr, period=period, window=window_int
+        )
+    elif chart_type == "precipitation":
+        df = _read_hom(
+            [dc.PRECIP_HOM_MONTHLY_MM],
+            [dc.PRECIP_HOM_ANNUAL_MM],
+        )
+        chart = charts.hom_precipitation_chart(
+            df,
+            station_abbr=station_abbr,
+            period=period,
+            window=window_int,
+        )
+    else:
+        raise _bad_request(f"Invalid chart type: {chart_type}")
 
     return _vega_chart(request, {chart_type: chart})
 
