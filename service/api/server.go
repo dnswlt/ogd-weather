@@ -206,6 +206,12 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 	// Weather stations (dropdown)
 	u := *s.chartServiceBaseURL
 	u.Path = path.Join(u.Path, "/stations")
+	// Request climate stations only for pages that show climate data.
+	if strings.HasSuffix(r.URL.Path, "/trends") {
+		stationsQ := url.Values{}
+		stationsQ.Add("station_type", "climate")
+		u.RawQuery = stationsQ.Encode()
+	}
 	stations, err := fetchBackendData[types.StationsResponse](r.Context(), s, u.String())
 	if err != nil {
 		s.backendError(w, err, "Failed to fetch stations from backend")
@@ -213,7 +219,7 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 	}
 
 	nav := ui.NewNavBar(
-		ui.NavItem("/ui/timeline", "Trends").Params("station", "from_year", "to_year", "period", "window"),
+		ui.NavItem("/ui/trends", "Trends").Params("station", "from_year", "to_year", "period", "window"),
 		ui.NavItem("/ui/sun_rain", "Sun & Rain").Params("station", "from_year", "to_year", "period"),
 		ui.NavItem("/ui/day", "Day").Params("station", "date"),
 		ui.NavItem("/ui/year", "Year").Params("station", "year"),
@@ -562,10 +568,10 @@ func (s *Server) Serve() error {
 
 	// Root UI page
 	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/ui/timeline", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, "/ui/trends", http.StatusTemporaryRedirect)
 	})
-	mux.HandleFunc("GET /ui/timeline", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "timeline.html")
+	mux.HandleFunc("GET /ui/trends", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "trends.html")
 	})
 	mux.HandleFunc("GET /ui/day", func(w http.ResponseWriter, r *http.Request) {
 		// Redirect to 2daysago if date= query param is missing.

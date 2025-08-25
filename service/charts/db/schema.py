@@ -386,12 +386,20 @@ sa_table_x_station_data_summary = sa.Table(
     sa.Column("station_height_masl", sa.REAL),
     sa.Column("station_coordinates_wgs84_lat", sa.REAL),
     sa.Column("station_coordinates_wgs84_lon", sa.REAL),
+    # Data summaries from the smn daily table:
     sa.Column("tre200d0_count", sa.Integer, nullable=False),
     sa.Column("tre200d0_min_date", sa.Text),
     sa.Column("tre200d0_max_date", sa.Text),
     sa.Column("rre150d0_count", sa.Integer, nullable=False),
     sa.Column("rre150d0_min_date", sa.Text),
     sa.Column("rre150d0_max_date", sa.Text),
+    # Data summaries from the nbcn (homogenous data) monthly table:
+    sa.Column("ths200m0_count", sa.Integer, nullable=False),
+    sa.Column("ths200m0_min_date", sa.Text),
+    sa.Column("ths200m0_max_date", sa.Text),
+    sa.Column("rhs150m0_count", sa.Integer, nullable=False),
+    sa.Column("rhs150m0_min_date", sa.Text),
+    sa.Column("rhs150m0_max_date", sa.Text),
 )
 
 sa_table_x_nearby_stations = sa.Table(
@@ -468,7 +476,9 @@ var_summary_stats_month = VarSummaryStatsTable(
 )
 
 
-def validate_schema(engine: sa.Engine, allow_missing_tables=True):
+def validate_schema(
+    engine: sa.Engine, allow_missing_tables=True, ignore_derived_tables=True
+):
     """
     Validates that the database schema matches the SQLAlchemy MetaData.
 
@@ -476,6 +486,8 @@ def validate_schema(engine: sa.Engine, allow_missing_tables=True):
         engine: the sqlalchemy engine to use
         allow_missing: if True, do not fail if a table is missing in the database,
             but present in the schema (e.g., if it will be created during an update).
+        ignore_derived_tables: if True, derived ("x_*") tables are not checked.
+            Derived tables are typically regenerated, so there is no need to validate them.
 
     Raises:
         SchemaValidationError: If there is a mismatch.
@@ -499,6 +511,8 @@ def validate_schema(engine: sa.Engine, allow_missing_tables=True):
     for table_name, table in metadata.tables.items():
         if table_name in missing_tables:
             continue
+        if ignore_derived_tables and table_name.startswith("x_"):
+            continue
 
         db_columns_info = inspector.get_columns(table_name)
         db_columns = {col["name"]: col for col in db_columns_info}
@@ -507,7 +521,7 @@ def validate_schema(engine: sa.Engine, allow_missing_tables=True):
             if col_name not in db_columns:
                 raise SchemaValidationError(
                     f"Column '{col_name}' in table '{table_name}' is defined "
-                    "in the schema but not in the database."
+                    "in the schema but not in the database"
                 )
 
             # Compare column types (this is the trickiest part)

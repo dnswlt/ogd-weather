@@ -53,6 +53,12 @@ class TestDbStations(TestDb):
                 "rre150d0_max_date": "2020-12-31",
                 "tre200d0_count": 100,
                 "rre150d0_count": 100,
+                "ths200m0_min_date": "2000-01-01",
+                "ths200m0_max_date": "2020-12-31",
+                "rhs150m0_min_date": "2000-01-01",
+                "rhs150m0_max_date": "2020-12-31",
+                "ths200m0_count": 100,
+                "rhs150m0_count": 100,
                 "station_exposition_de": "Ebene",
                 "station_exposition_fr": "Plaine",
                 "station_exposition_it": "Pianura",
@@ -68,6 +74,12 @@ class TestDbStations(TestDb):
                 "rre150d0_max_date": None,
                 "tre200d0_count": 50,
                 "rre150d0_count": 0,
+                "ths200m0_min_date": None,
+                "ths200m0_max_date": None,
+                "rhs150m0_min_date": None,
+                "rhs150m0_max_date": None,
+                "ths200m0_count": 0,
+                "rhs150m0_count": 0,
                 "station_exposition_de": "Ebene",
                 "station_exposition_fr": None,
                 "station_exposition_it": None,
@@ -83,6 +95,12 @@ class TestDbStations(TestDb):
                 "rre150d0_max_date": "2022-12-31",
                 "tre200d0_count": 0,
                 "rre150d0_count": 50,
+                "ths200m0_min_date": None,
+                "ths200m0_max_date": None,
+                "rhs150m0_min_date": "1980-01-01",
+                "rhs150m0_max_date": "2022-12-31",
+                "ths200m0_count": 0,
+                "rhs150m0_count": 50,
                 "station_exposition_de": "Ebene",
                 "station_exposition_fr": "Plaine",
                 "station_exposition_it": "Pianura",
@@ -98,6 +116,12 @@ class TestDbStations(TestDb):
                 "rre150d0_max_date": None,
                 "tre200d0_count": 0,
                 "rre150d0_count": 0,
+                "ths200m0_min_date": None,
+                "ths200m0_max_date": None,
+                "rhs150m0_min_date": None,
+                "rhs150m0_max_date": None,
+                "ths200m0_count": 0,
+                "rhs150m0_count": 0,
                 "station_exposition_de": None,
                 "station_exposition_fr": None,
                 "station_exposition_it": None,
@@ -165,9 +189,9 @@ class TestDbStations(TestDb):
 
     def test_read_stations_no_filters(self):
         stations = db.read_stations(self.conn)
-        # Default exclude_empty=True, so BAS (no precip) and BER (no temp) and LUG (no data) are excluded
-        self.assertEqual(len(stations), 1)  # Only ABO has both temp and precip data
-        self.assertEqual(stations[0].abbr, "ABO")
+        # Default exclude_empty=True, so LUG (no precip nor temp) is excluded
+        self.assertEqual(len(stations), 3)
+        self.assertEqual(set(s.abbr for s in stations), set(["ABO", "BAS", "BER"]))
 
     def test_read_stations_localized_string(self):
         stations = db.read_stations(self.conn, exclude_empty=False)
@@ -189,11 +213,6 @@ class TestDbStations(TestDb):
         self.assertEqual(len(stations), 1)
         self.assertEqual(stations[0].abbr, "ABO")
 
-        stations = db.read_stations(self.conn, cantons=["BL", "BE"])
-        self.assertEqual(
-            len(stations), 0
-        )  # BAS (no precip) and BER (no temp) are excluded by default
-
     def test_read_stations_canton_and_exclude_empty_false(self):
         stations = db.read_stations(
             self.conn, cantons=["BL", "BE"], exclude_empty=False
@@ -202,12 +221,11 @@ class TestDbStations(TestDb):
         self.assertEqual(stations[0].abbr, "BAS")
         self.assertEqual(stations[1].abbr, "BER")
 
-    def test_read_stations_canton_and_exclude_empty_true(self):
-        stations = db.read_stations(
-            self.conn, cantons=["GR", "BL", "BE"], exclude_empty=True
-        )
-        self.assertEqual(len(stations), 1)  # Only ABO has both temp and precip data
-        self.assertEqual(stations[0].abbr, "ABO")
+    def test_read_stations_climate(self):
+        stations = db.read_stations(self.conn, station_type="climate")
+        self.assertEqual(len(stations), 2)
+        # Only ABO and BER have climate (homogenous) data.
+        self.assertEqual(set(s.abbr for s in stations), set(["ABO", "BER"]))
 
 
 class TestDbStationVarAvailability(TestDb):

@@ -817,7 +817,14 @@ def recreate_station_data_summary(engine: sa.Engine) -> None:
                 h.tre200d0_max_date,
                 COALESCE(h.rre150d0_count, 0),
                 h.rre150d0_min_date,
-                h.rre150d0_max_date
+                h.rre150d0_max_date,
+
+                COALESCE(n.ths200m0_count, 0),
+                n.ths200m0_min_date,
+                n.ths200m0_max_date,
+                COALESCE(n.rhs150m0_count, 0),
+                n.rhs150m0_min_date,
+                n.rhs150m0_max_date
 
             FROM {ds.sa_table_smn_meta_stations.name} AS m
             LEFT JOIN (
@@ -832,7 +839,20 @@ def recreate_station_data_summary(engine: sa.Engine) -> None:
                 FROM {ds.TABLE_DAILY_MEASUREMENTS.name}
                 GROUP BY station_abbr
             ) AS h
-            ON m.station_abbr = h.station_abbr;
+            ON m.station_abbr = h.station_abbr
+            LEFT JOIN (
+                SELECT
+                    station_abbr,
+                    SUM(CASE WHEN ths200m0 IS NOT NULL THEN 1 END) AS ths200m0_count,
+                    MIN(CASE WHEN ths200m0 IS NOT NULL THEN reference_timestamp END) AS ths200m0_min_date,
+                    MAX(CASE WHEN ths200m0 IS NOT NULL THEN reference_timestamp END) AS ths200m0_max_date,
+                    SUM(CASE WHEN rhs150m0 IS NOT NULL THEN 1 END) AS rhs150m0_count,
+                    MIN(CASE WHEN rhs150m0 IS NOT NULL THEN reference_timestamp END) AS rhs150m0_min_date,
+                    MAX(CASE WHEN rhs150m0 IS NOT NULL THEN reference_timestamp END) AS rhs150m0_max_date
+                FROM {ds.TABLE_MONTHLY_HOM_MEASUREMENTS.name}
+                GROUP BY station_abbr
+            ) AS n
+            ON m.station_abbr = n.station_abbr
             """
             )
         )
@@ -906,6 +926,7 @@ def read_station(conn: sa.Connection, station_abbr: str) -> models.Station:
 def read_stations(
     conn: sa.Connection,
     cantons: list[str] | None = None,
+    station_type: str | None = None,
     exclude_empty: bool = True,
 ) -> list[models.Station]:
     """Returns all stations matching the given criteria."""
@@ -938,8 +959,10 @@ def read_stations(
         bindparams.append(sa.bindparam("cantons", expanding=True))
 
     # Exclude stations with no data
+    if station_type == "climate":
+        filters.append("(ths200m0_count > 0 OR rhs150m0_count > 0)")
     if exclude_empty:
-        filters.append("(tre200d0_count > 0 AND rre150d0_count > 0)")
+        filters.append("(tre200d0_count > 0 OR rre150d0_count > 0)")
 
     # Combine filters
     sql = base_sql

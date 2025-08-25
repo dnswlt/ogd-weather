@@ -774,13 +774,19 @@ async def get_info(
 
 
 @app.get("/stations")
-async def list_stations(cantons: str | None = None, response: Response = None):
+async def list_stations(
+    response: Response,
+    cantons: str | None = None,
+    station_type: str | None = None,
+):
     cantons_list = None
     if cantons:
         cantons_list = cantons.split(",")
 
     with app.state.engine.begin() as conn:
-        stations = db.read_stations(conn, cantons=cantons_list, exclude_empty=True)
+        stations = db.read_stations(
+            conn, cantons=cantons_list, station_type=station_type, exclude_empty=True
+        )
     # Stations don't change often, use 1 day TTL for caching.
     response.headers["Cache-Control"] = "public, max-age=86400"
     return {
