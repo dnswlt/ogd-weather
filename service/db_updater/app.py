@@ -1,6 +1,8 @@
 import argparse
+import json
 import logging
 import os
+import sys
 import sqlalchemy as sa
 
 from service.charts.base import logging_config as _  # configure logging
@@ -78,10 +80,16 @@ def main():
 
     args = parser.parse_args()
 
+    logger.info("Running db_updater with arguments: %s", json.dumps(sys.argv))
+
+    force_update: bool = args.force_update
+    force_recreate: bool = args.force_recreate
+    recreate_views: bool = args.recreate_views
+
     if args.base_dir:
-        base_dir = args.base_dir
+        base_dir: str = args.base_dir
     elif "OGD_BASE_DIR" in os.environ:
-        base_dir = os.environ["OGD_BASE_DIR"]
+        base_dir: str = os.environ["OGD_BASE_DIR"]
     else:
         parser.error("--base-dir is required if $OGD_BASE_DIR is not set.")
 
@@ -115,24 +123,22 @@ def main():
 
     logger.info("Using DB engine '%s'", engine.name)
 
-    try:
-        ds.validate_schema(engine=engine, allow_missing_tables=True)
-        logger.info("Successfully validated the DB schema.")
-    except SchemaValidationError as e:
-        logger.error(
-            "Schema mismatch detected: %s."
-            " Consider running with --force-recreate. "
-            " Note that this will DROP ALL DATA from the database.",
-            str(e),
-        )
-        return
+    if not force_recreate:
+        try:
+            ds.validate_schema(engine=engine, allow_missing_tables=True)
+            logger.info("Successfully validated the DB schema.")
+        except SchemaValidationError as e:
+            logger.error(
+                "Schema mismatch detected: %s."
+                " Consider running with --force-recreate. "
+                " Note that this will DROP ALL DATA from the database.",
+                str(e),
+            )
+            return
 
-    if args.recreate_views:
+    if recreate_views:
         ogd.run_recreate_views(engine)
         return
-
-    force_update: bool = args.force_update
-    force_recreate: bool = args.force_recreate
 
     # Drop old data if requested.
     if force_recreate:

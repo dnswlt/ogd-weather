@@ -99,5 +99,8 @@ aws-roll: ## Usage: make roll SERVICE=weather-api-service
 aws-update-db:
 	bash aws/scripts/run_db_updater.sh
 
+aws-recreate-db:
+	bash aws/scripts/run_db_updater_overrides.sh --force-recreate
+
 aws-terraform-apply:
 	cd aws/terraform && terraform apply
