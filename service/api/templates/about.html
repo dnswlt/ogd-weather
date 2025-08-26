@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {{ template "head.html" }}
+</head>
+
+<body class="min-h-screen bg-gray-50 p-4" data-page="about">
+    <!-- Navbar -->
+    {{template "nav.html" .}}
+
+    <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
+        <h1 class="text-2xl font-semibold text-center">About</h1>
+
+        <h2 class="text-lg font-medium text-gray-800">About this site</h2>
+
+        <p class="text-sm text-gray-600 leading-relaxed">
+            This site is a personal hobby project dedicated to displaying historical weather data for Switzerland. My
+            goal is to present the data in various forms for you to explore. Enjoy looking around!
+        </p>
+        <p class="text-sm text-gray-600 leading-relaxed">
+            <b>Disclaimer:</b> While I strive to present all measurement data accurately,
+            I take no responsibility for the correctness or use of the data shown.
+        </p>
+
+
+        <h2 class="text-lg font-medium text-gray-800">Source acknowledgements</h2>
+
+        <p class="text-sm text-gray-600 leading-relaxed">
+            The weather data shown on this site is based on the excellent
+            <a class="text-blue-600 hover:underline" href="https://opendatadocs.meteoswiss.ch/" target="_blank">
+                MeteoSwiss Open Data</a>. However,
+            <b>MeteoSwiss is not affiliated with this site and does not endorse it in any way.</b>
+            I am solely responsible for any potential errors in how the data is displayed.
+        </p>
+        <p class="text-sm text-gray-600 leading-relaxed">
+            <em>Quelle: MeteoSchweiz; Source: MétéoSuisse; Fonte: MeteoSvizzera; Source: MeteoSwiss</em>.
+        </p>
+
+        <h2 class="text-lg font-medium text-gray-800">Contact</h2>
+
+        <p class="text-sm text-gray-600 leading-relaxed">
+            If you have any questions, comments, or ideas for improvements, feel free to reach out
+            via email at
+            <a class="text-blue-600 hover:underline"
+                href="mailto:weather@hexz.me?subject=Question%2Fcomment%20about%20weather.hexz.me">
+                weather@hexz.me</a>.
+        </p>
+
+    </main>
+
+
+    <footer>
+        {{template "disclaimer.html" .}}
+    </footer>
+
+    <script type="module" src='{{assetHash "/static/dist/main.js"}}'></script>
+
+</body>
+
+</html>

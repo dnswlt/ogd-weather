@@ -224,6 +224,7 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 		ui.NavItem("/ui/year", "Year").Params("station", "year"),
 		ui.NavItem("/ui/day", "Day").Params("station", "date"),
 		ui.NavItem("/ui/map", "Map").Params("station"),
+		ui.NavItem("/ui/about", "About"),
 	).SetActive(r.URL.Path).SetParams(q)
 
 	templateParams := map[string]any{
@@ -605,6 +606,9 @@ func (s *Server) Serve() error {
 		s.serveHTMLPage(w, r, "map.html", map[string]any{
 			"MapColors": ui.MapColors(),
 		})
+	})
+	mux.HandleFunc("GET /ui/about", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "about.html", nil)
 	})
 	mux.Handle("DELETE /admin/cache/responses", s.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		s.cache.Purge()

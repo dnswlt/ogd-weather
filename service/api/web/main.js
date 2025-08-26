@@ -5,6 +5,7 @@ import {
     rememberAndRestoreQueryParams,
     registerSearchBarHandler,
     registerTablistHandler,
+    updateNavbarLinks,
 } from './helpers.js';
 
 import { initMapPage } from './map.js';
@@ -21,6 +22,8 @@ function initPage() {
             rememberAndRestoreQueryParams(form);
             htmx.trigger(form, 'change');
         }
+        // On page load: update navbar using current + saved state
+        updateNavbarLinks(new URLSearchParams(window.location.search));
 
         // Add handlers for postprocessing after htmx swaps.
         document.body.addEventListener('htmx:afterSwap', (evt) => {
@@ -116,6 +119,9 @@ switch (page) {
         break;
     case 'map':
         initMapPage();
+        break;
+    case 'about':
+        initPage();
         break;
     default:
         console.error(`Unhandled page in init: ${page}`);

@@ -3,6 +3,7 @@ import {
     rememberAndRestoreQueryParams,
     registerTablistHandler,
     registerSearchBarHandler,
+    updateNavbarLinks,
 } from './helpers.js';
 
 function adjustDate(deltaDays) {
@@ -45,6 +46,8 @@ export function initDayPage() {
             rememberAndRestoreQueryParams(form);
             htmx.trigger(form, 'change');
         }
+        // On page load: update navbar using current + saved state
+        updateNavbarLinks(new URLSearchParams(window.location.search));
 
         // Listen for prev/next button clicks.
         document.getElementById("prev-date")?.addEventListener("click", () => adjustDate(-1));

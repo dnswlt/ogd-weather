@@ -2,7 +2,8 @@
 import {
     rememberAndRestoreQueryParams,
     registerTablistHandler,
-    registerSearchBarHandler
+    registerSearchBarHandler,
+    updateNavbarLinks,
 } from './helpers.js';
 
 function adjustYear(delta) {
@@ -46,6 +47,8 @@ export function initYearPage() {
             rememberAndRestoreQueryParams(form);
             htmx.trigger(form, 'change');
         }
+        // On page load: update navbar using current + saved state
+        updateNavbarLinks(new URLSearchParams(window.location.search));
 
         // Listen for prev/next button clicks.
         document.getElementById("prev-year")?.addEventListener("click", () => adjustYear(-1));

@@ -35,7 +35,6 @@ export function htmxSwapStationSummaryContainer(container) {
 
 export function rememberAndRestoreQueryParams(form) {
     const path = window.location.pathname;
-    const currentParams = new URLSearchParams(window.location.search);
 
     // On form change: update sessionStorage, URL, and navbar.
     form.addEventListener('change', () => {
@@ -56,8 +55,6 @@ export function rememberAndRestoreQueryParams(form) {
         updateNavbarLinks(params);
     });
 
-    // On page load: update navbar using current + saved state
-    updateNavbarLinks(currentParams);
 }
 
 

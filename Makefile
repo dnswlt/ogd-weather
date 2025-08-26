@@ -19,7 +19,7 @@ ECR_REGISTRY = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
 CLUSTER = weather-cluster
 
-.PHONY: build rebuild up down restart update-db recreate-views logs clean
+.PHONY: npm-build build rebuild up down restart update-db recreate-views logs clean
 .PHONY: aws-login aws-build aws-push aws-redeploy aws-roll aws-update-db
 
 ## Local testing =====================================================
@@ -48,6 +48,9 @@ test-integration:
 
 
 ## Local Dev =========================================================
+
+npm-build:
+	cd service/api/web && npm run build
 
 build: ## Build all local images
 	$(COMPOSE) build
