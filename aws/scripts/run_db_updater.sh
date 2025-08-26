@@ -6,8 +6,6 @@ set -euo pipefail
 # cd to the terraform directory for "terraform output" calls.
 cd $(dirname $0)/../terraform
 
-# Runs the db-updater task with --bootstrap-postgres
-
 echo "Collecting terraform outputs."
 
 SUBNET_IDS=$(terraform output -json ecs_subnet_ids)
@@ -31,6 +29,7 @@ CLUSTER=$(terraform output -raw ecs_cluster_arn)
 echo "Starting task $TASK_DEF in cluster $CLUSTER."
 
 aws ecs run-task \
+  --no-cli-pager \
   --cluster "$CLUSTER" \
   --task-definition "$TASK_DEF" \
   --launch-type FARGATE \

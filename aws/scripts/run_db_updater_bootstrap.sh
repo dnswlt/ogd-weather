@@ -8,18 +8,6 @@ cd $(dirname $0)/../terraform
 
 echo "Collecting terraform outputs."
 
-BOOTSTRAP_OVERRIDES=$(cat <<'JSON'
-{
-  "containerOverrides": [
-    {
-      "name": "weather-db-updater",
-      "command": ["--bootstrap-postgres"]
-    }
-  ]
-}
-JSON
-)
-
 SUBNET_IDS=$(terraform output -json ecs_subnet_ids)
 SECURITY_GROUP=$(terraform output -json security_group_ecs_tasks)
 
@@ -38,9 +26,22 @@ TASK_DEF=$(terraform output -raw weather_db_updater_task_def_arn)
 
 CLUSTER=$(terraform output -raw ecs_cluster_arn)
 
+BOOTSTRAP_OVERRIDES=$(cat <<'JSON'
+{
+  "containerOverrides": [
+    {
+      "name": "weather-db-updater",
+      "command": ["--bootstrap-postgres"]
+    }
+  ]
+}
+JSON
+)
+
 echo "Starting task $TASK_DEF in cluster $CLUSTER."
 
 aws ecs run-task \
+  --no-cli-pager \
   --cluster "$CLUSTER" \
   --task-definition "$TASK_DEF" \
   --launch-type FARGATE \
