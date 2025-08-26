@@ -19,6 +19,7 @@ from sqlalchemy.dialects import postgresql
 
 from service.charts import geo
 from service.charts import models
+from service.charts.base import constants as bc
 from service.charts.base.errors import StationNotFoundError
 from service.charts.models import LocalizedString
 
@@ -975,7 +976,7 @@ def read_stations(
         bindparams.append(sa.bindparam("cantons", expanding=True))
 
     # Exclude stations with no data
-    if station_type == "climate":
+    if station_type == bc.STATION_TYPE_CLIMATE:
         filters.append("(ths200m0_count > 0 OR rhs150m0_count > 0)")
     if exclude_empty:
         filters.append("(tre200d0_count > 0 OR rre150d0_count > 0)")

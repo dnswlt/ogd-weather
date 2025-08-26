@@ -847,9 +847,6 @@ def monthly_bar_chart(
     title: str,
 ):
 
-    df = df.reset_index(names="month_num")
-    df["month_name"] = df["month_num"].map(lambda k: calendar.month_abbr[k])
-
     return (
         alt.Chart(df)
         .mark_bar(width={"band": 0.5})
@@ -983,60 +980,87 @@ def _localize_tz(data: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Series:
 
 
 def monthly_raindays_bar_chart(
-    df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
+    df: pd.DataFrame, df_ref: pd.DataFrame | None, station_abbr: str, year: int
 ) -> AltairChart:
 
     ser = df[dc.PRECIP_DAILY_MM]
     rainday = (ser >= 1.0).astype(float)
 
     # Sum daily precipitation for each month.
-    months = rainday.groupby(rainday.index.month).agg([("value", "sum")])
-    months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
+    data = rainday.groupby(rainday.index.month).agg([("value", "sum")])
+    data["month_name"] = data.index.map(lambda k: calendar.month_abbr[k])
 
-    # Get percentiles for monthly precipitation from reference data.
-    ref_stats = df_ref.loc[(station_abbr, dc.DX_RAIN_DAYS_ANNUAL_COUNT)][
-        ["p25_value", "mean_value", "p75_value"]
-    ]
-    # Join, keep data only for months where `months` has data (left join).
-    # Conform the index to the ("%02d") format used in ref_stats.
-    join_key = months.index.map(dc.ts_month)
-    data = months.join(ref_stats, on=join_key, how="left")
+    if df_ref is not None:
+        # Get percentiles for monthly precipitation from reference data.
+        ref_stats = df_ref.loc[(station_abbr, dc.DX_RAIN_DAYS_ANNUAL_COUNT)][
+            ["p25_value", "mean_value", "p75_value"]
+        ]
+        # Join, keep data only for months where `months` has data (left join).
+        # Conform the index to the ("%02d") format used in ref_stats.
+        join_key = data.index.map(dc.ts_month)
+        data = data.join(ref_stats, on=join_key, how="left")
 
     data = data.reset_index(names="month_num")
+
+    title = f"Number of rain days (≥ 1 mm precipitation) per month in {year}"
+    y_title = "# days"
+    color = _C["SkyBlue"]
+
+    if df_ref is None:
+        return monthly_bar_chart(
+            data,
+            color=color,
+            y_title=y_title,
+            title=title,
+        )
 
     return bar_chart_with_reference(
         data,
         x_col="month_name",
         y_col="value",
         x_title="Month",
-        y_title="# days",
+        y_title=y_title,
         sort_field="month_num",
-        color=_C["SkyBlue"],
-        title=f"Number of rain days (≥ 1 mm precipitation) per month in {year}",
+        color=color,
+        title=title,
     )
 
 
 def monthly_sunny_days_bar_chart(
-    df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
+    df: pd.DataFrame, df_ref: pd.DataFrame | None, station_abbr: str, year: int
 ) -> AltairChart:
 
     ser = df[dc.SUNSHINE_DAILY_PCT_OF_MAX]
     sunny_day = (ser >= 80).astype(float)
 
     # Sum daily precipitation for each month.
-    months = sunny_day.groupby(sunny_day.index.month).agg([("value", "sum")])
-    months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
+    data = sunny_day.groupby(sunny_day.index.month).agg([("value", "sum")])
+    data["month_name"] = data.index.map(lambda k: calendar.month_abbr[k])
 
-    # Get percentiles for monthly precipitation from reference data.
-    ref_stats = df_ref.loc[(station_abbr, dc.DX_SUNNY_DAYS_ANNUAL_COUNT)][
-        ["p25_value", "mean_value", "p75_value"]
-    ]
-    # Join, keep data only for months where `months` has data (left join).
-    # Conform the index to the ("%02d") format used in ref_stats.
-    join_key = months.index.map(dc.ts_month)
-    data = months.join(ref_stats, on=join_key, how="left")
+    if df_ref is not None:
+        # Get percentiles for monthly precipitation from reference data.
+        ref_stats = df_ref.loc[(station_abbr, dc.DX_SUNNY_DAYS_ANNUAL_COUNT)][
+            ["p25_value", "mean_value", "p75_value"]
+        ]
+        # Join, keep data only for months where `months` has data (left join).
+        # Conform the join key to the ("%02d") format used in ref_stats.
+        join_key = data.index.map(dc.ts_month)
+        data = data.join(ref_stats, on=join_key, how="left")
+
+    title = (
+        f"Number of sunny days (≥ 80% rel. sunshine duration) per month in {year}",
+    )
+    color = _C["Apricot"]
 
     data = data.reset_index(names="month_num")
+
+    if df_ref is None:
+        return monthly_bar_chart(
+            data,
+            color=color,
+            y_title="# days",
+            title=title,
+        )
 
     return bar_chart_with_reference(
         data,
@@ -1045,40 +1069,54 @@ def monthly_sunny_days_bar_chart(
         x_title="Month",
         y_title="# days",
         sort_field="month_num",
-        color=_C["Apricot"],
-        title=f"Number of sunny days (≥ 80% rel. sunshine duration) per month in {year}",
+        color=color,
+        title=title,
     )
 
 
 def monthly_precipitation_bar_chart(
-    df: pd.DataFrame, df_ref: pd.DataFrame, station_abbr: str, year: int
+    df: pd.DataFrame, df_ref: pd.DataFrame | None, station_abbr: str, year: int
 ) -> AltairChart:
 
     ser = df[dc.PRECIP_DAILY_MM]
 
     # Sum daily precipitation for each month.
-    months = ser.groupby(ser.index.month).agg([("value", "sum")])
-    months["month_name"] = months.index.map(lambda k: calendar.month_abbr[k])
+    data = ser.groupby(ser.index.month).agg([("value", "sum")])
+    data["month_name"] = data.index.map(lambda k: calendar.month_abbr[k])
 
-    # Get percentiles for monthly precipitation from reference data.
-    ref_stats = df_ref.loc[(station_abbr, dc.DX_PRECIP_TOTAL)][
-        ["p25_value", "mean_value", "p75_value"]
-    ]
-    # Join, keep data only for months where `months` has data (left join).
-    # Conform the index to the ("%02d") format used in ref_stats.
-    join_key = months.index.map(dc.ts_month)
-    data = months.join(ref_stats, on=join_key, how="left")
+    if df_ref is not None:
+        # Get percentiles for monthly precipitation from reference data.
+        ref_stats = df_ref.loc[(station_abbr, dc.DX_PRECIP_TOTAL)][
+            ["p25_value", "mean_value", "p75_value"]
+        ]
+        # Join, keep data only for months where `months` has data (left join).
+        # Conform the index to the ("%02d") format used in ref_stats.
+        join_key = data.index.map(dc.ts_month)
+        data = data.join(ref_stats, on=join_key, how="left")
 
     data = data.reset_index(names="month_num")
+
+    title = f"Monthly precipitation in {year}"
+    y_title = "Total precipitation (mm)"
+    color = _C["SteelBlue"]
+
+    if df_ref is None:
+        return monthly_bar_chart(
+            data,
+            color=color,
+            y_title=y_title,
+            title=title,
+        )
 
     return bar_chart_with_reference(
         data,
         x_col="month_name",
         y_col="value",
         x_title="Month",
-        y_title="Total precipitation (mm)",
+        y_title=y_title,
+        color=color,
         sort_field="month_num",
-        title=f"Monthly precipitation in {year}",
+        title=title,
     )
 
 

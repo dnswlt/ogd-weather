@@ -3,6 +3,7 @@ import pandas as pd
 from pyproj import Geod
 
 from service.charts import models
+from service.charts.base import constants as bc
 
 from . import prefix
 
@@ -146,14 +147,28 @@ class StationLookup:
         self._stations = stations
 
     def find_nearest(
-        self, place: models.Place, limit: int = 3, max_distance_km: float = 100
-    ) -> list[models.PlaceNearestStations]:
-        """Returns the limit stations closest to the given (lon, lat) coordinates."""
+        self,
+        place: models.Place,
+        limit: int = 3,
+        max_distance_km: float = 100,
+        station_type: str | None = None,
+    ) -> models.PlaceNearestStations:
+        """Returns the limit stations closest to the given (lon, lat) coordinates.
+
+        Args:
+            place: the place to find stations for.
+            limit: the maximum number of results to return.
+            max_distance_km: the maximum distance in kilometers between the place and the station.
+            station_type: if bc.STATION_TYPE_CLIMATE, only stations with homogenous data are returned.
+        """
 
         dists: list[models.StationDistance] = []
         for s in self._stations:
             if None in (s.coordinates_wgs84_lat, s.coordinates_wgs84_lon):
                 continue
+            if station_type == bc.STATION_TYPE_CLIMATE and not s.has_homogenous_data():
+                continue
+
             _, _, dist_m = _GEOD.inv(
                 s.coordinates_wgs84_lon, s.coordinates_wgs84_lat, place.lon, place.lat
             )

@@ -41,6 +41,9 @@ class Station(BaseModel):
     precipitation_hom_min_date: date | None = None
     precipitation_hom_max_date: date | None = None
 
+    def has_homogenous_data(self):
+        return self.temperature_hom_min_date is not None
+
 
 class NearbyStation(BaseModel):
     abbr: str

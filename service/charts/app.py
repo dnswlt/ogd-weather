@@ -17,6 +17,7 @@ from service.charts import charts
 from service.charts import db
 from service.charts import geo
 from service.charts import models
+from service.charts.base import constants as bc
 from service.charts.base.errors import NoDataError, StationNotFoundError
 from service.charts.calc import stats
 from service.charts.charts import vega
@@ -478,8 +479,8 @@ async def get_year_chart(
 
     elif chart_type == "sunny_days:month":
         df = _read_daily([dc.SUNSHINE_DAILY_PCT_OF_MAX])
-        df_ref = _read_ref([dc.DX_SUNNY_DAYS_ANNUAL_COUNT])
-        chart = charts.monthly_sunny_days_bar_chart(df, df_ref, station_abbr, year)
+        # df_ref = _read_ref([dc.DX_SUNNY_DAYS_ANNUAL_COUNT])
+        chart = charts.monthly_sunny_days_bar_chart(df, None, station_abbr, year)
 
     elif chart_type == "sunshine:month":
         df = _read_daily([dc.SUNSHINE_DAILY_MINUTES])
@@ -491,13 +492,13 @@ async def get_year_chart(
 
     elif chart_type == "precipitation:month":
         df = _read_daily([dc.PRECIP_DAILY_MM])
-        df_ref = _read_ref([dc.DX_PRECIP_TOTAL])
-        chart = charts.monthly_precipitation_bar_chart(df, df_ref, station_abbr, year)
+        # df_ref = _read_ref([dc.DX_PRECIP_TOTAL])
+        chart = charts.monthly_precipitation_bar_chart(df, None, station_abbr, year)
 
     elif chart_type == "raindays:month":
         df = _read_daily([dc.PRECIP_DAILY_MM])
-        df_ref = _read_ref([dc.DX_RAIN_DAYS_ANNUAL_COUNT])
-        chart = charts.monthly_raindays_bar_chart(df, df_ref, station_abbr, year)
+        # df_ref = _read_ref([dc.DX_RAIN_DAYS_ANNUAL_COUNT])
+        chart = charts.monthly_raindays_bar_chart(df, None, station_abbr, year)
 
     elif chart_type == "windrose":
         # This is a vanilla Vega chart, not a Vega-Lite chart.
@@ -807,7 +808,7 @@ async def list_stations(
 
 
 @app.get("/stations/search")
-async def search_stations(q: str):
+async def search_stations(q: str, station_type: str | None = None):
     places_lookup: geo.Places = app.state.geo_places
     station_lookup: geo.StationLookup = app.state.geo_stations
 
@@ -820,7 +821,14 @@ async def search_stations(q: str):
     else:
         places = places_lookup.find_prefix(q, limit=3)
 
-    ps = [station_lookup.find_nearest(p, limit=3, max_distance_km=50) for p in places]
+    max_distance = 50 if station_type != bc.STATION_TYPE_CLIMATE else 80
+    result = []
+    for p in places:
+        nearest = station_lookup.find_nearest(
+            p, limit=3, max_distance_km=max_distance, station_type=station_type
+        )
+        result.append(nearest)
+
     return {
-        "places": ps,
+        "places": result,
     }

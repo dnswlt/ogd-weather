@@ -227,11 +227,12 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 	).SetActive(r.URL.Path).SetParams(q)
 
 	err = s.template.ExecuteTemplate(&output, templateFile, map[string]any{
-		"Query":           flatQuery,
-		"Periods":         periods,
-		"Stations":        stations.Stations,
-		"SelectedStation": flatQuery["station"],
-		"NavBar":          nav,
+		"Query":                 flatQuery,
+		"Periods":               periods,
+		"Stations":              stations.Stations,
+		"SelectedStation":       flatQuery["station"],
+		"NavBar":                nav,
+		"ClimateNormalsEnabled": false,
 	})
 	if err != nil {
 		log.Printf("Failed to render template %q: %v", templateFile, err)

@@ -202,11 +202,13 @@
             Each <a href="https://en.wikipedia.org/wiki/Box_plot" class="text-blue-600 hover:underline"
                 target="_blank">box plot</a> shows the middle 50% (the interquartile range; IQR) of temperatures for
             that month. The whiskers indicate the minimum and maximum values.
+            {{ if .ClimateNormalsEnabled }}
             <em>Climate normals</em>: the band shows the middle 50% (IQR) of the daily mean temperature
             in the
             <a class="text-blue-600 hover:underline" href="https://www.ncei.noaa.gov/products/wmo-climate-normals">WMO
                 Climate Normals</a> period
             1991&ndash;2020, the orange line indicates its mean.
+            {{ end }}
         </p>
 
         <!-- Tabs -- Click events are registered in "year.js" -->
@@ -230,6 +232,7 @@
                         aria-selected:border-blue-600 aria-selected:text-blue-600">
                     Max.&nbsp;temp
                 </button>
+                {{ if .ClimateNormalsEnabled }}
                 <!-- Vs. Climate Normals 1991-2020 ref. period -->
                 <button data-facet="mean" data-chart-type="temperature_normals:month" role="tab" aria-selected="false"
                     class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
@@ -237,6 +240,7 @@
                         aria-selected:border-blue-600 aria-selected:text-blue-600">
                     Climate normals
                 </button>
+                {{ end }}
             </div>
 
             <!-- Loader: carries station+year from the global form + its own hx-vals facet -->
@@ -255,12 +259,16 @@
                 class="text-blue-600 hover:underline" target="_blank">box plot</a> shows the middle 50% (IQR)
             and median of daily sunshine hours. The whiskers indicate the minimum and maximum values.
 
+            {{if .ClimateNormalsEnabled }}
             <em>Sunny days</em>:
             The light coloured boxes indicate the middle 50% (IQR) of monthly
             precipitation in the
             <a class="text-blue-600 hover:underline" href="https://www.ncei.noaa.gov/products/wmo-climate-normals">WMO
                 Climate Normals</a> period
             1991&ndash;2020, the orange line indicates its mean.
+            {{else}}
+            <em>Sunny days</em>: shows the number of sunny days (&geq; 80% relative sunshine duration) per month.
+            {{end}}
         </p>
 
         <div class="tab-widget mb-12">
@@ -289,11 +297,15 @@
         <!-- Monthly precipitation compared to reference period 1991-2020 -->
         <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Precipitation</h2>
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            {{ if .ClimateNormalsEnabled }}
             Total precipitation by month. The light coloured boxes indicate the middle 50% (IQR) of monthly
             precipitation in the
             <a class="text-blue-600 hover:underline" href="https://www.ncei.noaa.gov/products/wmo-climate-normals">WMO
                 Climate Normals</a> period
             1991&ndash;2020, the orange line indicates its mean.
+            {{ else }}
+            Total precipitation and number of rain days per month.    
+            {{ end }}
         </p>
         <div class="tab-widget mb-12">
             <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
