@@ -193,7 +193,7 @@ func (s *Server) backendError(w http.ResponseWriter, err error, format string, a
 	http.Error(w, fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)), statusCode)
 }
 
-func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateFile string) {
+func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateFile string, params map[string]any) {
 	var output bytes.Buffer
 	// Pass on query parameters to the template.
 	flatQuery := map[string]string{}
@@ -226,14 +226,18 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 		ui.NavItem("/ui/map", "Map").Params("station"),
 	).SetActive(r.URL.Path).SetParams(q)
 
-	err = s.template.ExecuteTemplate(&output, templateFile, map[string]any{
+	templateParams := map[string]any{
 		"Query":                 flatQuery,
 		"Periods":               periods,
 		"Stations":              stations.Stations,
 		"SelectedStation":       flatQuery["station"],
 		"NavBar":                nav,
 		"ClimateNormalsEnabled": false,
-	})
+	}
+	for k, v := range params {
+		templateParams[k] = v
+	}
+	err = s.template.ExecuteTemplate(&output, templateFile, templateParams)
 	if err != nil {
 		log.Printf("Failed to render template %q: %v", templateFile, err)
 		http.Error(w, "Template rendering error", http.StatusInternalServerError)
@@ -572,7 +576,7 @@ func (s *Server) Serve() error {
 		http.Redirect(w, r, "/ui/trends", http.StatusTemporaryRedirect)
 	})
 	mux.HandleFunc("GET /ui/trends", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "trends.html")
+		s.serveHTMLPage(w, r, "trends.html", nil)
 	})
 	mux.HandleFunc("GET /ui/day", func(w http.ResponseWriter, r *http.Request) {
 		// Redirect to 2daysago if date= query param is missing.
@@ -582,7 +586,7 @@ func (s *Server) Serve() error {
 			})
 			http.Redirect(w, r, newURL.RequestURI(), http.StatusFound)
 		}
-		s.serveHTMLPage(w, r, "day.html")
+		s.serveHTMLPage(w, r, "day.html", nil)
 	})
 	mux.HandleFunc("GET /ui/year", func(w http.ResponseWriter, r *http.Request) {
 		// Redirect to the year from N days ago if year= query param is missing.
@@ -592,13 +596,15 @@ func (s *Server) Serve() error {
 			})
 			http.Redirect(w, r, newURL.RequestURI(), http.StatusFound)
 		}
-		s.serveHTMLPage(w, r, "year.html")
+		s.serveHTMLPage(w, r, "year.html", nil)
 	})
 	mux.HandleFunc("GET /ui/annual", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "annual.html")
+		s.serveHTMLPage(w, r, "annual.html", nil)
 	})
 	mux.HandleFunc("GET /ui/map", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "map.html")
+		s.serveHTMLPage(w, r, "map.html", map[string]any{
+			"MapColors": ui.MapColors(),
+		})
 	})
 	mux.Handle("DELETE /admin/cache/responses", s.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		s.cache.Purge()

@@ -12,7 +12,7 @@ function loadStationInfo(station_abbr) {
 export function initMapPage() {
     document.addEventListener("DOMContentLoaded", () => {
         const DEFAULT_COLOR = "#DA291C";
-        const HIGHLIGHT_COLOR = "#38BDF8";
+        const HIGHLIGHT_COLOR = "#000000";
 
         // prev/next buttons for the date picker
         

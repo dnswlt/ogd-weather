@@ -310,3 +310,22 @@ func PrefixSlice(k int, items any) (any, error) {
 	}
 	return v.Slice(0, k).Interface(), nil
 }
+
+// MapColors returns a map from
+func MapColors() map[string]string {
+	return map[string]string{
+		// Light gray palette
+		// "Background1": "#F5F5F5",
+		// "Background2": "#E0E0E0",
+		// "Background3": "#CCCCCC",
+		// "Background4": "#BDBDBD",
+		// "Background5": "#A9A9A9",
+
+		// Alternative palette: cool blue
+		"Background1": "#F0F4F8",
+		"Background2": "#D9E2EC",
+		"Background3": "#BCCCDC",
+		"Background4": "#9FB3C8",
+		"Background5": "#829AB1",
+	}
+}
