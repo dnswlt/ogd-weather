@@ -220,9 +220,9 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 
 	nav := ui.NewNavBar(
 		ui.NavItem("/ui/trends", "Trends").Params("station", "from_year", "to_year", "period", "window"),
-		ui.NavItem("/ui/sun_rain", "Sun & Rain").Params("station", "from_year", "to_year", "period"),
-		ui.NavItem("/ui/day", "Day").Params("station", "date"),
+		ui.NavItem("/ui/annual", "Annual").Params("station", "from_year", "to_year", "period"),
 		ui.NavItem("/ui/year", "Year").Params("station", "year"),
+		ui.NavItem("/ui/day", "Day").Params("station", "date"),
 		ui.NavItem("/ui/map", "Map").Params("station"),
 	).SetActive(r.URL.Path).SetParams(q)
 
@@ -593,8 +593,8 @@ func (s *Server) Serve() error {
 		}
 		s.serveHTMLPage(w, r, "year.html")
 	})
-	mux.HandleFunc("GET /ui/sun_rain", func(w http.ResponseWriter, r *http.Request) {
-		s.serveHTMLPage(w, r, "sun_rain.html")
+	mux.HandleFunc("GET /ui/annual", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "annual.html")
 	})
 	mux.HandleFunc("GET /ui/map", func(w http.ResponseWriter, r *http.Request) {
 		s.serveHTMLPage(w, r, "map.html")

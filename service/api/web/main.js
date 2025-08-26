@@ -105,7 +105,7 @@ switch (page) {
     case 'timeline':
         initPage();
         break;
-    case 'sun_rain':
+    case 'annual':
         initPage();
         break;
     case 'day':
