@@ -1,0 +1,179 @@
+<table id="station-summary" class="w-full table-auto border-collapse text-sm">
+    <tbody>
+        {{with .Ref1991To2020Stats}}
+
+        {{if .Vars.SourceDateRange}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Date range    
+            </td>
+            <td class="py-2 text-gray-800">
+                {{datefmt "a J Y" .Vars.SourceDateRange.MinValueDate}} &ndash; 
+                {{datefmt "a J Y" .Vars.SourceDateRange.MaxValueDate}}
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.TemperatureDailyMin}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Lowest temperature
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .Vars.TemperatureDailyMin.MinValue}} &deg;C
+                ({{datefmt "a J Y" .Vars.TemperatureDailyMin.MinValueDate}})
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.TemperatureDailyMax}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Highest temperature
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .Vars.TemperatureDailyMax.MaxValue}} &deg;C
+                ({{datefmt "a J Y" .Vars.TemperatureDailyMax.MaxValueDate}})
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.PrecipitationDailyMillimeters}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. daily rainfall
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .Vars.PrecipitationDailyMillimeters.MeanValue}} mm
+                ({{printf "%.1f" .Vars.PrecipitationDailyMillimeters.P25Value}}
+                &ndash;
+                {{printf "%.1f" .Vars.PrecipitationDailyMillimeters.P75Value}} mm)
+            </td>
+        </tr>
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Highest daily rainfall
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .Vars.PrecipitationDailyMillimeters.MaxValue}} mm
+                ({{datefmt "a J Y" .Vars.PrecipitationDailyMillimeters.MaxValueDate}})
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.SunshineDailyMinutes}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. daily sunshine
+            </td>
+            <td class="py-2 text-gray-800">
+                {{min2hours .Vars.SunshineDailyMinutes.MeanValue}} hours
+                ({{min2hours
+                .Vars.SunshineDailyMinutes.P25Value}}
+                &ndash;
+                {{min2hours .Vars.SunshineDailyMinutes.P75Value}} h)
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.AtmPressureDailyMean}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. atmospheric pressure
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .Vars.AtmPressureDailyMean.MeanValue}} hPa
+                ({{printf "%.1f" .Vars.AtmPressureDailyMean.P25Value}}
+                &ndash;
+                {{printf "%.1f" .Vars.AtmPressureDailyMean.P75Value}} hPa)
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.GustPeakDailyMax}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Max. wind speed
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" (ms2kmh .Vars.GustPeakDailyMax.MaxValue)}} km/h
+                ({{datefmt "a J Y" .Vars.GustPeakDailyMax.MaxValueDate}})
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.SummerDaysAnnualCount}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. summer days (&geq; 25&deg;C)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .Vars.SummerDaysAnnualCount.MeanValue}} days
+                ({{printf "%.0f" .Vars.SummerDaysAnnualCount.P25Value}}
+                &ndash;
+                {{printf "%.0f" .Vars.SummerDaysAnnualCount.P75Value}} days)
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.SunnyDaysAnnualCount}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. sunny days (&geq; 6 h sunshine)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .Vars.SunnyDaysAnnualCount.MeanValue}} days
+                ({{printf "%.0f" .Vars.SunnyDaysAnnualCount.P25Value}}
+                &ndash;
+                {{printf "%.0f" .Vars.SunnyDaysAnnualCount.P75Value}} days)
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.TropicalNightsAnnualCount}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. no. of tropical nights (&ge; 20&deg;C)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .Vars.TropicalNightsAnnualCount.MeanValue}} nights
+                ({{printf "%.1f" .Vars.TropicalNightsAnnualCount.P25Value}}
+                &ndash;
+                {{printf "%.1f" .Vars.TropicalNightsAnnualCount.P75Value}} nights)
+            </td>
+        </tr>
+        {{if gt .Vars.TropicalNightsAnnualCount.MaxValue 0.05}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Max. tropical nights (&ge; 20&deg;C)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.1f" .Vars.TropicalNightsAnnualCount.MaxValue}} nights
+                ({{datefmt "Y" .Vars.TropicalNightsAnnualCount.MaxValueDate}})
+            </td>
+        </tr>
+        {{end}}
+        {{end}}
+        {{if .Vars.FrostDaysAnnualCount}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. frost days (&lt; 0&deg;C)
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .Vars.FrostDaysAnnualCount.MeanValue}} days
+                ({{printf "%.0f" .Vars.FrostDaysAnnualCount.P25Value}}
+                &ndash;
+                {{printf "%.0f" .Vars.FrostDaysAnnualCount.P75Value}} days)
+            </td>
+        </tr>
+        {{end}}
+        {{if .Vars.GrowingDegreeDaysAnnualSum}}
+        <tr class="border-b">
+            <td class="py-2 pr-4 font-medium text-gray-600 whitespace-nowrap w-1">
+                Avg. growing degree days
+            </td>
+            <td class="py-2 text-gray-800">
+                {{printf "%.0f" .Vars.GrowingDegreeDaysAnnualSum.MeanValue}}
+                <a class="text-blue-600 hover:underline" href="https://en.wikipedia.org/wiki/Growing_degree-day"
+                    target="_blank">GDD</a>
+                ({{printf "%.0f" .Vars.GrowingDegreeDaysAnnualSum.P25Value}}
+                &ndash;
+                {{printf "%.0f" .Vars.GrowingDegreeDaysAnnualSum.P75Value}})
+            </td>
+        </tr>
+        {{end}}
+
+        {{end}} <!-- {{/* with .Ref1991To2020Stats */}} -->
+    </tbody>
+</table>

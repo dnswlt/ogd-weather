@@ -340,12 +340,13 @@ def day_count_chart(
     period: str = PERIOD_ALL,
     title: str = "Untitled chart",
     palette: colors.Palette | None = None,
+    trendline: bool = True,
 ) -> AltairChart:
     """Creates a chart for "# days" of some boolean predicate."""
     data_long, trend_long = day_count_chart_data(predicate)
     return annual_timeline_chart(
         data_long,
-        trend_long,
+        trend_long if trendline else None,
         typ="bar",
         title=f"{title} in {period_to_title(period)}, by year".strip(),
         y_label="# days",
@@ -363,6 +364,7 @@ def raindays_chart(
         period=period,
         title="Number of rain days (≥ 1.0 mm precip.)",
         palette=colors.Tab20("SkyBlue"),
+        trendline=False,
     )
 
 
@@ -376,6 +378,7 @@ def sunny_days_chart(
         period=period,
         title="Number of sunny days (≥ 6 h of sunshine)",
         palette=colors.Tab20("Apricot"),
+        trendline=False,
     )
 
 
@@ -389,6 +392,7 @@ def frost_days_chart(
         period=period,
         title="Number of frost days (min. < 0 °C)",
         palette=colors.Tab20("AshGray"),
+        trendline=False,
     )
 
 
@@ -402,6 +406,7 @@ def summer_days_chart(
         period=period,
         title="Number of summer days (max. ≥ 25 °C)",
         palette=colors.Tab20("Lavender"),
+        trendline=False,
     )
 
 
@@ -412,14 +417,14 @@ def sunshine_chart(
 
     sunshine = df[dc.SUNSHINE_DAILY_MINUTES] / 60.0
     data = pd.DataFrame({"sunshine (h)": sunshine})
-    data_long, trend_long = tf.timeline_years_chart_data(data, "mean")
+    data_long, _ = tf.timeline_years_chart_data(data, "mean")
 
     title = (
         f"Mean daily hours of sunshine in {period_to_title(period)}, by year".strip()
     )
     return annual_timeline_chart(
         data_long,
-        trend_long,
+        trend_long=None,
         typ="bar",
         title=title,
         y_label="hours / day",
@@ -433,12 +438,12 @@ def rainiest_day_chart(
     _verify_timeline_data(df, [dc.PRECIP_DAILY_MM], station_abbr, period)
 
     data = pd.DataFrame({"precip (mm)": df[dc.PRECIP_DAILY_MM]})
-    data_long, trend_long = tf.timeline_years_chart_data(data, "max")
+    data_long, _ = tf.timeline_years_chart_data(data, "max")
 
     title = f"Max daily amount of rain in {period_to_title(period)}, by year".strip()
     return annual_timeline_chart(
         data_long,
-        trend_long,
+        trend_long=None,
         typ="bar",
         title=title,
         y_label="mm",
@@ -452,12 +457,12 @@ def max_snow_depth_chart(
     _verify_timeline_data(df, [dc.SNOW_DEPTH_MAN_DAILY_CM], station_abbr, period)
 
     data = pd.DataFrame({"snow depth (cm)": df[dc.SNOW_DEPTH_MAN_DAILY_CM]})
-    data_long, trend_long = tf.timeline_years_chart_data(data, "max")
+    data_long, _ = tf.timeline_years_chart_data(data, "max")
 
     title = f"Max. snow depth in {period_to_title(period)}, by year".strip()
     return annual_timeline_chart(
         data_long,
-        trend_long,
+        trend_long=None,
         typ="bar",
         title=title,
         y_label="cm",
@@ -471,12 +476,12 @@ def max_fresh_snow_chart(
     _verify_timeline_data(df, [dc.FRESH_SNOW_MAN_DAILY_CM], station_abbr, period)
 
     data = pd.DataFrame({"snow depth (cm)": df[dc.FRESH_SNOW_MAN_DAILY_CM]})
-    data_long, trend_long = tf.timeline_years_chart_data(data, "max")
+    data_long, _ = tf.timeline_years_chart_data(data, "max")
 
     title = f"Max. daily fresh snow in {period_to_title(period)}, by year".strip()
     return annual_timeline_chart(
         data_long,
-        trend_long,
+        trend_long=None,
         typ="bar",
         title=title,
         y_label="cm",
@@ -493,6 +498,7 @@ def snow_days_chart(
         period=period,
         title="Number of snow days (≥ 1 cm snow depth)",
         palette=colors.Tab20("AshGray"),
+        trendline=False,
     )
 
 
@@ -505,6 +511,7 @@ def fresh_snow_days_chart(
         period=period,
         title="Number of days on which it snowed (> 0 cm fresh snow)",
         palette=colors.Tab20("Teal"),
+        trendline=False,
     )
 
 
