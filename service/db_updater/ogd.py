@@ -476,7 +476,9 @@ def run_import(
         ),
     )
 
-    logger.info("Done. DB %s updated in %.1fs.", engine.url, time.time() - started_time)
+    logger.info(
+        "Done. DB %s updated in %.1fs.", engine.name, time.time() - started_time
+    )
 
 
 def run_recreate_views(engine: sa.Engine):

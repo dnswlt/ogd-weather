@@ -106,7 +106,7 @@ def main():
 
     if pgconn:
         postgres_url = pgconn.url()
-        logger.info("Connecting to postgres DB at %s", postgres_url)
+        logger.info("Connecting to postgres DB at %s", pgconn.sanitized_url())
         engine = sa.create_engine(postgres_url, echo=args.verbose)
     else:
         db_path = os.path.join(base_dir, dc.SQLITE_DB_FILENAME)
