@@ -201,6 +201,7 @@ class DBTableStats(BaseModel):
 
 class ServerStatus(BaseModel):
     current_time_utc: datetime.datetime
-    db_engine: str
     options: ServerOptions
+    db_engine: str
+    db_last_update_time: datetime.datetime | None = None
     db_table_stats: list[DBTableStats] | None = None  # only for postgres

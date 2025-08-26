@@ -527,9 +527,9 @@ func (s *Server) serveStatus(w http.ResponseWriter, r *http.Request) {
 		status, err := fetchBackendData[map[string]any](r.Context(), s, u.String())
 		if err != nil {
 			log.Printf("Error fetching /status from backend: %v", err)
-
+		} else {
+			backendStatus = *status
 		}
-		backendStatus = *status
 	}
 	hostname, _ := os.Hostname()
 

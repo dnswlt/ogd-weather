@@ -401,7 +401,7 @@ def add_update_log_entry(engine: sa.Engine, entry: UpdateLogEntry) -> None:
         )
 
 
-def read_latest_update_log_entry(conn: sa.Connection) -> UpdateLogEntry:
+def read_latest_update_log_entry(conn: sa.Connection) -> UpdateLogEntry | None:
     cur = conn.execute(
         sa.text(
             f"""
@@ -415,7 +415,11 @@ def read_latest_update_log_entry(conn: sa.Connection) -> UpdateLogEntry:
             """
         )
     )
-    row = cur.mappings().one()
+
+    row = cur.mappings().fetchone()
+    if row is None:
+        return None
+
     return UpdateLogEntry(
         update_time=datetime.datetime.fromisoformat(row["update_time"]),
         imported_files_count=row["imported_files_count"],

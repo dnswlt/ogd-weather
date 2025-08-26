@@ -241,15 +241,21 @@ def health():
 @app.get("/status")
 def server_status():
     """Returns status informatin for the running server."""
+
+    engine: sa.Engine = app.state.engine
     status = models.ServerStatus(
         current_time_utc=datetime.datetime.now(tz=datetime.timezone.utc),
-        db_engine=app.state.engine.name,
         options=app.state.server_options,
+        db_engine=engine.name,
     )
+    with engine.begin() as conn:
+        log_entry = db.read_latest_update_log_entry(conn)
+        if log_entry is not None:
+            status.db_last_update_time = log_entry.update_time
 
-    if app.state.engine.name == "postgresql":
+    if engine.name == "postgresql":
         user = _pg_user(app.state.server_options.sanitized_postgres_url)
-        status.db_table_stats = db.table_stats(app.state.engine, user=user)
+        status.db_table_stats = db.table_stats(engine, user=user)
 
     return status
 
