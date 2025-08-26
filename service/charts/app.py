@@ -713,20 +713,32 @@ async def get_summary(
     to_date = _date_from_year(to_year, dy=1)
 
     with app.state.engine.begin() as conn:
-        df = db.read_daily_measurements(
-            conn,
-            station_abbr,
-            period=period,
-            columns=[
-                dc.TEMP_DAILY_MIN,
-                dc.TEMP_DAILY_MEAN,
-                dc.TEMP_DAILY_MAX,
-                dc.PRECIP_DAILY_MM,
-            ],
-            from_date=from_date,
-            to_date=to_date,
+        if period == charts.PERIOD_ALL:
+            df = db.read_annual_hom_measurements(
+                conn,
+                station_abbr,
+                columns=[
+                    dc.TEMP_HOM_ANNUAL_MEAN,
+                    dc.PRECIP_HOM_ANNUAL_MM,
+                ],
+                from_date=from_date,
+                to_date=to_date,
+            )
+        else:
+            df = db.read_monthly_hom_measurements(
+                conn,
+                station_abbr,
+                period=period,
+                columns=[
+                    dc.TEMP_HOM_MONTHLY_MEAN,
+                    dc.PRECIP_HOM_MONTHLY_MM,
+                ],
+                from_date=from_date,
+                to_date=to_date,
+            )
+        stats = charts.station_stats(
+            tf.timeless_column_names(df), station_abbr, period=period
         )
-        stats = charts.station_stats(df, station_abbr, period=period)
         station = db.read_station(conn, station_abbr)
 
     # Stations don't change often, use 1 day TTL for caching.

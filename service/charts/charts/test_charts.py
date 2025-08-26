@@ -6,10 +6,12 @@ import pandas as pd
 import unittest
 
 
-from . import charts
 from service.charts.db import constants as dc
 from service.charts.base.errors import NoDataError
 from service.charts.testutils import PandasTestCase
+
+from . import charts
+from . import transform as tf
 
 
 class TestStationNumDays(PandasTestCase):
@@ -77,17 +79,15 @@ class TestStationStats(PandasTestCase):
     def test_station_stats_temp_increase(self):
         df = pd.DataFrame(
             [
-                ["2025-01-01", "BER", -2, -1, 0, 0],
-                ["2025-01-02", "BER", -2, -1, 0, 0],
-                ["2026-01-01", "BER", -10, 1, 3, 2.5],
+                ["2025-01-01", "BER", -1, 0],
+                ["2025-01-02", "BER", -1, 0],
+                ["2026-01-01", "BER", 1, 2.5],
             ],
             columns=[
                 "reference_timestamp",
                 "station_abbr",
-                dc.TEMP_DAILY_MIN,
-                dc.TEMP_DAILY_MEAN,
-                dc.TEMP_DAILY_MAX,
-                dc.PRECIP_DAILY_MM,
+                tf.TEMP_MEAN,
+                tf.PRECIP_MM,
             ],
         )
         df = df.set_index("reference_timestamp")
@@ -102,16 +102,14 @@ class TestStationStats(PandasTestCase):
     def test_station_stats_single_year(self):
         df = pd.DataFrame(
             [
-                ["2025-01-01", "BER", -2, -1, 0, 0],
-                ["2025-01-02", "BER", -2, -1, 0, 0],
+                ["2025-01-01", "BER", -1, 0],
+                ["2025-01-02", "BER", -1, 0],
             ],
             columns=[
                 "reference_timestamp",
                 "station_abbr",
-                dc.TEMP_DAILY_MIN,
-                dc.TEMP_DAILY_MEAN,
-                dc.TEMP_DAILY_MAX,
-                dc.PRECIP_DAILY_MM,
+                tf.TEMP_MEAN,
+                tf.PRECIP_MM,
             ],
         )
         df = df.set_index("reference_timestamp")

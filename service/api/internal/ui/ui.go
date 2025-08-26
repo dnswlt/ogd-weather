@@ -57,7 +57,7 @@ func Periods(selected string) []Option {
 		{"spring", "Spring (Mar-May)", false},
 		{"summer", "Summer (Jun-Aug)", false},
 		{"autumn", "Autumn (Sep-Nov)", false},
-		{"winter", "Winter (Dec-Feb)", false},
+		{"winter", "Winter (Jan-Feb,Dec)", false},
 	}
 	if selected == "" {
 		selected = "all" // By default, select "Whole Year"

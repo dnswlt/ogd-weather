@@ -49,7 +49,7 @@ SEASON_NAMES = {
     "spring": "Spring (Mar-May)",
     "summer": "Summer (Jun-Aug)",
     "autumn": "Autumn (Sep-Nov)",
-    "winter": "Winter (Dec-Feb)",
+    "winter": "Winter (Jan-Feb,Dec)",
 }
 
 PERIOD_ALL = "all"
@@ -1907,9 +1907,7 @@ def station_stats(
         raise NoDataError(f"No stats data for {station_abbr}")
     _verify_period(df, period)
 
-    df = df[
-        [dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MEAN, dc.TEMP_DAILY_MAX, dc.PRECIP_DAILY_MM]
-    ]
+    df = df[[tf.TEMP_MEAN, tf.PRECIP_MM]]
     first_date = df.index.min().to_pydatetime().date()
     last_date = df.index.max().to_pydatetime().date()
 
@@ -1918,16 +1916,16 @@ def station_stats(
     )
 
     # pydantic JSON serialization does not like numpy, so lots of conversions here.
-    df_m = tf.annual_agg(df[[dc.TEMP_DAILY_MEAN]], "mean")
-    temp_dm = df_m[dc.TEMP_DAILY_MEAN].dropna()
+    df_m = tf.annual_agg(df[[tf.TEMP_MEAN]], "mean")
+    temp_dm = df_m[tf.TEMP_MEAN].dropna()
     if not temp_dm.empty:
         result.coldest_year = int(temp_dm.idxmin())
         result.coldest_year_temp = float(temp_dm.min())
         result.warmest_year = int(temp_dm.idxmax())
         result.warmest_year_temp = float(temp_dm.max())
 
-    df_s = tf.annual_agg(df[[dc.PRECIP_DAILY_MM]], "sum")
-    precip = df_s[dc.PRECIP_DAILY_MM].dropna()
+    df_s = tf.annual_agg(df[[tf.PRECIP_MM]], "sum")
+    precip = df_s[tf.PRECIP_MM].dropna()
     if not precip.empty:
         result.driest_year = int(precip.idxmin())
         result.driest_year_precip_mm = float(precip.min())
@@ -1936,8 +1934,8 @@ def station_stats(
 
     if not temp_dm.empty:
         try:
-            coeffs, _ = tf.polyfit_columns(df_m[[dc.TEMP_DAILY_MEAN]], deg=1)
-            result.annual_temp_increase = float(coeffs[dc.TEMP_DAILY_MEAN].iloc[1])
+            coeffs, _ = tf.polyfit_columns(df_m[[tf.TEMP_MEAN]], deg=1)
+            result.annual_temp_increase = float(coeffs[tf.TEMP_MEAN].iloc[1])
         except ValueError:
             # Could not fit a curve
             pass
