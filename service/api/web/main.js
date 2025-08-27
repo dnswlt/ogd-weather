@@ -11,6 +11,7 @@ import {
 import { initMapPage } from './map.js';
 import { initDayPage } from './day.js';
 import { initYearPage } from './year.js';
+import { initComparePage } from './compare.js';
 
 // Default initialization for pages with chart controls.
 function initPage() {
@@ -122,6 +123,9 @@ switch (page) {
         break;
     case 'about':
         initPage();
+        break;
+    case 'compare':
+        initComparePage();
         break;
     default:
         console.error(`Unhandled page in init: ${page}`);

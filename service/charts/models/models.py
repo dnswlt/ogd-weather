@@ -142,6 +142,22 @@ class StationMeasurementsData(BaseModel):
     columns: list[ColumnInfo]
 
 
+class StationComparisonRow(BaseModel):
+    """A single row of a station comparison table."""
+
+    label: str
+    values: list[float | None]
+    lower_bound: float | None
+    upper_bound: float | None = None
+
+
+class StationComparisonData(BaseModel):
+    """Holder of a station comparison results table."""
+
+    stations: list[Station]
+    rows: list[StationComparisonRow]
+
+
 class StationYearHighlights(BaseModel):
     first_frost_day: datetime.date | None = None
     last_frost_day: datetime.date | None = None

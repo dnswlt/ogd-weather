@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {{ template "head.html" }}
+</head>
+
+<body class="min-h-screen bg-gray-50 p-4" data-page="compare">
+    <!-- Navbar -->
+    {{template "nav.html" .}}
+
+    <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
+        <h1 class="text-2xl font-semibold text-center">Compare Stations</h1>
+
+        <div class="space-y-3">
+            <!-- Search (locations or postal codes) -->
+            <div class="grid grid-cols-3 gap-3 items-start">
+                <label for="station-search" class="col-span-1 font-medium pt-2">Search</label>
+
+                <div class="col-span-2">
+                    <div class="flex items-center gap-2">
+                        <input id="station-search" name="q" type="search" placeholder="'3004' or 'Bern'"
+                            class="border rounded p-2 w-full" autocomplete="off" spellcheck="false"
+                            hx-get="/stations:search" hx-trigger="input changed delay:400ms, search"
+                            hx-target="#search-results" />
+                    </div>
+                    <div id="search-results"></div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <form class="space-y-4" id="compare-controls">
+                <!-- Stations (hidden, selected via the search bar) -->
+                <input type="hidden" name="stations" value="">
+                <!-- Period -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    <label for="period" class="col-span-1 font-medium pt-2">Period</label>
+
+                    <select id="period" name="period" class="col-span-2 border rounded p-2 w-full">
+                        <!-- Jan Feb Mar ... Spring Summer etc.-->
+                        {{range .Periods}}
+                        <option value="{{.Value}}" {{.Selected}}>{{.DisplayName}}</option>
+                        {{end}}
+                    </select>
+                </div>
+                <!-- Year Range -->
+                <div class="grid grid-cols-3 gap-3 items-start">
+                    {{ $option1 := "9120" }}
+                    <label class="col-span-1 font-medium pt-2">Year Range</label>
+                    <div class="col-span-2 flex items-center space-x-4">
+                        <label class="inline-flex items-center border rounded p-2 w-full">
+                            <input type="radio" name="year_range" value="1991-2020" class="form-radio" {{if eq
+                                .Query.year_range $option1}}checked{{end}}>
+                            <span class="ml-2">1991-2020</span>
+                        </label>
+                        <label class="inline-flex items-center border rounded p-2 w-full">
+                            <input type="radio" name="year_range" value="2021-today" class="form-radio" {{if ne
+                                .Query.year_range $option1}}checked{{end}}>
+                            <span class="ml-2">2021-today</span>
+                        </label>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Comparison table -->
+        <div id="comparison-table-container" hx-trigger="change from:#compare-controls" hx-get="/stations:compare"
+            hx-include="#compare-controls" hx-target="this" hx-swap="innerHTML">
+            {{ template "compare_table.html" . }}
+        </div>
+    </main>
+
+    <footer>
+        {{template "disclaimer.html" .}}
+    </footer>
+
+    <script type="module" src='{{assetHash "/static/dist/main.js"}}'></script>
+
+</body>
+
+</html>

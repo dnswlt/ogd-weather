@@ -280,6 +280,25 @@ type StationMeasurementsResponse struct {
 	Data *StationMeasurementsData `json:"data"`
 }
 
+type StationComparisonRow struct {
+	Label string `json:"label"`
+	// lower and upper bound of the range of Values.
+	// Used to define the 0% and 100% points when plotting Values.
+	// If empty, these are determined from Values themselves.
+	LowerBound NullFloat64   `json:"lower_bound"`
+	UpperBound NullFloat64   `json:"upper_bound"`
+	Values     []NullFloat64 `json:"values"`
+}
+
+type StationComparisonData struct {
+	Stations []*Station              `json:"stations"`
+	Rows     []*StationComparisonRow `json:"rows"`
+}
+
+type StationComparisonResponse struct {
+	Data *StationComparisonData `json:"data"`
+}
+
 type StationYearHighlights struct {
 	FirstFrostDay             NullDate    `json:"first_frost_day"`
 	LastFrostDay              NullDate    `json:"last_frost_day"`
@@ -295,6 +314,16 @@ type StationYearHighlights struct {
 type StationYearHighlightsResponse struct {
 	Station    *Station               `json:"station"`
 	Highlights *StationYearHighlights `json:"highlights"`
+}
+
+func (r *StationComparisonRow) MaxValue() NullFloat64 {
+	var mx NullFloat64
+	for _, v := range r.Values {
+		if v.HasValue && (!mx.HasValue || mx.Value < v.Value) {
+			mx = v
+		}
+	}
+	return mx
 }
 
 func (s *StationYearHighlights) MaxDailyTempRange() NullFloat64 {

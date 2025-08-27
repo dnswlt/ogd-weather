@@ -22,7 +22,7 @@ TROPICAL_NIGHTS = "tropical_nights"
 HEAT_DAYS = "heat_days"
 
 
-def annual_agg(df, func):
+def annual_agg(df: pd.DataFrame, func: str) -> pd.DataFrame:
     """Returns a DataFrame with one row per year containing average values."""
     df_y = df.groupby(df.index.year).agg(func)
     df_y.index.name = "year"

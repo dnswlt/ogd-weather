@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"html/template"
 	"math"
 	"net/url"
 	"reflect"
@@ -16,13 +17,16 @@ var (
 	zurichLoc = mustLoadLocation("Europe/Zurich")
 
 	AllFuncs = map[string]any{
-		"datefmt":        DateFmt,
-		"wgs84tosvg":     WGS84ToSVG,
-		"min2hours":      MinutesToHours,
-		"ms2kmh":         MetersPerSecondToKilometersPerHour,
-		"float":          PrintfFloat64,
-		"vegaSpecHTMLID": VegaSpecHTMLID,
-		"first":          PrefixSlice,
+		"datefmt":            DateFmt,
+		"wgs84tosvg":         WGS84ToSVG,
+		"min2hours":          MinutesToHours,
+		"ms2kmh":             MetersPerSecondToKilometersPerHour,
+		"float":              PrintfFloat64,
+		"floatOr":            PrintfFloat64OrDefault,
+		"floatFormat":        FloatFormat,
+		"vegaSpecHTMLID":     VegaSpecHTMLID,
+		"first":              PrefixSlice,
+		"stationVarsPercent": StationVarsPercent,
 	}
 )
 
@@ -71,9 +75,23 @@ func Periods(selected string) []Option {
 	return opts
 }
 
+func FloatFormat(f float64) string {
+	if math.Abs(f) > 100 {
+		return "%.0f"
+	}
+	return "%.1f"
+}
+
 func PrintfFloat64(format string, f types.NullFloat64) string {
 	if !f.HasValue {
 		return ""
+	}
+	return fmt.Sprintf(format, f.Value)
+}
+
+func PrintfFloat64OrDefault(format string, f types.NullFloat64, defaultVal string) string {
+	if !f.HasValue {
+		return defaultVal
 	}
 	return fmt.Sprintf(format, f.Value)
 }
@@ -328,4 +346,61 @@ func MapColors() map[string]string {
 		"Background4": "#9FB3C8",
 		"Background5": "#829AB1",
 	}
+}
+
+// StationVarsPercent creates the style= attribute string that defines
+// --station{i} variables for the widths of the station comparison table
+// bars. Example:
+// "--station1: 49.1%; --station2: 52.3%; --station3: 74.3%; --station4: 74.3%;"
+func StationVarsPercent(row *types.StationComparisonRow) template.CSS {
+	if len(row.Values) == 0 {
+		return ""
+	}
+	minVal := math.Inf(1)
+	if row.LowerBound.HasValue {
+		minVal = row.LowerBound.Value
+	}
+	maxVal := math.Inf(-1)
+	if row.UpperBound.HasValue {
+		maxVal = row.UpperBound.Value
+	}
+	for _, v := range row.Values {
+		if !v.HasValue {
+			continue
+		}
+		vv := v.Value
+		if vv > maxVal {
+			maxVal = vv
+		}
+		if vv < minVal {
+			minVal = vv
+		}
+	}
+	var span float64
+	if math.IsInf(minVal, 1) || minVal == maxVal {
+		span = 0
+	} else if !row.LowerBound.HasValue || minVal < row.LowerBound.Value {
+		// minVal was pushed down by an actual value.
+		// To avoid having a 0% bar width for that value,
+		// Push minVal down further so that the old minVal is at 10%.
+		minVal = maxVal - (maxVal-minVal)/0.9
+		span = maxVal - minVal
+	} else {
+		span = maxVal - minVal
+	}
+
+	vars := make([]string, len(row.Values))
+	for i, v := range row.Values {
+		var pct float64
+		if !v.HasValue {
+			pct = 0
+		} else if span == 0 {
+			// All values are identical
+			pct = 100
+		} else {
+			pct = (v.Value - minVal) / span * 100
+		}
+		vars[i] = fmt.Sprintf("--station%d: %.1f%%;", i, pct)
+	}
+	return template.CSS(strings.Join(vars, " "))
 }

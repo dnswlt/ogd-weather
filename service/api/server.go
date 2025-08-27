@@ -223,6 +223,7 @@ func (s *Server) serveHTMLPage(w http.ResponseWriter, r *http.Request, templateF
 		ui.NavItem("/ui/annual", "Annual").Params("station", "from_year", "to_year", "period"),
 		ui.NavItem("/ui/year", "Year").Params("station", "year"),
 		ui.NavItem("/ui/day", "Day").Params("station", "date"),
+		ui.NavItem("/ui/compare", "Compare").Params("stations", "period", "year_range"),
 		ui.NavItem("/ui/map", "Map").Params("station"),
 		ui.NavItem("/ui/about", "About"),
 	).SetActive(r.URL.Path).SetParams(q)
@@ -607,6 +608,9 @@ func (s *Server) Serve() error {
 			"MapColors": ui.MapColors(),
 		})
 	})
+	mux.HandleFunc("GET /ui/compare", func(w http.ResponseWriter, r *http.Request) {
+		s.serveHTMLPage(w, r, "compare.html", nil)
+	})
 	mux.HandleFunc("GET /ui/about", func(w http.ResponseWriter, r *http.Request) {
 		s.serveHTMLPage(w, r, "about.html", nil)
 	})
@@ -698,11 +702,20 @@ func (s *Server) Serve() error {
 			}
 			proxy.ServeHTTP(w, r)
 		})
-	mux.HandleFunc("GET /stations/search",
+	mux.HandleFunc("GET /stations:search",
 		func(w http.ResponseWriter, r *http.Request) {
 			accept := r.Header.Get("Accept")
 			if acceptsHTML(accept) {
 				serveChartServiceURL[types.PlacesSearchResponse](s, w, r, "places_search.html", nil)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		})
+	mux.HandleFunc("GET /stations:compare",
+		func(w http.ResponseWriter, r *http.Request) {
+			accept := r.Header.Get("Accept")
+			if acceptsHTML(accept) {
+				serveChartServiceURL[types.StationComparisonResponse](s, w, r, "compare_table.html", nil)
 				return
 			}
 			proxy.ServeHTTP(w, r)

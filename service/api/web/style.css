@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+@layer utilities {
+  /* semantic colors for comparing up to 4 stations */
+  .c-station0 { @apply bg-blue-500; }
+  .c-station1 { @apply bg-amber-500; }
+  .c-station2 { @apply bg-emerald-500; }
+  .c-station3 { @apply bg-violet-500; }
+
+  /* small dot used in comparison table headers */
+  .dot { @apply inline-block w-2.5 h-2.5 rounded-full; }
+
+  /* comparison mini bar primitives */
+  .bars { display: grid; gap: 2px; }
+  .bar  { height: 0.6rem; width: var(--p, 0%); border-radius: 9999px; }
+}

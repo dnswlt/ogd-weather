@@ -4,6 +4,8 @@ import pandas as pd
 from service.charts import models
 from service.charts.db import constants as dc
 
+from service.charts.charts import transform as tf
+
 
 def daily_measurements(
     df: pd.DataFrame, station_abbr: str
@@ -83,3 +85,57 @@ def year_highlights(
         snow_days=snow_days,
         max_snow_depth_cm=max_snow_depth_cm,
     )
+
+
+def compare_stations(
+    per_station_data: dict[str, tuple[models.Station, pd.DataFrame]],
+) -> models.StationComparisonData:
+
+    def nn(f):
+        if pd.isna(f):
+            return None
+        return f
+
+    stations = [s for s, _ in per_station_data.values()]
+    dfs = [df for _, df in per_station_data.values()]
+    rows = []
+
+    # Min. temperature measured in period
+    min_temps = [df[dc.TEMP_DAILY_MIN].min() for df in dfs]
+
+    rows.append(
+        models.StationComparisonRow(
+            label="Min. temperature (°C)",
+            values=min_temps,
+            lower_bound=-25,
+            upper_bound=0,
+        )
+    )
+
+    # Max. temperature measured in period
+    max_temps = [nn(df[dc.TEMP_DAILY_MAX].max()) for df in dfs]
+
+    rows.append(
+        models.StationComparisonRow(
+            label="Max. temperature (°C)",
+            values=max_temps,
+            lower_bound=20,
+            upper_bound=40,
+        )
+    )
+
+    # Avg. total annual precipitation
+    precip_means = []
+    for df in dfs:
+        df_p = tf.annual_agg(df[[dc.PRECIP_DAILY_MM]], "sum")
+        precip_means.append(nn(df_p[dc.PRECIP_DAILY_MM].mean()))
+
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. annual precipitation (mm)",
+            values=precip_means,
+            lower_bound=0,
+        )
+    )
+
+    return models.StationComparisonData(stations=stations, rows=rows)

@@ -22,7 +22,7 @@
                     <div class="flex items-center gap-2">
                         <input id="station-search" name="q" type="search" placeholder="'3004' or 'Bern'"
                             class="border rounded p-2 w-full" autocomplete="off" spellcheck="false"
-                            hx-get="/stations/search" hx-trigger="input changed delay:400ms, search"
+                            hx-get="/stations:search" hx-trigger="input changed delay:400ms, search"
                             hx-target="#search-results" />
                     </div>
                     <div id="search-results"></div>

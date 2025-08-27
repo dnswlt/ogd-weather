@@ -33,7 +33,7 @@
                     <div class="flex items-center gap-2">
                         <input id="station-search" name="q" type="search" placeholder="'3004' or 'Bern'"
                             class="border rounded p-2 w-full" autocomplete="off" spellcheck="false"
-                            hx-get="/stations/search?station_type=climate"
+                            hx-get="/stations:search?station_type=climate"
                             hx-trigger="input changed delay:400ms, search" hx-target="#search-results" />
                     </div>
                     <div id="search-results"></div>
@@ -82,16 +82,17 @@
 
                 <!-- Smoothing Window -->
                 <div class="grid grid-cols-3 gap-3 items-start">
+                    {{ $option2 := "5" }}
                     <label class="col-span-1 font-medium pt-2">Smoothing</label>
                     <div class="col-span-2 flex items-center space-x-4">
                         <label class="inline-flex items-center border rounded p-2 w-full">
-                            <input type="radio" name="window" value="1" class="form-radio" {{if ne .Query.window "5"
-                                }}checked{{end}}>
+                            <input type="radio" name="window" value="1" class="form-radio" {{if ne .Query.window
+                                $option2 }}checked{{end}}>
                             <span class="ml-2">Annual</span>
                         </label>
                         <label class="inline-flex items-center border rounded p-2 w-full">
-                            <input type="radio" name="window" value="5" class="form-radio" {{if eq .Query.window "5"
-                                }}checked{{end}}>
+                            <input type="radio" name="window" value="5" class="form-radio" {{if eq .Query.window
+                                $option2 }}checked{{end}}>
                             <span class="ml-2">5-year rolling avg.</span>
                         </label>
                     </div>
@@ -156,12 +157,12 @@
             <!-- Summer/Frost days tabs -->
             <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Special temperature days</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
-                Number of days for the selected period each year: 
-                <em>ice days</em> (max. temperature &lt; 0 °C), 
-                <em>frost days</em> (min. temperature &lt; 0 °C), 
+                Number of days for the selected period each year:
+                <em>ice days</em> (max. temperature &lt; 0 °C),
+                <em>frost days</em> (min. temperature &lt; 0 °C),
                 <em>summer days</em> (max. temperature ≥ 25 °C),
                 <em>heat days</em> (max. temperature ≥ 30 °C),
-                and 
+                and
                 <em>tropical nights</em> (max. temperature ≥ 20 °C).
             </p>
             <div class="tab-widget mb-12">

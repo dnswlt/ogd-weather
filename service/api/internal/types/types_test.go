@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestNullFloat64_UnmarshalJSON(t *testing.T) {
@@ -31,6 +33,33 @@ func TestNullFloat64_UnmarshalJSON(t *testing.T) {
 		}
 		if f.Value != tt.wantValue || f.HasValue != tt.wantHas {
 			t.Errorf("UnmarshalJSON(%q) = %+v, want value=%v has=%v", tt.input, f, tt.wantValue, tt.wantHas)
+		}
+	}
+}
+
+func TestNullFloat64_SliceUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		input     string
+		wantValue []NullFloat64
+	}{
+		{
+			input: `[null, 1.3]`,
+			wantValue: []NullFloat64{
+				{0, false},
+				{1.3, true},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		var fs []NullFloat64
+		err := json.Unmarshal([]byte(tt.input), &fs)
+		if err != nil {
+			t.Errorf("UnmarshalJSON(%q) error = %v", tt.input, err)
+			continue
+		}
+		if diff := cmp.Diff(tt.wantValue, fs); diff != "" {
+			t.Errorf("Unmarshal diff (-want, +got): %v", diff)
 		}
 	}
 }

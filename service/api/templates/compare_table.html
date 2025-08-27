@@ -1,0 +1,45 @@
+<table class="w-full table-auto border-collapse text-sm" id="comparison-table">
+    <thead>
+        <tr class="border-b">
+            <th scope="col" class="py-2 pr-2 text-left text-gray-700"></th>
+
+            {{ range $i, $s := .Response.Data.Stations }}
+            <th scope="col" class="py-2 pr-2 text-right text-gray-700" data-station="{{$s.Abbr}}">
+                <div class="flex items-center justify-end gap-2">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full c-station{{$i}}"></span>
+                    <span>{{$s.Name}}</span>
+                    <button class="remove-station-btn text-gray-500">&times;</button>
+                </div>
+            </th>
+            {{ end }}
+
+            <th scope="col" class="py-2 pr-2 text-left text-gray-700">
+                <span style="visibility: hidden;">LittleMermaid</span>
+            </th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {{ range .Response.Data.Rows }}
+        <tr class="border-b" style="{{ stationVarsPercent . }}">
+            <td class="py-2 pr-2 text-gray-800 text-left">
+                {{ .Label }}
+            </td>
+            {{ $fmt := floatFormat .MaxValue.Value }}
+            {{ range .Values }}
+            <td class="py-2 pr-2 tabular-nums text-right text-gray-800">
+                {{ floatOr $fmt . "n/a" }}
+            </td>
+            {{ end }}
+            <td class="py-2 pr-2">
+                <div class="bars" role="img">
+                    {{ range $i, $v := .Values }}
+                    <div class="bar c-station{{$i}}" style="--p: var(--station{{$i}});"></div>
+                    {{ end }}
+                </div>
+            </td>
+        </tr>
+        {{ end }}
+
+    </tbody>
+</table>

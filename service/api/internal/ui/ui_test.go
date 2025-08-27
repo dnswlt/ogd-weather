@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"html/template"
 	"strings"
 	"testing"
 	"time"
@@ -189,5 +190,149 @@ func TestFormatBytesIEC(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("formatBytesIEC(%d) = %q; want %q", tt.input, got, tt.expected)
 		}
+	}
+}
+
+func TestStationVarsPercent(t *testing.T) {
+	// Helper to create a NullFloat64 struct.
+	v := func(val float64) types.NullFloat64 {
+		return types.NullFloat64{HasValue: true, Value: val}
+	}
+	// Helper for an empty/non-existent value.
+	noV := types.NullFloat64{HasValue: false}
+
+	// Define all test cases in a table.
+	testCases := []struct {
+		name string
+		row  *types.StationComparisonRow
+		want template.CSS
+	}{
+		{
+			name: "Normal case, no bounds",
+			row: &types.StationComparisonRow{
+				Values: []types.NullFloat64{v(10), v(55), v(100)},
+			},
+			// minVal becomes 10, maxVal 100. Span is 90.
+			// To avoid 0% bar, original span (90) is treated as 90% of new span.
+			// New span = 90 / 0.9 = 100.
+			// New minVal = 100 (maxVal) - 100 (newSpan) = 0.
+			// Pcts: (10-0)/100*100=10%, (55-0)/100*100=55%, (100-0)/100*100=100%
+			want: "--station0: 10.0%; --station1: 55.0%; --station2: 100.0%;",
+		},
+		{
+			name: "Empty values slice",
+			row: &types.StationComparisonRow{
+				Values: []types.NullFloat64{},
+			},
+			want: "",
+		},
+		{
+			name: "All values are identical",
+			row: &types.StationComparisonRow{
+				Values: []types.NullFloat64{v(50), v(50), v(50)},
+			},
+			// span is 0, so all should be 100%
+			want: "--station0: 100.0%; --station1: 100.0%; --station2: 100.0%;",
+		},
+		{
+			name: "With fixed lower bound",
+			row: &types.StationComparisonRow{
+				Values:     []types.NullFloat64{v(10), v(55), v(100)},
+				LowerBound: v(0),
+			},
+			// minVal=0, maxVal=100, span=100. No 0% adjustment needed.
+			// Pcts: (10-0)/100*100=10%, (55-0)/100*100=55%, (100-0)/100*100=100%
+			want: "--station0: 10.0%; --station1: 55.0%; --station2: 100.0%;",
+		},
+		{
+			name: "With fixed upper bound",
+			row: &types.StationComparisonRow{
+				Values:     []types.NullFloat64{v(10), v(50)},
+				UpperBound: v(100),
+			},
+			// minVal=10, maxVal=100, span=90. 0% adjustment is triggered.
+			// New span = 90 / 0.9 = 100.
+			// New minVal = 100 - 100 = 0.
+			// Pcts: (10-0)/100*100=10%, (50-0)/100*100=50%
+			want: "--station0: 10.0%; --station1: 50.0%;",
+		},
+		{
+			name: "With both bounds",
+			row: &types.StationComparisonRow{
+				Values:     []types.NullFloat64{v(20), v(80)},
+				LowerBound: v(0),
+				UpperBound: v(100),
+			},
+			// minVal=0, maxVal=100, span=100.
+			// Pcts: (20-0)/100*100=20%, (80-0)/100*100=80%
+			want: "--station0: 20.0%; --station1: 80.0%;",
+		},
+		{
+			name: "Values outside fixed bounds",
+			row: &types.StationComparisonRow{
+				Values:     []types.NullFloat64{v(-10), v(110)},
+				LowerBound: v(0),
+				UpperBound: v(100),
+			},
+			// Actual value should push minVal down so its value is at
+			// 10%.
+			want: "--station0: 10.0%; --station1: 100.0%;",
+		},
+		{
+			name: "With missing/nil values",
+			row: &types.StationComparisonRow{
+				Values: []types.NullFloat64{v(10), noV, v(100)},
+			},
+			// Same as normal case, but middle value is 0%.
+			want: "--station0: 10.0%; --station1: 0.0%; --station2: 100.0%;",
+		},
+		{
+			name: "All missing values",
+			row: &types.StationComparisonRow{
+				Values: []types.NullFloat64{noV, noV, noV},
+			},
+			// No min/max found, span is 0, all pcts are 0.
+			want: "--station0: 0.0%; --station1: 0.0%; --station2: 0.0%;",
+		},
+		{
+			name: "Single value, no bounds",
+			row: &types.StationComparisonRow{
+				Values: []types.NullFloat64{v(42)},
+			},
+			// minVal==maxVal, span is 0, so pct is 100%.
+			want: "--station0: 100.0%;",
+		},
+		{
+			name: "Single value with bounds",
+			row: &types.StationComparisonRow{
+				Values:     []types.NullFloat64{v(50)},
+				LowerBound: v(0),
+				UpperBound: v(100),
+			},
+			// minVal=0, maxVal=100, span=100.
+			// Pct: (50-0)/100*100=50%
+			want: "--station0: 50.0%;",
+		},
+		{
+			name: "Negative values",
+			row: &types.StationComparisonRow{
+				Values: []types.NullFloat64{v(-50), v(-10), v(0)},
+			},
+			// minVal=-50, maxVal=0, span=50. 0% adjustment triggered.
+			// New span = 50 / 0.9 = 55.55...
+			// New minVal = 0 - 55.55... = -55.55...
+			// Pcts: (-50 - -55.55)/55.55*100=10%, (-10 - -55.55)/55.55*100=82%, (0 - -55.55)/55.55*100=100%
+			want: "--station0: 10.0%; --station1: 82.0%; --station2: 100.0%;",
+		},
+	}
+
+	// Run the test cases.
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StationVarsPercent(tc.row)
+			if got != tc.want {
+				t.Errorf("StationVarsPercent()\n got: %q\nwant: %q", got, tc.want)
+			}
+		})
 	}
 }

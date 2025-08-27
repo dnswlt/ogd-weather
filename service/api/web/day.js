@@ -54,10 +54,10 @@ export function initDayPage() {
         document.getElementById("next-date")?.addEventListener("click", () => adjustDate(+1));
         document.getElementById("latest-date")?.addEventListener("click", () => setYesterdayDateString());
 
+        // Handle clicks on tablist buttons.
+        registerTablistHandler();
+
+        registerSearchBarHandler();
     });
 
-    // Handle clicks on tablist buttons.
-    registerTablistHandler();
-
-    registerSearchBarHandler();
 }

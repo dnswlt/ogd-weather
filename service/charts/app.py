@@ -868,7 +868,7 @@ async def list_stations(
     }
 
 
-@app.get("/stations/search")
+@app.get("/stations:search")
 async def search_stations(q: str, station_type: str | None = None):
     places_lookup: geo.Places = app.state.geo_places
     station_lookup: geo.StationLookup = app.state.geo_stations
@@ -892,4 +892,48 @@ async def search_stations(q: str, station_type: str | None = None):
 
     return {
         "places": result,
+    }
+
+
+@app.get("/stations:compare")
+async def compare_stations(
+    stations: str,
+    period: str | None = None,
+    year_range: str | None = None,
+):
+    period = _period_default(period)
+
+    station_list = [s.strip() for s in stations.split(",") if s.strip()]
+    if len(station_list) < 1 or len(station_list) > 4:
+        raise _bad_request(f"Only 1..4 stations can be compared")
+
+    if year_range == "1991-2020":
+        from_date = datetime.date(1991, 1, 1)
+        to_date = datetime.date(2021, 1, 1)
+    elif year_range == "2021-today":
+        # 2021 - previous year (ignore incomplete current year)
+        from_date = datetime.date(2021, 1, 1)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        to_date = datetime.date(now.year, 1, 1)
+    else:
+        raise _bad_request(f"Invalid year_range: {year_range}")
+
+    with app.state.engine.begin() as conn:
+        per_station_data = {}
+        for s in station_list:
+            station = db.read_station(conn, s)
+            df = db.read_daily_measurements(
+                conn,
+                s,
+                columns=[dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MAX, dc.PRECIP_DAILY_MM],
+                from_date=from_date,
+                to_date=to_date,
+                period=period,
+            )
+            per_station_data[s] = (station, df)
+
+    data = stats.compare_stations(per_station_data)
+
+    return {
+        "data": data,
     }
