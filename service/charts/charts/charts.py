@@ -668,6 +668,90 @@ def hom_frost_days_chart(
     )
 
 
+def hom_ice_days_chart(
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
+):
+    _verify_timeline_data(df, [tf.ICE_DAYS], station_abbr, period)
+
+    data = pd.DataFrame(
+        {
+            "# days": df[tf.ICE_DAYS],
+        }
+    )
+
+    data_long, trend_long = tf.timeline_years_chart_data(data, "sum", window)
+
+    window_info = f"({window}y rolling avg.)" if window > 1 else ""
+    title = f"Number of ice days (max. < 0 °C) in {period_to_title(period)}, by year {window_info}".strip()
+    return annual_timeline_chart(
+        data_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+        palette=colors.Tab20("PastelPink"),
+    )
+
+
+def hom_tropical_nights_chart(
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
+):
+    _verify_timeline_data(df, [tf.TROPICAL_NIGHTS], station_abbr, period)
+
+    data = pd.DataFrame(
+        {
+            "# days": df[tf.TROPICAL_NIGHTS],
+        }
+    )
+
+    data_long, trend_long = tf.timeline_years_chart_data(data, "sum", window)
+
+    window_info = f"({window}y rolling avg.)" if window > 1 else ""
+    title = f"Number of tropical nights (min. ≥ 20 °C) in {period_to_title(period)}, by year {window_info}".strip()
+    return annual_timeline_chart(
+        data_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+        palette=colors.Tab20("LeafGreen"),
+    )
+
+
+def hom_heat_days_chart(
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
+):
+    _verify_timeline_data(df, [tf.HEAT_DAYS], station_abbr, period)
+
+    data = pd.DataFrame(
+        {
+            "# days": df[tf.HEAT_DAYS],
+        }
+    )
+
+    data_long, trend_long = tf.timeline_years_chart_data(data, "sum", window)
+
+    window_info = f"({window}y rolling avg.)" if window > 1 else ""
+    title = f"Number of heat days (max. ≥ 30 °C) in {period_to_title(period)}, by year {window_info}".strip()
+    return annual_timeline_chart(
+        data_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+        palette=colors.Tab20("DustyRose"),
+    )
+
+
 def monthly_boxplot_chart_data(ser: pd.Series):
     if ser.empty:
         raise NoDataError(f"No data for boxplot")

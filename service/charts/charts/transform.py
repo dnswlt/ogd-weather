@@ -17,6 +17,9 @@ TEMP_MEAN_OF_DAILY_MAX = "temp_mean_of_daily_max"
 PRECIP_MM = "precip_mm"
 SUMMER_DAYS = "summer_days"
 FROST_DAYS = "frost_days"
+ICE_DAYS = "ice_days"
+TROPICAL_NIGHTS = "tropical_nights"
+HEAT_DAYS = "heat_days"
 
 
 def annual_agg(df, func):
@@ -118,5 +121,11 @@ def timeless_column_names(df: pd.DataFrame) -> pd.DataFrame:
         dc.SUMMER_DAYS_HOM_ANNUAL_COUNT: SUMMER_DAYS,
         dc.FROST_DAYS_HOM_MONTHLY_COUNT: FROST_DAYS,
         dc.FROST_DAYS_HOM_ANNUAL_COUNT: FROST_DAYS,
+        dc.ICE_DAYS_HOM_MONTHLY_COUNT: ICE_DAYS,
+        dc.ICE_DAYS_HOM_ANNUAL_COUNT: ICE_DAYS,
+        dc.TROPICAL_NIGHTS_HOM_MONTHLY_COUNT: TROPICAL_NIGHTS,
+        dc.TROPICAL_NIGHTS_HOM_ANNUAL_COUNT: TROPICAL_NIGHTS,
+        dc.HEAT_DAYS_HOM_MONTHLY_COUNT: HEAT_DAYS,
+        dc.HEAT_DAYS_HOM_ANNUAL_COUNT: HEAT_DAYS,
     }
     return df.rename(columns=DISPLAY_COLUMN_NAMES)

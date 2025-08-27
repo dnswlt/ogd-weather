@@ -156,22 +156,40 @@
             <!-- Summer/Frost days tabs -->
             <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Special Temperature Days</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
-                Number of days for the selected period each year: <em>summer days</em> (max. temperature ≥ 25 °C),
-                <em>frost days</em> (min. temperature &lt; 0 °C).
+                Number of days for the selected period each year: 
+                <em>ice days</em> (max. temperature &lt; 0 °C), 
+                <em>frost days</em> (min. temperature &lt; 0 °C), 
+                <em>summer days</em> (max. temperature ≥ 25 °C),
+                <em>heat days</em> (max. temperature ≥ 30 °C),
+                and 
+                <em>tropical nights</em> (max. temperature ≥ 20 °C).
             </p>
             <div class="tab-widget mb-12">
                 <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
-                    <!-- Summer days -->
+                    <button data-chart-type="ice_days" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Ice days
+                    </button>
+                    <button data-chart-type="frost_days" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Frost days
+                    </button>
                     <button data-chart-type="summer_days" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                    hover:text-gray-800 focus:outline-none
                    aria-selected:border-blue-600 aria-selected:text-blue-600">
                         Summer days
                     </button>
-                    <!-- Frost days -->
-                    <button data-chart-type="frost_days" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                    <button data-chart-type="heat_days" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
                    hover:text-gray-800 focus:outline-none
                    aria-selected:border-blue-600 aria-selected:text-blue-600">
-                        Frost days
+                        Heat days
+                    </button>
+                    <button data-chart-type="tropical_nights" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Tropical nights
                     </button>
                 </div>
 
