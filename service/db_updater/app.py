@@ -46,6 +46,12 @@ def main():
         help="If set, ALL DATA IS DROPPED from the database before updating it.",
     )
     parser.add_argument(
+        "--auto-recreate",
+        action="store_true",
+        default=False,
+        help="If set, tables with mismatching colums are automatically DROPPED from the database before updating it.",
+    )
+    parser.add_argument(
         "--force-update",
         action="store_true",
         default=False,
@@ -94,6 +100,7 @@ def main():
 
     force_update: bool = args.force_update
     force_recreate: bool = args.force_recreate
+    auto_recreate: bool = args.auto_recreate
     recreate_views: bool = args.recreate_views
     db_migrations: list[str] = (
         [s.strip() for s in args.db_migrations.split(",")] if args.db_migrations else []
@@ -149,13 +156,19 @@ def main():
             ds.validate_schema(engine=engine, allow_missing_tables=True)
             logger.info("Successfully validated the DB schema.")
         except SchemaValidationError as e:
-            logger.error(
-                "Schema mismatch detected: %s."
-                " Consider running with --force-recreate. "
-                " Note that this will DROP ALL DATA from the database.",
-                str(e),
-            )
-            return
+            if auto_recreate and len(e.mismatched_columns) > 0:
+                logger.warning("Dropping tables with mismatched columns: %s", str(e))
+                ogd.recreate_mismatched_tables(
+                    engine, set(c.table for c in e.mismatched_columns)
+                )
+            else:
+                logger.error(
+                    "Schema mismatch detected: %s."
+                    " Consider running with --auto-recreate or --force-recreate."
+                    " Note that --force-recreate will DROP ALL DATA from the database.",
+                    str(e),
+                )
+                return
 
     if recreate_views:
         ogd.run_recreate_views(engine)

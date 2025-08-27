@@ -6,6 +6,7 @@ import queue
 import re
 import sys
 import time
+from typing import Iterable
 from pydantic import BaseModel
 import requests
 import sqlalchemy as sa
@@ -490,3 +491,28 @@ def run_recreate_views(engine: sa.Engine):
     logger.info("Recreating views only...")
     db.recreate_views(engine)
     logger.info("Recreated materialized views in %.1fs.", time.time() - started_time)
+
+
+def recreate_mismatched_tables(engine: sa.Engine, table_names: Iterable[str]):
+    """Drops and (re)creates the given tables.
+
+    Also removes all rows from the update_status table for the dropped tables,
+    so that updates work as expected.
+    """
+    tables: list[sa.Table] = []
+    for t in table_names:
+        table = ds.metadata.tables.get(t)
+        if table is None:
+            raise ValueError(f"Table {t} does not exist and cannot be dropped")
+        tables.append(table)
+
+    with engine.begin() as conn:
+        for table in tables:
+            logger.info("Dropping mismatched table %s", table.name)
+            table.drop(conn)
+            table.create(conn)
+            # Drop rows from update_status
+            delete_stmt = ds.sa_table_update_status.delete().where(
+                ds.sa_table_update_status.c.destination_table == table.name
+            )
+            conn.execute(delete_stmt)

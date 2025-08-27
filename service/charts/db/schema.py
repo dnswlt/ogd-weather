@@ -3,7 +3,7 @@
 import pandas as pd
 import sqlalchemy as sa
 
-from service.charts.base.errors import SchemaValidationError
+from service.charts.base.errors import SchemaValidationError, SchemaColumnMismatchInfo
 
 from . import constants as dc
 
@@ -521,15 +521,17 @@ def validate_schema(
     missing_tables = set()
     for table_name in metadata.tables:
         if table_name not in db_tables:
-            if allow_missing_tables:
-                missing_tables.add(table_name)
-            else:
-                raise SchemaValidationError(
-                    f"Table '{table_name}' is defined in the schema "
-                    "but does not exist in the database."
-                )
+            missing_tables.add(table_name)
+
+    if not allow_missing_tables:
+        raise SchemaValidationError(
+            f"Tables {missing_tables} are defined in the schema "
+            "but do not exist in the database.",
+            missing_tables=missing_tables,
+        )
 
     # Step 2: Check for missing/mismatched columns in existing tables
+    mismatched_columns = []
     for table_name, table in metadata.tables.items():
         if table_name in missing_tables:
             continue
@@ -541,10 +543,12 @@ def validate_schema(
 
         for col_name, column in table.columns.items():
             if col_name not in db_columns:
-                raise SchemaValidationError(
-                    f"Column '{col_name}' in table '{table_name}' is defined "
-                    "in the schema but not in the database"
+                mismatched_columns.append(
+                    SchemaColumnMismatchInfo(
+                        table=table_name, column=col_name, is_missing=True
+                    )
                 )
+                continue
 
             # Compare column types (this is the trickiest part)
             db_col_type = db_columns[col_name]["type"]
@@ -555,14 +559,27 @@ def validate_schema(
             if not isinstance(db_col_type, type(code_col_type)):
                 # A simple fallback for when types don't match directly
                 if str(code_col_type).upper() not in str(db_col_type).upper():
-                    raise SchemaValidationError(
-                        f"Column '{col_name}' in table '{table_name}' has a type mismatch. "
-                        f"Schema: {code_col_type}, DB: {db_col_type}"
+                    mismatched_columns.append(
+                        SchemaColumnMismatchInfo(
+                            table=table_name,
+                            column=col_name,
+                            info=f"Schema: {code_col_type}, DB: {db_col_type}",
+                        )
                     )
+                    continue
 
             # Compare nullability
             if column.nullable != db_columns[col_name]["nullable"]:
-                raise SchemaValidationError(
-                    f"Column '{col_name}' in table '{table_name}' has a nullability mismatch. "
-                    f"Schema: nullable={column.nullable}, DB: nullable={db_columns[col_name]['nullable']}"
+                mismatched_columns.append(
+                    SchemaColumnMismatchInfo(
+                        table=table_name,
+                        column=col_name,
+                        info=f"Schema: nullable={column.nullable}, DB: nullable={db_columns[col_name]['nullable']}",
+                    )
                 )
+                continue
+
+    if len(mismatched_columns) > 0:
+        raise SchemaValidationError(
+            f"Column mismatches detected", mismatched_columns=mismatched_columns
+        )
