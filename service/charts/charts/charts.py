@@ -174,8 +174,11 @@ def annual_timeline_chart(
     trend_palette: colors.Palette | None = None,
 ) -> alt.LayerChart:
 
-    if palette is not None and trend_palette is None:
-        trend_palette = palette.invert()  # Use inverted colors for trendlines
+    if trend_palette is None:
+        # Use inverted colors for Tab20 trendlines
+        trend_palette = (
+            palette.invert() if isinstance(palette, colors.Tab20) else palette
+        )
 
     values_long = _year_to_dt(values_long)
     # Actual data
@@ -549,6 +552,7 @@ def hom_annual_temperature_chart(
         typ="line",
         title=title,
         y_label="°C",
+        palette=colors.Custom.tab20("SteelBlue", "Apricot", "CoralRed"),
     )
 
 
@@ -605,6 +609,62 @@ def hom_temperature_deviation_chart(
     return dynamic_baseline_bars_chart(
         data_long,
         f"Temperature deviation from mean in {period_to_title(period)}",
+    )
+
+
+def hom_summer_days_chart(
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
+):
+    _verify_timeline_data(df, [tf.SUMMER_DAYS], station_abbr, period)
+
+    data = pd.DataFrame(
+        {
+            "# days": df[tf.SUMMER_DAYS],
+        }
+    )
+
+    data_long, trend_long = tf.timeline_years_chart_data(data, "sum", window)
+
+    window_info = f"({window}y rolling avg.)" if window > 1 else ""
+    title = f"Number of summer days (max. ≥ 25 °C) in {period_to_title(period)}, by year {window_info}".strip()
+    return annual_timeline_chart(
+        data_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+        palette=colors.Tab20("Lavender"),
+    )
+
+
+def hom_frost_days_chart(
+    df: pd.DataFrame,
+    station_abbr: str,
+    period: str = PERIOD_ALL,
+    window: int | None = None,
+):
+    _verify_timeline_data(df, [tf.FROST_DAYS], station_abbr, period)
+
+    data = pd.DataFrame(
+        {
+            "# days": df[tf.FROST_DAYS],
+        }
+    )
+
+    data_long, trend_long = tf.timeline_years_chart_data(data, "sum", window)
+
+    window_info = f"({window}y rolling avg.)" if window > 1 else ""
+    title = f"Number of frost days (min. < 0 °C) in {period_to_title(period)}, by year {window_info}".strip()
+    return annual_timeline_chart(
+        data_long,
+        trend_long,
+        typ="bar",
+        title=title,
+        y_label="# days",
+        palette=colors.Tab20("AshGray"),
     )
 
 

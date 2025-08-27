@@ -76,7 +76,7 @@ class Palette:
         range = self.first_n(len(domain))
         return alt.Scale(domain=domain, range=range)
 
-    def invert(self) -> "Tab20":
+    def invert(self) -> "Palette":
         raise NotImplemented(f"invert is not implemented for {self.__class__}")
 
     def __str__(self) -> str:
@@ -106,6 +106,7 @@ class Custom(Palette):
 
 
 class Tab20(Palette):
+    """A Tableau 20 color palette that switches between primary and secondary color tones."""
 
     def __init__(self, start_color: str):
         primary, secondary = self._from_color_pairs(COLORS_TABLEAU20, start_color)

@@ -420,6 +420,28 @@ async def get_trends_chart(
             period=period,
             window=window_int,
         )
+    elif chart_type == "summer_days":
+        df = _read_hom(
+            [dc.SUMMER_DAYS_HOM_MONTHLY_COUNT],
+            [dc.SUMMER_DAYS_HOM_ANNUAL_COUNT],
+        )
+        chart = charts.hom_summer_days_chart(
+            df,
+            station_abbr=station_abbr,
+            period=period,
+            window=window_int,
+        )
+    elif chart_type == "frost_days":
+        df = _read_hom(
+            [dc.FROST_DAYS_HOM_MONTHLY_COUNT],
+            [dc.FROST_DAYS_HOM_ANNUAL_COUNT],
+        )
+        chart = charts.hom_frost_days_chart(
+            df,
+            station_abbr=station_abbr,
+            period=period,
+            window=window_int,
+        )
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
 

@@ -14,13 +14,13 @@
 
         <div class="space-y-3">
             <p class="text-sm text-gray-700 leading-relaxed p-2 bg-[#eaf2fa] border border-[#d1e6f5] rounded-lg">
-                This page displays the long-term climatic development based on 
+                This page displays the long-term climatic development based on
                 <a class="text-blue-600 hover:underline"
                     href="https://opendatadocs.meteoswiss.ch/c-climate-data/c1-climate-stations_homogeneous"
                     target="_blank">
                     homogenous data
                 </a>
-                from MeteoSwiss's climate stations. 
+                from MeteoSwiss's climate stations.
             </p>
         </div>
 
@@ -33,8 +33,8 @@
                     <div class="flex items-center gap-2">
                         <input id="station-search" name="q" type="search" placeholder="'3004' or 'Bern'"
                             class="border rounded p-2 w-full" autocomplete="off" spellcheck="false"
-                            hx-get="/stations/search?station_type=climate" hx-trigger="input changed delay:400ms, search"
-                            hx-target="#search-results" />
+                            hx-get="/stations/search?station_type=climate"
+                            hx-trigger="input changed delay:400ms, search" hx-target="#search-results" />
                     </div>
                     <div id="search-results"></div>
                 </div>
@@ -126,7 +126,7 @@
 
             <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Temperature Deviations</h2>
             <p class="text-sm text-gray-600 leading-relaxed mb-4">
-                Yearly deviations from the long‑term mean of the <strong>average daily mean temperatures</strong>
+                Yearly deviations from the long-term mean of the <strong>average daily mean temperatures</strong>
                 for the entire period. Red bars indicate years warmer than this overall mean, while blue bars show
                 cooler years.
             </p>
@@ -152,6 +152,37 @@
                 </div>
                 <div id="precipitation-chart" class="w-full overflow-hidden"></div>
             </div>
+
+            <!-- Summer/Frost days tabs -->
+            <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Special Temperature Days</h2>
+            <p class="text-sm text-gray-600 leading-relaxed mb-4">
+                Number of days for the selected period each year: <em>summer days</em> (max. temperature ≥ 25 °C),
+                <em>frost days</em> (min. temperature &lt; 0 °C).
+            </p>
+            <div class="tab-widget mb-12">
+                <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
+                    <!-- Summer days -->
+                    <button data-chart-type="summer_days" role="tab" aria-selected="true" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Summer days
+                    </button>
+                    <!-- Frost days -->
+                    <button data-chart-type="frost_days" role="tab" aria-selected="false" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600
+                   hover:text-gray-800 focus:outline-none
+                   aria-selected:border-blue-600 aria-selected:text-blue-600">
+                        Frost days
+                    </button>
+                </div>
+
+                <div class="vega-spec-loader" data-vega-target="seasondays-vega-chart"
+                    hx-get="/stations/{station}/charts/trends/{chartType}" hx-ext="path-params"
+                    hx-trigger="change from:#chart-controls, refresh" hx-include="#chart-controls"
+                    hx-vals='{"chartType":"summer_days"}' hx-target="this" hx-swap="innerHTML"></div>
+                <div id="seasondays-vega-chart" class="w-full overflow-hidden"></div>
+            </div>
+
+
         </div>
 
     </main>
