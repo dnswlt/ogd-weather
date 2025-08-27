@@ -39,6 +39,7 @@ class UpdateStatus(BaseModel):
     table_updated_time: datetime.datetime
     resource_updated_time: datetime.datetime | None = None
     etag: str | None = None
+    destination_table: str | None = None
 
     _is_not_modified: bool = False
 
@@ -384,6 +385,7 @@ def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
                     resource_updated_time=parse_dt(row["resource_updated_time"]),
                     table_updated_time=parse_dt(row["table_updated_time"]),
                     etag=row["etag"],
+                    destination_table=row["destination_table"],
                 )
             )
 

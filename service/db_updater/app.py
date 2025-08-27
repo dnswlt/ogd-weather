@@ -13,6 +13,7 @@ from service.charts.db import schema as ds
 from service.charts.db import constants as dc
 
 from . import bootstrap
+from . import migration
 from . import ogd
 
 logger = logging.getLogger("db_updater")
@@ -72,6 +73,15 @@ def main():
         ),
     )
     parser.add_argument(
+        "--db-migrations",
+        dest="db_migrations",
+        metavar="MIGRATION_LIST",
+        help=(
+            "Optional comma-separated list of migration script IDs to execute."
+            " If set, no actual data import will be performed."
+        ),
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         default=False,
@@ -85,6 +95,9 @@ def main():
     force_update: bool = args.force_update
     force_recreate: bool = args.force_recreate
     recreate_views: bool = args.recreate_views
+    db_migrations: list[str] = (
+        [s.strip() for s in args.db_migrations.split(",")] if args.db_migrations else []
+    )
 
     if args.base_dir:
         base_dir: str = args.base_dir
@@ -122,6 +135,14 @@ def main():
         engine = sa.create_engine(f"sqlite:///{db_path}", echo=args.verbose)
 
     logger.info("Using DB engine '%s'", engine.name)
+
+    # DB migrations
+    if db_migrations:
+        logger.info(f"Running DB migrations: {', '.join(db_migrations)}")
+        for m_id in db_migrations:
+            migration.run_migration(engine, m_id)
+        logger.info(f"Finished DB migrations. Exiting.")
+        return
 
     if not force_recreate:
         try:

@@ -275,6 +275,8 @@ def import_into_db(
 
     table_spec = MEASUREMENT_TABLES.get((resource.parent_id, resource.interval))
     if table_spec is not None:
+        # Ensure the destination_table gets stored in the udpate_status table.
+        resource.status.destination_table = table_spec.name
         db.insert_csv_data(
             weather_dir,
             engine,
@@ -288,6 +290,7 @@ def import_into_db(
         if table is None:
             logger.warning("Ignoring unknown metadata CSV file %s", csv_file)
             return
+        resource.status.destination_table = table.name
         db.insert_csv_metadata(
             weather_dir,
             engine,

@@ -196,6 +196,7 @@ TABLE_MONTHLY_HOM_MEASUREMENTS = DataTableSpec(
         dc.FROST_DAYS_HOM_MONTHLY_COUNT,
         dc.ICE_DAYS_HOM_MONTHLY_COUNT,
         dc.TROPICAL_NIGHTS_HOM_MONTHLY_COUNT,
+        # dc.SUMMER_DAYS_HOM_MONTHLY_COUNT,
         dc.HEAT_DAYS_HOM_MONTHLY_COUNT,
         dc.VERY_HOT_DAYS_HOM_MONTHLY_COUNT,
         dc.PRECIP_HOM_MONTHLY_MM,
@@ -340,6 +341,7 @@ sa_table_update_status = sa.Table(
     sa.Column("table_updated_time", sa.Text, nullable=False),
     sa.Column("resource_updated_time", sa.Text),
     sa.Column("etag", sa.Text),
+    sa.Column("destination_table", sa.Text),
 )
 
 sa_table_update_log = sa.Table(
