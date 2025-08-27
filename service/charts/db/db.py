@@ -340,6 +340,7 @@ def save_update_status(conn: sa.Connection, s: UpdateStatus) -> None:
                     else None
                 ),
                 etag=s.etag,
+                destination_table=s.destination_table,
             )
         )
     else:
@@ -373,6 +374,7 @@ def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
         ds.sa_table_update_status.c.resource_updated_time,
         ds.sa_table_update_status.c.table_updated_time,
         ds.sa_table_update_status.c.etag,
+        ds.sa_table_update_status.c.destination_table,
     )
 
     with engine.connect() as conn:

@@ -842,6 +842,7 @@ class TestCreateDb(unittest.TestCase):
                 href="file:///ogd-nbcn_ber_m.csv",
                 resource_updated_time=now,
                 table_updated_time=now,
+                destination_table=ds.TABLE_MONTHLY_HOM_MEASUREMENTS.name,
             ),
         )
         with engine.connect() as conn:
@@ -862,6 +863,12 @@ class TestCreateDb(unittest.TestCase):
         self.assertTrue(
             (df[columns].sum() > 0).all(),
             "All measurement columns should have some nonzero values.",
+        )
+
+        updates = db.read_update_status(engine)
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(
+            updates[0].destination_table, ds.TABLE_MONTHLY_HOM_MEASUREMENTS.name
         )
 
     def test_create_annual_hom(self):
@@ -911,6 +918,7 @@ class TestCreateDb(unittest.TestCase):
                 href="file:///ogd-smn_meta_stations.csv",
                 resource_updated_time=now,
                 table_updated_time=now,
+                destination_table=ds.sa_table_smn_meta_stations.name,
             ),
         )
         # No query methods for metadata, so not much to check in the metadata table itself.
@@ -921,6 +929,7 @@ class TestCreateDb(unittest.TestCase):
         self.assertEqual(len(u.id), 36)  # Should have a uuid4
         self.assertEqual(u.resource_updated_time, now)
         self.assertEqual(u.table_updated_time, now)
+        self.assertEqual(u.destination_table, ds.sa_table_smn_meta_stations.name)
 
     def test_recreate_nearby_stations(self):
         engine = sa.create_engine("sqlite:///:memory:")
