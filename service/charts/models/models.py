@@ -100,6 +100,7 @@ class StationPeriodStats(BaseModel):
 
 
 class MeasurementInfo(BaseModel):
+    dataset: str
     variable: str
     description: LocalizedString
     group: LocalizedString

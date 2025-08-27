@@ -160,6 +160,7 @@ type NearbyStation struct {
 }
 
 type MeasurementInfo struct {
+	Dataset     string          `json:"dataset"`
 	Variable    string          `json:"variable"`
 	Description LocalizedString `json:"description"`
 	Group       LocalizedString `json:"group"`
@@ -169,20 +170,51 @@ type MeasurementInfo struct {
 	MaxDate     NullDate        `json:"max_date"`
 }
 
-// DailyValuePresentPercent returns the percent (0..100) of
-// days that have a measurement value.
+// ValuePresentPercent returns the percent (0..100) of
+// time units that have a measurement value.
 // If there are no values or no date range, it returns 0.
-func (m *MeasurementInfo) DailyValuePresentPercent() float64 {
-	if !m.MinDate.HasValue || !m.MaxDate.HasValue {
-		return 0
-	}
-	d := m.MaxDate.Value.Time.Sub(m.MinDate.Value.Time).Hours()/24 + 1
-	if d <= 0 {
-		// MaxDate < MinDate?
+func (m *MeasurementInfo) ValuePresentPercent() float64 {
+	if !m.MinDate.HasValue || !m.MaxDate.HasValue || m.ValueCount == 0 {
 		return 0
 	}
 
-	return float64(m.ValueCount) / d * 100
+	t1 := m.MinDate.Value.Time
+	t2 := m.MaxDate.Value.Time
+
+	var expected float64
+	switch m.Granularity {
+	case "H":
+		// Calculate the total number of hours spanned, inclusive.
+		expected = t2.Sub(t1).Hours() + 1
+	case "D":
+		// To correctly count calendar days, we zero out the time part of each date.
+		d1 := time.Date(t1.Year(), t1.Month(), t1.Day(), 0, 0, 0, 0, t1.Location())
+		d2 := time.Date(t2.Year(), t2.Month(), t2.Day(), 0, 0, 0, 0, t2.Location())
+		// Calculate the difference in hours and divide by 24 to get the number of days, inclusive.
+		expected = (d2.Sub(d1).Hours() / 24) + 1
+	case "M":
+		// Calculate the total number of months spanned, inclusive.
+		years := t2.Year() - t1.Year()
+		months := int(t2.Month()) - int(t1.Month())
+		expected = float64(years*12 + months + 1)
+	case "Y":
+		// Calculate the total number of years spanned, inclusive.
+		expected = float64(t2.Year()-t1.Year()) + 1
+	default:
+		// If granularity is unknown, we can't calculate a percentage.
+		return 0
+	}
+
+	if expected <= 0 {
+		// This can happen if MaxDate < MinDate.
+		return 0
+	}
+
+	// Calculate the percentage.
+	percent := (float64(m.ValueCount) / expected) * 100
+
+	// The percentage should not exceed 100.
+	return math.Min(percent, 100.0)
 }
 
 type StationInfo struct {

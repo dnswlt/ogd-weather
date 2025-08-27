@@ -355,11 +355,31 @@ sa_table_update_log = sa.Table(
 # we prefix them all by "x_"
 
 
+sa_table_x_all_meta_parameters = sa.Table(
+    f"x_all_meta_parameters",
+    metadata,
+    sa.Column("dataset", sa.Text, primary_key=True),
+    sa.Column("parameter_shortname", sa.Text, primary_key=True),
+    sa.Column("parameter_description_de", sa.Text),
+    sa.Column("parameter_description_fr", sa.Text),
+    sa.Column("parameter_description_it", sa.Text),
+    sa.Column("parameter_description_en", sa.Text),
+    sa.Column("parameter_group_de", sa.Text),
+    sa.Column("parameter_group_fr", sa.Text),
+    sa.Column("parameter_group_it", sa.Text),
+    sa.Column("parameter_group_en", sa.Text),
+    sa.Column("parameter_granularity", sa.Text),
+    sa.Column("parameter_decimals", sa.Integer),
+    sa.Column("parameter_datatype", sa.Text),
+    sa.Column("parameter_unit", sa.Text),
+)
+
 sa_table_x_station_var_availability = sa.Table(
     "x_station_var_availability",
     metadata,
     sa.Column("station_abbr", sa.Text, primary_key=True),
     sa.Column("variable", sa.Text, primary_key=True),
+    sa.Column("dataset", sa.Text, primary_key=True),
     sa.Column("value_count", sa.Integer, nullable=False),
     sa.Column("min_date", sa.Text),
     sa.Column("max_date", sa.Text),

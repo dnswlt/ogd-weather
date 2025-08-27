@@ -246,8 +246,19 @@ class TestDbStationVarAvailability(TestDb):
                 table_updated_time=now,
             ),
         )
+        db.insert_csv_metadata(
+            _testdata_dir(),
+            cls.engine,
+            ds.sa_table_nbcn_meta_parameters,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-nbcn_meta_parameters.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+        )
 
-    def test_availability(self):
+    def test_availability_smn(self):
         with self.engine.begin() as conn:
             # Insert daily data.
             def p(stn, dt, t, p):
@@ -270,6 +281,7 @@ class TestDbStationVarAvailability(TestDb):
                 ],
             )
 
+        db.recreate_all_meta_parameters(self.engine)
         db.recreate_station_var_availability(self.engine)
 
         with self.engine.begin() as conn:
@@ -281,6 +293,54 @@ class TestDbStationVarAvailability(TestDb):
             self.assertEqual(ber[dc.PRECIP_DAILY_MM].value_count, 2)
             self.assertIn("Niederschlag", ber[dc.PRECIP_DAILY_MM].description.de)
             self.assertEqual(ber[dc.TEMP_DAILY_MIN].group.en, "temperature")
+            # Should use uppercase single letters for granularity (same as source data).
+            self.assertEqual(ber[dc.TEMP_DAILY_MIN].granularity, "D")
+
+            zer_list = db.read_measurement_infos(conn, "ZER")
+            zer = {m.variable: m for m in zer_list}
+            # No measurement data at all, but should still have info.
+            self.assertGreaterEqual(len(zer), 2)
+            self.assertTrue(all(v.value_count == 0 for v in zer.values()))
+
+    def test_availability_nbcn(self):
+        with self.engine.begin() as conn:
+            # Insert daily data.
+            def p(stn, dt, t, m):
+                return {
+                    "station_abbr": stn,
+                    "reference_timestamp": dt,
+                    dc.TEMP_HOM_ANNUAL_MAX: t,
+                    dc.SUNSHINE_HOM_ANNUAL_MINUTES: m,
+                }
+
+            conn = self.engine.connect()
+            conn.execute(
+                sa.insert(ds.TABLE_ANNUAL_HOM_MEASUREMENTS.sa_table),
+                [
+                    p("BER", "1991-01-01", 30, 1000),
+                    p("BER", "1992-01-01", 37, 1500),
+                    p("BER", "2001-01-01", 32, None),
+                    p("CHU", "2002-01-01", 30, 2000),
+                    p("ZER", "2003-01-01", None, None),
+                ],
+            )
+
+        db.recreate_all_meta_parameters(self.engine)
+        db.recreate_station_var_availability(self.engine)
+
+        with self.engine.begin() as conn:
+            ber_list = db.read_measurement_infos(conn, "BER")
+            ber = {m.variable: m for m in ber_list}
+            # Has many variables, but at least the two we use in the test should be present.
+            self.assertGreaterEqual(len(ber), 2)
+            self.assertEqual(ber[dc.TEMP_HOM_ANNUAL_MAX].value_count, 3)
+            self.assertEqual(ber[dc.SUNSHINE_HOM_ANNUAL_MINUTES].value_count, 2)
+            self.assertIn(
+                "Sonnenschein", ber[dc.SUNSHINE_HOM_ANNUAL_MINUTES].description.de
+            )
+            self.assertEqual(ber[dc.TEMP_HOM_ANNUAL_MAX].group.en, "temperature")
+            # Should use uppercase single letters for granularity (same as source data).
+            self.assertEqual(ber[dc.TEMP_HOM_ANNUAL_MAX].granularity, "Y")
 
             zer_list = db.read_measurement_infos(conn, "ZER")
             zer = {m.variable: m for m in zer_list}

@@ -428,10 +428,30 @@ def read_latest_update_log_entry(conn: sa.Connection) -> UpdateLogEntry | None:
 
 
 def recreate_views(engine: sa.Engine) -> None:
+    recreate_all_meta_parameters(engine)
     recreate_station_data_summary(engine)
     recreate_station_var_availability(engine)
     recreate_nearby_stations(engine)
     recreate_climate_normals_stats_tables(engine)
+
+
+def recreate_all_meta_parameters(engine: sa.Engine) -> None:
+    logger.info("Recreating combined meta parameters table")
+    with engine.begin() as conn:
+        # Drop old table if exists
+        ds.sa_table_x_all_meta_parameters.drop(conn, checkfirst=True)
+        # Create table
+        ds.sa_table_x_all_meta_parameters.create(conn)
+
+        insert_sql = f"""
+            INSERT INTO {ds.sa_table_x_all_meta_parameters.name}
+            SELECT 'smn' AS dataset, * FROM {ds.sa_table_smn_meta_parameters.name}
+            UNION ALL
+            SELECT 'nime' AS dataset, * FROM {ds.sa_table_nime_meta_parameters.name}
+            UNION ALL
+            SELECT 'nbcn' AS dataset, * FROM {ds.sa_table_nbcn_meta_parameters.name}
+        """
+        conn.execute(sa.text(insert_sql))
 
 
 def recreate_climate_normals_stats_tables(engine: sa.Engine):
@@ -745,36 +765,48 @@ def recreate_station_var_availability(engine: sa.Engine) -> None:
         ds.sa_table_x_station_var_availability.drop(conn, checkfirst=True)
         ds.sa_table_x_station_var_availability.create(conn)
 
-    with engine.begin() as conn:
-        select_agg_avail = ", ".join(
-            f"""
-                SUM(CASE WHEN {m} IS NOT NULL THEN 1 ELSE 0 END) AS {m}_count,
-                MIN(CASE WHEN {m} IS NOT NULL THEN reference_timestamp END) AS {m}_min_date,
-                MAX(CASE WHEN {m} IS NOT NULL THEN reference_timestamp END) AS {m}_max_date
-            """
-            for m in ds.TABLE_DAILY_MEASUREMENTS.measurements
-        )
-        # To unpivot, we UNION ALL the aggregation results for each variable.
-        select_union_all = "\nUNION ALL\n".join(
-            f"SELECT station_abbr, '{m}', {m}_count, {m}_min_date, {m}_max_date FROM Aggregated"
-            for m in ds.TABLE_DAILY_MEASUREMENTS.measurements
-        )
+        inputs = [
+            ("smn", ds.TABLE_DAILY_MEASUREMENTS),
+            ("smn", ds.TABLE_MONTHLY_MEASUREMENTS),
+            ("smn", ds.TABLE_ANNUAL_MEASUREMENTS),
+            ("nime", ds.TABLE_DAILY_MAN_MEASUREMENTS),
+            ("nime", ds.TABLE_MONTHLY_MAN_MEASUREMENTS),
+            ("nime", ds.TABLE_ANNUAL_MAN_MEASUREMENTS),
+            ("nbcn", ds.TABLE_DAILY_HOM_MEASUREMENTS),
+            ("nbcn", ds.TABLE_MONTHLY_HOM_MEASUREMENTS),
+            ("nbcn", ds.TABLE_ANNUAL_HOM_MEASUREMENTS),
+        ]
+        for dataset, table_spec in inputs:
+            select_agg_avail = ", ".join(
+                f"""
+                    SUM(CASE WHEN {m} IS NOT NULL THEN 1 ELSE 0 END) AS {m}_count,
+                    MIN(CASE WHEN {m} IS NOT NULL THEN reference_timestamp END) AS {m}_min_date,
+                    MAX(CASE WHEN {m} IS NOT NULL THEN reference_timestamp END) AS {m}_max_date
+                """
+                for m in table_spec.measurements
+            )
+            # To unpivot, we UNION ALL the aggregation results for each variable.
+            select_union_all = "\nUNION ALL\n".join(
+                f"SELECT dataset, station_abbr, '{m}', {m}_count, {m}_min_date, {m}_max_date FROM Aggregated"
+                for m in table_spec.measurements
+            )
 
-        insert_sql = sa.text(
-            f"""
-                WITH Aggregated AS (
-                    SELECT 
-                        station_abbr,
-                        {select_agg_avail}
-                    FROM {ds.TABLE_DAILY_MEASUREMENTS.name}
-                    GROUP BY station_abbr
-                )
-                INSERT INTO {ds.sa_table_x_station_var_availability.name}
-                    (station_abbr, variable, value_count, min_date, max_date)
-                {select_union_all}
-            """
-        )
-        conn.execute(insert_sql)
+            insert_sql = sa.text(
+                f"""
+                    WITH Aggregated AS (
+                        SELECT
+                            '{dataset}' AS dataset,
+                            station_abbr,
+                            {select_agg_avail}
+                        FROM {table_spec.name}
+                        GROUP BY dataset, station_abbr
+                    )
+                    INSERT INTO {ds.sa_table_x_station_var_availability.name}
+                        (dataset, station_abbr, variable, value_count, min_date, max_date)
+                    {select_union_all}
+                """
+            )
+            conn.execute(insert_sql)
 
 
 def recreate_station_data_summary(engine: sa.Engine) -> None:
@@ -1525,8 +1557,24 @@ def read_measurement_infos(
         return datetime.date.fromisoformat(v) if v else None
 
     sql = f"""
+            WITH AllParams AS (
+                SELECT
+                    dataset,
+                    parameter_shortname AS variable,
+                    parameter_description_de,
+                    parameter_description_fr,
+                    parameter_description_it,
+                    parameter_description_en,
+                    parameter_group_de,
+                    parameter_group_fr,
+                    parameter_group_it,
+                    parameter_group_en,
+                    parameter_granularity
+                FROM {ds.sa_table_x_all_meta_parameters.name}
+            )
             SELECT
-                a.variable,
+                dataset,
+                variable,
                 a.value_count,
                 a.min_date,
                 a.max_date,
@@ -1537,18 +1585,19 @@ def read_measurement_infos(
                 p.parameter_group_de,
                 p.parameter_group_fr,
                 p.parameter_group_it,
-                p.parameter_group_en
+                p.parameter_group_en,
+                p.parameter_granularity
             FROM {ds.sa_table_x_station_var_availability.name} AS a
-            LEFT JOIN {ds.sa_table_smn_meta_parameters.name} AS p
-                ON a.variable = p.parameter_shortname
+            LEFT JOIN AllParams AS p USING (dataset, variable)
             WHERE a.station_abbr = :station_abbr
-            ORDER BY a.variable
+            ORDER BY dataset, variable
         """
 
     result = conn.execute(sa.text(sql), {"station_abbr": station_abbr}).mappings().all()
 
     return [
         models.MeasurementInfo(
+            dataset=row["dataset"],
             variable=row["variable"],
             description=LocalizedString.from_nullable(
                 de=row["parameter_description_de"],
@@ -1562,7 +1611,7 @@ def read_measurement_infos(
                 it=row["parameter_group_it"],
                 en=row["parameter_group_en"],
             ),
-            granularity="daily",
+            granularity=row["parameter_granularity"],
             value_count=row["value_count"],
             min_date=d(row["min_date"]),
             max_date=d(row["max_date"]),
