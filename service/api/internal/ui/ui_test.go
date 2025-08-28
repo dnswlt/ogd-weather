@@ -235,6 +235,14 @@ func TestStationVarsPercent(t *testing.T) {
 			want: "--station0: 100.0%; --station1: 100.0%; --station2: 100.0%;",
 		},
 		{
+			name: "All zero values",
+			row: &types.StationComparisonRow{
+				Values: []types.NullFloat64{v(0), v(0), v(0)},
+			},
+			// As a special case, if all values are zero, all % should be 0%, too.
+			want: "--station0: 0.0%; --station1: 0.0%; --station2: 0.0%;",
+		},
+		{
 			name: "With fixed lower bound",
 			row: &types.StationComparisonRow{
 				Values:     []types.NullFloat64{v(10), v(55), v(100)},

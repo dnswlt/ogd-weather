@@ -121,6 +121,17 @@ def compare_stations(
         )
     )
 
+    # Mean daily temperature variation
+    d_temps = [nn((df[dc.TEMP_DAILY_MAX] - df[dc.TEMP_DAILY_MIN]).mean()) for df in dfs]
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. daily temp. range (∆ °C)",
+            values=d_temps,
+            lower_bound=0,
+            upper_bound=10,
+        )
+    )
+
     # Min. temperature measured in period
     min_temps = [df[dc.TEMP_DAILY_MIN].min() for df in dfs]
 

@@ -392,10 +392,11 @@ func StationVarsPercent(row *types.StationComparisonRow) template.CSS {
 	vars := make([]string, len(row.Values))
 	for i, v := range row.Values {
 		var pct float64
-		if !v.HasValue {
+		if !v.HasValue || v.Value == 0 && span == 0 {
+			// No value or all values are zero.
 			pct = 0
 		} else if span == 0 {
-			// All values are identical
+			// All values are identical => set to 100%.
 			pct = 100
 		} else {
 			pct = (v.Value - minVal) / span * 100
