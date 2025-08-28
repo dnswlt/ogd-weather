@@ -225,6 +225,21 @@ def compare_stations(
         )
     )
 
+    # Avg. number of rain days (≥ 1 mm)
+    rain_days = []
+    for df in dfs:
+        days = pd.DataFrame({"days": (df[dc.PRECIP_DAILY_MM] >= 1).astype(int)})
+        days_y = tf.annual_agg(days, "sum")
+        rain_days.append(days_y["days"].mean())
+
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. number of rain days (≥ 1 mm precip.)",
+            values=rain_days,
+            lower_bound=0,
+        )
+    )
+
     # Mean atmospheric pressure (QFE)
     atm_p = [nn(df[dc.ATM_PRESSURE_DAILY_MEAN].mean()) for df in dfs]
     rows.append(
