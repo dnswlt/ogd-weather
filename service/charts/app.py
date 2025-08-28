@@ -925,7 +925,13 @@ async def compare_stations(
             df = db.read_daily_measurements(
                 conn,
                 s,
-                columns=[dc.TEMP_DAILY_MIN, dc.TEMP_DAILY_MAX, dc.PRECIP_DAILY_MM],
+                columns=[
+                    dc.TEMP_DAILY_MIN,
+                    dc.TEMP_DAILY_MAX,
+                    dc.PRECIP_DAILY_MM,
+                    dc.ATM_PRESSURE_DAILY_MEAN,
+                    dc.SUNSHINE_DAILY_MINUTES,
+                ],
                 from_date=from_date,
                 to_date=to_date,
                 period=period,

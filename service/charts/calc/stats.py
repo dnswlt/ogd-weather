@@ -100,6 +100,27 @@ def compare_stations(
     dfs = [df for _, df in per_station_data.values()]
     rows = []
 
+    # Station elevation (m a.s.l.)
+    heights_masl = [s.height_masl for s in stations]
+    rows.append(
+        models.StationComparisonRow(
+            label="Station elevation (m a.s.l.)",
+            values=heights_masl,
+            lower_bound=0,
+            upper_bound=1500,
+        )
+    )
+
+    # Mean daily max. temperature
+    mdx_temps = [nn(df[dc.TEMP_DAILY_MAX].mean()) for df in dfs]
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. daily max. temperature (°C)",
+            values=mdx_temps,
+            lower_bound=0,
+        )
+    )
+
     # Min. temperature measured in period
     min_temps = [df[dc.TEMP_DAILY_MIN].min() for df in dfs]
 
@@ -124,6 +145,61 @@ def compare_stations(
         )
     )
 
+    # Avg. number of frost days (< 0°C)
+    frost_days = []
+    for df in dfs:
+        days = pd.DataFrame({"days": (df[dc.TEMP_DAILY_MIN] < 0).astype(int)})
+        days_y = tf.annual_agg(days, "sum")
+        frost_days.append(days_y["days"].mean())
+
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. number of frost days (min. < 0 °C)",
+            values=frost_days,
+            lower_bound=0,
+        )
+    )
+
+    # Avg. number of summer days (≥ 25°C)
+    summer_days = []
+    for df in dfs:
+        days = pd.DataFrame({"days": (df[dc.TEMP_DAILY_MAX] >= 25).astype(int)})
+        days_y = tf.annual_agg(days, "sum")
+        summer_days.append(days_y["days"].mean())
+
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. number of summer days (max. ≥ 25 °C)",
+            values=summer_days,
+            lower_bound=0,
+        )
+    )
+
+    # Avg. number of tropical nights (min ≥ 20°C)
+    tropical_nights = []
+    for df in dfs:
+        days = pd.DataFrame({"days": (df[dc.TEMP_DAILY_MIN] >= 20).astype(int)})
+        days_y = tf.annual_agg(days, "sum")
+        tropical_nights.append(days_y["days"].mean())
+
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. number of tropical nights (min. ≥ 20 °C)",
+            values=tropical_nights,
+            lower_bound=0,
+        )
+    )
+
+    # Avg. number of daily sunshine hours
+    sunshine_hours = [nn(df[dc.SUNSHINE_DAILY_MINUTES].mean() / 60) for df in dfs]
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. daily hours of sunshine (h)",
+            values=sunshine_hours,
+            lower_bound=0,
+        )
+    )
+
     # Avg. total annual precipitation
     precip_means = []
     for df in dfs:
@@ -135,6 +211,17 @@ def compare_stations(
             label="Avg. annual precipitation (mm)",
             values=precip_means,
             lower_bound=0,
+        )
+    )
+
+    # Mean atmospheric pressure (QFE)
+    atm_p = [nn(df[dc.ATM_PRESSURE_DAILY_MEAN].mean()) for df in dfs]
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. atmospheric pressure (hPa)",
+            values=atm_p,
+            lower_bound=850,
+            upper_bound=1014,
         )
     )
 
