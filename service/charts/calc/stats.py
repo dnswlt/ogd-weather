@@ -145,7 +145,7 @@ def compare_stations(
     )
 
     # Min. temperature measured in period
-    min_temps = [df[dc.TEMP_DAILY_MIN].min() for df in dfs]
+    min_temps = [nn(df[dc.TEMP_DAILY_MIN].min()) for df in dfs]
 
     rows.append(
         models.StationComparisonRow(
@@ -267,6 +267,10 @@ def compare_stations(
     # Snow days (≥ 1cm snow depth)
     snow_days = []
     for df in dfs_manual:
+        if len(df) == 0:
+            # No manual measurement data for this station.
+            snow_days.append(None)
+            continue
         days = pd.DataFrame({"days": (df[dc.SNOW_DEPTH_MAN_DAILY_CM] >= 1).astype(int)})
         days_y = tf.annual_agg(days, "sum")
         snow_days.append(days_y["days"].mean())
