@@ -550,23 +550,29 @@ def validate_schema(
                 )
                 continue
 
-            # Compare column types (this is the trickiest part)
+            # Compare column types
             db_col_type = db_columns[col_name]["type"]
             code_col_type = column.type
 
-            # Using str() comparison is often good enough for common types.
-            # For 100% accuracy, you might need more complex dialect-specific logic.
-            if not isinstance(db_col_type, type(code_col_type)):
-                # A simple fallback for when types don't match directly
-                if str(code_col_type).upper() not in str(db_col_type).upper():
-                    mismatched_columns.append(
-                        SchemaColumnMismatchInfo(
-                            table=table_name,
-                            column=col_name,
-                            info=f"Schema: {code_col_type}, DB: {db_col_type}",
-                        )
+            db_type_str = db_col_type.compile(engine.dialect)
+            code_type_str = code_col_type.compile(engine.dialect)
+
+            types_match = db_type_str == code_type_str
+            # Special handling for known type equivalences.
+            # For SQLite, REAL and FLOAT are interchangeable.
+            if not types_match and engine.dialect.name == "sqlite":
+                if {db_type_str, code_type_str} == {"REAL", "FLOAT"}:
+                    types_match = True
+
+            if not types_match:
+                mismatched_columns.append(
+                    SchemaColumnMismatchInfo(
+                        table=table_name,
+                        column=col_name,
+                        info=f"Schema: {code_col_type}, DB: {db_col_type}",
                     )
-                    continue
+                )
+                continue
 
             # Compare nullability
             if column.nullable != db_columns[col_name]["nullable"]:

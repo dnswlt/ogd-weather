@@ -16,6 +16,11 @@ class SchemaColumnMismatchInfo(BaseModel):
     is_missing: bool = False
     info: str = ""
 
+    def __str__(self) -> str:
+        missing = "[missing]" if self.is_missing else ""
+        info = "{" + self.info + "}" if self.info else ""
+        return f"{self.table}.{self.column}{missing}{info}"
+
 
 class SchemaValidationError(ValueError):
     """Custom exception for sqlalchemy schema mismatch."""
@@ -45,5 +50,6 @@ class SchemaValidationError(ValueError):
         if self.missing_tables:
             parts.append(f"missing_tables={self.missing_tables}")
         if self.mismatched_columns:
-            parts.append(f"mismatched_columns={self.mismatched_columns}")
+            cols_msg = ", ".join(str(c) for c in self.mismatched_columns)
+            parts.append(f"mismatched_columns=[{cols_msg}]")
         return f"{base} ({', '.join(parts)})" if parts else base

@@ -205,8 +205,8 @@ class PlaceNearestStations(BaseModel):
 
 class ServerOptions(BaseModel):
     base_dir: str
-    sanitized_postgres_url: str = ""
     start_time: datetime.datetime
+    sanitized_postgres_url: str | None = None
 
 
 class DBTableStats(BaseModel):
