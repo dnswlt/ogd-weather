@@ -11,6 +11,17 @@
 
     <main class="w-full max-w-screen-lg mx-auto space-y-6 bg-white shadow rounded-xl p-6">
         <h1 class="text-2xl font-semibold text-center">Compare Stations</h1>
+        <div class="space-y-3">
+            <p class="text-sm text-gray-700 leading-relaxed p-2 bg-[#eaf2fa] border border-[#d1e6f5] rounded-lg">
+                This page displays data from MeteoSwiss's automatic and manual
+                <a class="text-blue-600 hover:underline" href="https://opendatadocs.meteoswiss.ch/a-data-groundbased"
+                    target="_blank">
+                    weather stations
+                </a>
+                The data has not been homogenised, so measurements from different years may not be directly comparable
+                and should not be used to draw conclusions about long-term climate trends.
+            </p>
+        </div>
 
         <div class="space-y-3">
             <!-- Search (locations or postal codes) -->
@@ -31,7 +42,7 @@
             <!-- Controls -->
             <form class="space-y-4" id="compare-controls">
                 <!-- Stations (hidden, selected via the search bar) -->
-                <input type="hidden" name="stations" value="">
+                <input type="hidden" name="stations" value="{{.Query.stations}}">
                 <!-- Period -->
                 <div class="grid grid-cols-3 gap-3 items-start">
                     <label for="period" class="col-span-1 font-medium pt-2">Period</label>
