@@ -919,7 +919,7 @@ async def compare_stations(
         raise _bad_request(f"Invalid year_range: {year_range}")
 
     with app.state.engine.begin() as conn:
-        per_station_data = {}
+        per_station_data = []
         for s in station_list:
             station = db.read_station(conn, s)
             df = db.read_daily_measurements(
@@ -936,7 +936,21 @@ async def compare_stations(
                 to_date=to_date,
                 period=period,
             )
-            per_station_data[s] = (station, df)
+            df_man = db.read_daily_manual_measurements(
+                conn,
+                s,
+                columns=[dc.SNOW_DEPTH_MAN_DAILY_CM],
+                from_date=from_date,
+                to_date=to_date,
+                period=period,
+            )
+            per_station_data.append(
+                stats.PerStationData(
+                    station=station,
+                    daily_measurements=df,
+                    daily_manual_measurements=df_man,
+                )
+            )
 
     data = stats.compare_stations(per_station_data)
 

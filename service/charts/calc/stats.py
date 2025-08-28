@@ -1,10 +1,21 @@
 import pandas as pd
+from pydantic import BaseModel
 
 
 from service.charts import models
 from service.charts.db import constants as dc
 
 from service.charts.charts import transform as tf
+
+
+class PerStationData(BaseModel):
+    station: models.Station
+    daily_measurements: pd.DataFrame
+    daily_manual_measurements: pd.DataFrame
+
+    class Config:
+        # Needed for pd.DataFrame fields.
+        arbitrary_types_allowed = True
 
 
 def daily_measurements(
@@ -88,7 +99,7 @@ def year_highlights(
 
 
 def compare_stations(
-    per_station_data: dict[str, tuple[models.Station, pd.DataFrame]],
+    per_station_data: list[PerStationData],
 ) -> models.StationComparisonData:
 
     def nn(f):
@@ -96,8 +107,9 @@ def compare_stations(
             return None
         return f
 
-    stations = [s for s, _ in per_station_data.values()]
-    dfs = [df for _, df in per_station_data.values()]
+    stations = [d.station for d in per_station_data]
+    dfs = [d.daily_measurements for d in per_station_data]
+    dfs_manual = [d.daily_manual_measurements for d in per_station_data]
     rows = []
 
     # Station elevation (m a.s.l.)
@@ -208,6 +220,7 @@ def compare_stations(
             label="Avg. daily hours of sunshine (h)",
             values=sunshine_hours,
             lower_bound=0,
+            upper_bound=6,
         )
     )
 
@@ -248,6 +261,21 @@ def compare_stations(
             values=atm_p,
             lower_bound=850,
             upper_bound=1014,
+        )
+    )
+
+    # Snow days (≥ 1cm snow depth)
+    snow_days = []
+    for df in dfs_manual:
+        days = pd.DataFrame({"days": (df[dc.SNOW_DEPTH_MAN_DAILY_CM] >= 1).astype(int)})
+        days_y = tf.annual_agg(days, "sum")
+        snow_days.append(days_y["days"].mean())
+
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. number of snow days (≥ 1 cm snow depth)",
+            values=snow_days,
+            lower_bound=0,
         )
     )
 
