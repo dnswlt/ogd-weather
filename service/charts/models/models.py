@@ -151,11 +151,22 @@ class StationComparisonRow(BaseModel):
     upper_bound: float | None = None
 
 
+class WindStats(BaseModel):
+    station_abbr: str
+    moderate_breeze_days: float
+    strong_breeze_days: float
+    gust_factor: float
+    main_wind_dir: str  # N, NE, E, etc.
+    wind_dir_percent: dict[str, float]  # 8 values for N, NE, E, etc.
+    measurement_count: int  # Total number of measurements on which % are based
+
+
 class StationComparisonData(BaseModel):
     """Holder of a station comparison results table."""
 
     stations: list[Station]
     rows: list[StationComparisonRow]
+    wind_stats: list[WindStats]
 
 
 class StationYearHighlights(BaseModel):
@@ -168,15 +179,6 @@ class StationYearHighlights(BaseModel):
     max_daily_sunshine_hours_date: datetime.date | None = None
     snow_days: float | None = None
     max_snow_depth_cm: float | None = None
-
-
-class WindStats(BaseModel):
-    station_abbr: str
-    moderate_breeze_days: float
-    strong_breeze_days: float
-    gust_factor: float
-    main_wind_dir: str  # N, NE, E, etc.
-    main_wind_dir_percent: float  # [0..100]
 
 
 ################################################################

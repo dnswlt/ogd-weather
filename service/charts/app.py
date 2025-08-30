@@ -910,11 +910,9 @@ async def compare_stations(
     if year_range == "1991-2020":
         from_date = datetime.date(1991, 1, 1)
         to_date = datetime.date(2021, 1, 1)
-    elif year_range == "2021-today":
-        # 2021 - previous year (ignore incomplete current year)
-        from_date = datetime.date(2021, 1, 1)
-        now = datetime.datetime.now(datetime.timezone.utc)
-        to_date = datetime.date(now.year, 1, 1)
+    elif year_range == "2020-2024":
+        from_date = datetime.date(2020, 1, 1)
+        to_date = datetime.date(2025, 1, 1)
     else:
         raise _bad_request(f"Invalid year_range: {year_range}")
 
@@ -944,11 +942,13 @@ async def compare_stations(
                 to_date=to_date,
                 period=period,
             )
+            wind_stats = db.read_monthly_wind_stats(conn, s, year_range, period)
             per_station_data.append(
                 stats.PerStationData(
                     station=station,
                     daily_measurements=df,
                     daily_manual_measurements=df_man,
+                    wind_stats=wind_stats,
                 )
             )
 

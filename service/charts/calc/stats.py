@@ -12,6 +12,7 @@ class PerStationData(BaseModel):
     station: models.Station
     daily_measurements: pd.DataFrame
     daily_manual_measurements: pd.DataFrame
+    wind_stats: models.WindStats | None = None
 
     class Config:
         # Needed for pd.DataFrame fields.
@@ -110,6 +111,7 @@ def compare_stations(
     stations = [d.station for d in per_station_data]
     dfs = [d.daily_measurements for d in per_station_data]
     dfs_manual = [d.daily_manual_measurements for d in per_station_data]
+    wind_stats = [d.wind_stats for d in per_station_data]
     rows = []
 
     # Station elevation (m a.s.l.)
@@ -283,4 +285,35 @@ def compare_stations(
         )
     )
 
-    return models.StationComparisonData(stations=stations, rows=rows)
+    # Wind
+    moderate_breeze_days = [
+        ws.moderate_breeze_days if ws else None for ws in wind_stats
+    ]
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. days with Moderate Breeze hour (≥ 20 km/h)",
+            values=moderate_breeze_days,
+            lower_bound=0,
+        )
+    )
+    strong_breeze_days = [ws.strong_breeze_days if ws else None for ws in wind_stats]
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. days with Strong Breeze gusts (≥ 39 km/h)",
+            values=strong_breeze_days,
+            lower_bound=0,
+        )
+    )
+
+    gust_factors = [ws.gust_factor if ws else None for ws in wind_stats]
+    rows.append(
+        models.StationComparisonRow(
+            label="Avg. hourly gust factor",
+            values=gust_factors,
+            lower_bound=1,
+        )
+    )
+
+    return models.StationComparisonData(
+        stations=stations, rows=rows, wind_stats=wind_stats
+    )

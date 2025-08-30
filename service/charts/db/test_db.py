@@ -1523,7 +1523,7 @@ class TestCreateWindStats(unittest.TestCase):
             self.assertEqual(len(rows), 12, "Expect one row per month")
             r = rows[0]
             self.assertEqual(r["month"], 1)
-            self.assertGreater(r["wind_dir_total_count"], 500)
+            self.assertEqual(r["wind_dir_total_count"], 31 * 24)
             self.assertGreater(r["wind_dir_ne_count"], 100)
             self.assertEqual(
                 r["wind_dir_total_count"],
@@ -1541,7 +1541,10 @@ class TestCreateWindStats(unittest.TestCase):
             stats = db.read_monthly_wind_stats(conn, "CHU", "2000", "all")
             self.assertIsNotNone(stats)
             self.assertEqual(stats.main_wind_dir, "S")
-            self.assertTrue(25 < stats.main_wind_dir_percent < 35)
+            self.assertTrue(25 < stats.wind_dir_percent[stats.main_wind_dir] < 35)
+            self.assertEqual(stats.measurement_count, 366 * 24)
+            pctSum = sum(stats.wind_dir_percent.values())
+            self.assertAlmostEqual(pctSum, 100.0, places=4)
 
             stats = db.read_monthly_wind_stats(conn, "CHU", "NOT_EXIST", "all")
             self.assertIsNone(stats)

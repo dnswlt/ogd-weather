@@ -316,14 +316,14 @@ type StationYearHighlightsResponse struct {
 	Highlights *StationYearHighlights `json:"highlights"`
 }
 
-func (r *StationComparisonRow) MaxValue() NullFloat64 {
-	var mx NullFloat64
+func (r *StationComparisonRow) MinValue() NullFloat64 {
+	var mn NullFloat64
 	for _, v := range r.Values {
-		if v.HasValue && (!mx.HasValue || mx.Value < v.Value) {
-			mx = v
+		if v.HasValue && (!mn.HasValue || mn.Value > v.Value) {
+			mn = v
 		}
 	}
-	return mx
+	return mn
 }
 
 func (s *StationYearHighlights) MaxDailyTempRange() NullFloat64 {

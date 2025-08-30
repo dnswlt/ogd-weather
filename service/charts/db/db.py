@@ -447,10 +447,7 @@ def recreate_wind_stats(engine: sa.Engine) -> None:
         ds.sa_table_x_monthly_wind_stats.drop(conn, checkfirst=True)
         ds.sa_table_x_monthly_wind_stats.create(conn)
 
-        now = datetime.datetime.now()
-        recent_year = (now - datetime.timedelta(days=7)).year
-
-        year_ranges = [(1991, 2020), (2021, recent_year)]
+        year_ranges = [(1991, 2020), (2020, 2024)]
         for from_year, to_year in year_ranges:
             insert_monthly_wind_stats(conn, from_year, to_year)
 
@@ -1692,18 +1689,19 @@ def read_monthly_wind_stats(
         "value_count"
     ].sum()
 
-    if df["wind_dir_total_count"].sum() > 0:
+    total_count = df["wind_dir_total_count"].sum()
+    if total_count > 0:
         dirs = ["n", "ne", "e", "se", "s", "sw", "w", "nw"]
         dir_cols = [f"wind_dir_{d}_count" for d in dirs]
         dir_sums = df[dir_cols].sum()
         max_dir_col = dir_sums.idxmax()
         main_wind_dir = dirs[dir_cols.index(max_dir_col)].upper()
-        main_wind_dir_pct = (
-            df[max_dir_col].sum() / df["wind_dir_total_count"].sum() * 100
-        )
+        wind_dir_pct = {
+            d.upper(): df[c].sum() / total_count * 100 for d, c in zip(dirs, dir_cols)
+        }
     else:
         main_wind_dir = None
-        main_wind_dir_pct = None
+        wind_dir_pct = None
 
     return models.WindStats(
         station_abbr=station_abbr,
@@ -1711,5 +1709,6 @@ def read_monthly_wind_stats(
         strong_breeze_days=float(df["strong_breeze_days"].sum()),
         gust_factor=float(gust_factor),
         main_wind_dir=main_wind_dir,
-        main_wind_dir_percent=float(main_wind_dir_pct),
+        wind_dir_percent=wind_dir_pct,
+        measurement_count=total_count,
     )
