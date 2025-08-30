@@ -96,6 +96,9 @@
 
         <!-- Sunshine -->
         <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Sunshine</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Minutes of sunshine for each hour of the day.
+        </p>
         <div>
             <div class="mb-8">
                 <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
@@ -109,7 +112,7 @@
         <!-- Wind -->
         <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Wind</h2>
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
-            Average wind speed and gust peak speeds (in km/h) for each hour of the day.
+            Average wind speed and max. gust peak speeds (in km/h) for each hour of the day.
         </p>
         <div class="tab-widget mb-12">
             <div role="tablist" class="flex gap-2 mb-4 border-b border-gray-200">
@@ -149,6 +152,21 @@
                     hx-target="this" hx-swap="innerHTML" data-vega-target="pressure-chart">
                 </div>
                 <div id="pressure-chart" class="w-full overflow-hidden"></div>
+            </div>
+        </div>
+
+        <!-- Rel. air humidity -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Relative air humidity</h2>
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Average relative air humidity for each hour of the day.
+        </p>
+        <div>
+            <div class="mb-8">
+                <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/charts/day/{date}/humidity" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML" data-vega-target="humidity-chart">
+                </div>
+                <div id="humidity-chart" class="w-full overflow-hidden"></div>
             </div>
         </div>
 

@@ -121,15 +121,6 @@ def _bad_request(detail: str) -> HTTPException:
     )
 
 
-def _int_or_none(n: str | None) -> int | None:
-    if n is None:
-        return None
-    try:
-        return int(n)
-    except ValueError:
-        raise _bad_request(f"not a number: {n}")
-
-
 def _date_from_year(year: str | None, dy=0) -> datetime.date | None:
     """Tries to parse year as an int and returns 1 Jan of that year.
 
@@ -629,6 +620,10 @@ async def get_daily_chart(
         with app.state.engine.begin() as conn:
             stn = db.read_station(conn, station_abbr)
         chart = charts.daily_atm_pressure_line_chart(df, from_date, stn)
+
+    elif chart_type == "humidity":
+        df = _read_hourly([dc.REL_HUMIDITY_HOURLY_MEAN])
+        chart = charts.daily_humidity_line_chart(df, from_date, station_abbr)
 
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")

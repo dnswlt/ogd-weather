@@ -1814,6 +1814,21 @@ def daily_atm_pressure_line_chart(
     )
 
 
+def daily_humidity_line_chart(
+    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+) -> AltairChart:
+
+    date_str = from_date.strftime("%a, %d %b %Y")
+
+    return daily_line_chart(
+        df[dc.REL_HUMIDITY_HOURLY_MEAN],
+        y_title="%",
+        title=f"Relative air humidity on {date_str}",
+        color=_C["WarmGray"],
+        points=True,
+    )
+
+
 def daily_gust_peak_bar_chart(
     df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
 ) -> AltairChart:
