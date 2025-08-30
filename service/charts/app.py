@@ -255,7 +255,7 @@ def server_status():
 
     if engine.name == "postgresql":
         user = _pg_user(app.state.server_options.sanitized_postgres_url)
-        status.db_table_stats = db.table_stats(engine, user=user)
+        status.db_table_stats = db.read_table_stats(engine, user=user)
 
     return status
 

@@ -437,6 +437,27 @@ sa_table_x_nearby_stations = sa.Table(
     sa.Column("height_diff", sa.REAL),
 )
 
+sa_table_x_monthly_wind_stats = sa.Table(
+    "x_monthly_wind_stats",
+    metadata,
+    sa.Column("year_range", sa.Text, primary_key=True),
+    sa.Column("station_abbr", sa.Text, primary_key=True),
+    sa.Column("month", sa.Integer, primary_key=True),
+    sa.Column("moderate_breeze_days", sa.Integer, nullable=False),
+    sa.Column("strong_breeze_days", sa.Integer, nullable=False),
+    sa.Column("gust_factor", sa.REAL, nullable=False),
+    sa.Column("value_count", sa.Integer, nullable=False),
+    sa.Column("wind_dir_n_count", sa.Integer),
+    sa.Column("wind_dir_ne_count", sa.Integer),
+    sa.Column("wind_dir_e_count", sa.Integer),
+    sa.Column("wind_dir_se_count", sa.Integer),
+    sa.Column("wind_dir_s_count", sa.Integer),
+    sa.Column("wind_dir_sw_count", sa.Integer),
+    sa.Column("wind_dir_w_count", sa.Integer),
+    sa.Column("wind_dir_nw_count", sa.Integer),
+    sa.Column("wind_dir_total_count", sa.Integer),
+)
+
 
 class VarSummaryStatsTable:
 

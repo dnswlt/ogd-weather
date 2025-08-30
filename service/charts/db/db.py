@@ -20,6 +20,7 @@ from sqlalchemy.dialects import postgresql
 from service.charts import geo
 from service.charts import models
 from service.charts.base import constants as bc
+from service.charts.base.dates import utc_datestr, utc_timestr
 from service.charts.base.errors import StationNotFoundError
 from service.charts.models import LocalizedString
 
@@ -437,6 +438,37 @@ def recreate_views(engine: sa.Engine) -> None:
     recreate_station_var_availability(engine)
     recreate_nearby_stations(engine)
     recreate_climate_normals_stats_tables(engine)
+    recreate_wind_stats(engine)
+
+
+def recreate_wind_stats(engine: sa.Engine) -> None:
+    logger.info("Recreating wind stats table")
+    with engine.begin() as conn:
+        ds.sa_table_x_monthly_wind_stats.drop(conn, checkfirst=True)
+        ds.sa_table_x_monthly_wind_stats.create(conn)
+
+        now = datetime.datetime.now()
+        recent_year = (now - datetime.timedelta(days=7)).year
+
+        year_ranges = [(1991, 2020), (2021, recent_year)]
+        for from_year, to_year in year_ranges:
+            insert_monthly_wind_stats(conn, from_year, to_year)
+
+
+def insert_monthly_wind_stats(
+    conn: sa.Connection,
+    from_year: int,
+    to_year: int,
+) -> None:
+    utc = datetime.timezone.utc
+    from_date = datetime.datetime(from_year, 1, 1, tzinfo=utc)
+    to_date = datetime.datetime(to_year + 1, 1, 1, tzinfo=utc)
+    date_range = f"{from_year}-{to_year}" if from_year != to_year else f"{from_year}"
+
+    insert_sql = sql_queries.insert_into_monthly_wind_stats(
+        from_date, to_date, date_range
+    )
+    conn.execute(insert_sql)
 
 
 def recreate_all_meta_parameters(engine: sa.Engine) -> None:
@@ -638,8 +670,8 @@ def _read_all_daily_measurements(
             reference_timestamp,
             {', '.join(daily_vars)}
         FROM {ds.TABLE_DAILY_MEASUREMENTS.name}
-        WHERE reference_timestamp >= '{_utc_datestr(from_date)}' 
-            AND reference_timestamp < '{_utc_datestr(to_date)}'
+        WHERE reference_timestamp >= '{utc_datestr(from_date)}' 
+            AND reference_timestamp < '{utc_datestr(to_date)}'
     """
     with engine.begin() as conn:
         df = pd.read_sql_query(
@@ -1118,30 +1150,22 @@ def _sql_filter_by_period(period: str) -> str:
     raise ValueError(f"Invalid period {period} for SQL filter")
 
 
-def _utc_timestr(d: datetime.datetime) -> str:
-    """Returns the given datetime as a UTC time string in ISO format.
-
-    Example: "2025-03-31 23:59:59Z"
-
-    If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
-    """
-    if d.tzinfo is not None:
-        # datetime.UTC is only available since Python 3.11
-        d = d.astimezone(datetime.timezone.utc)
-    return d.strftime("%Y-%m-%d %H:%M:%SZ")
-
-
-def _utc_datestr(d: datetime.datetime | datetime.date) -> str:
-    """Returns the given date or datetime as a UTC date string in ISO format.
-
-    Example: "2025-03-31"
-
-    If d is a naive datetime (no tzinfo), it is assumed to be in UTC.
-    """
-    if isinstance(d, datetime.datetime) and d.tzinfo is not None:
-        # datetime.UTC is only available since Python 3.11
-        d = d.astimezone(datetime.timezone.utc)
-    return d.strftime("%Y-%m-%d")
+def _period_to_months(period: str) -> list[int]:
+    """Returns the list of months that belong to the given period."""
+    if period.isdigit():
+        return [int(period)]
+    elif period == "spring":
+        return [3, 4, 5]
+    elif period == "summer":
+        return [6, 7, 8]
+    elif period == "autumn":
+        return [9, 10, 11]
+    elif period == "winter":
+        return [1, 2, 12]
+    elif period == "all":
+        return list(range(1, 13))
+    else:
+        raise ValueError(f"invalid period: {period}")
 
 
 _COLUMN_NAME_RE = re.compile(r"^[a-z][a-zA-Z0-9_]*$")
@@ -1196,14 +1220,14 @@ def _read_measurements_table(
     params = {"station_abbr": station_abbr}
 
     if isinstance(from_date, datetime.datetime):
-        filters.append(f"reference_timestamp >= '{_utc_timestr(from_date)}'")
+        filters.append(f"reference_timestamp >= '{utc_timestr(from_date)}'")
     elif isinstance(from_date, datetime.date):
-        filters.append(f"reference_timestamp >= '{_utc_datestr(from_date)}'")
+        filters.append(f"reference_timestamp >= '{utc_datestr(from_date)}'")
 
     if isinstance(to_date, datetime.datetime):
-        filters.append(f"reference_timestamp < '{_utc_timestr(to_date)}'")
+        filters.append(f"reference_timestamp < '{utc_timestr(to_date)}'")
     elif isinstance(to_date, datetime.date):
-        filters.append(f"reference_timestamp < '{_utc_datestr(to_date)}'")
+        filters.append(f"reference_timestamp < '{utc_datestr(to_date)}'")
 
     if period is not None:
         filters.append(_sql_filter_by_period(period))
@@ -1624,7 +1648,7 @@ def read_measurement_infos(
     ]
 
 
-def table_stats(engine: sa.Engine, user: str) -> list[models.DBTableStats]:
+def read_table_stats(engine: sa.Engine, user: str) -> list[models.DBTableStats]:
     with engine.begin() as conn:
         sql = sql_queries.psql_total_bytes(user)
         result = conn.execute(sql).mappings().all()
@@ -1637,3 +1661,55 @@ def table_stats(engine: sa.Engine, user: str) -> list[models.DBTableStats]:
             )
             for r in result
         ]
+
+
+def read_monthly_wind_stats(
+    conn: sa.Connection, station_abbr: str, year_range: str, period: str
+) -> models.WindStats | None:
+    """Returns a DataFrame with lekker wind stats."""
+
+    months = _period_to_months(period)
+
+    t = ds.sa_table_x_monthly_wind_stats
+    sql_query = sa.select(t).where(
+        t.c.station_abbr == station_abbr,
+        t.c.year_range == year_range,
+        t.c.month.in_(months),
+    )
+
+    df = pd.read_sql(
+        sql_query,
+        conn,
+        dtype={
+            c.name: _column_to_dtype(c)
+            for c in ds.sa_table_x_monthly_wind_stats.columns
+        },
+    )
+    if df.empty or df["value_count"].sum() == 0:
+        return None
+
+    gust_factor = (df["gust_factor"] * df["value_count"]).sum() / df[
+        "value_count"
+    ].sum()
+
+    if df["wind_dir_total_count"].sum() > 0:
+        dirs = ["n", "ne", "e", "se", "s", "sw", "w", "nw"]
+        dir_cols = [f"wind_dir_{d}_count" for d in dirs]
+        dir_sums = df[dir_cols].sum()
+        max_dir_col = dir_sums.idxmax()
+        main_wind_dir = dirs[dir_cols.index(max_dir_col)].upper()
+        main_wind_dir_pct = (
+            df[max_dir_col].sum() / df["wind_dir_total_count"].sum() * 100
+        )
+    else:
+        main_wind_dir = None
+        main_wind_dir_pct = None
+
+    return models.WindStats(
+        station_abbr=station_abbr,
+        moderate_breeze_days=float(df["moderate_breeze_days"].sum()),
+        strong_breeze_days=float(df["strong_breeze_days"].sum()),
+        gust_factor=float(gust_factor),
+        main_wind_dir=main_wind_dir,
+        main_wind_dir_percent=float(main_wind_dir_pct),
+    )

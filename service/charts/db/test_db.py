@@ -1484,3 +1484,64 @@ class TestVarSummaryStats(PandasTestCase):
                 columns=cols,
             ),
         )
+
+
+class TestCreateWindStats(unittest.TestCase):
+
+    def test_create_monthly_from_hourly(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        ds.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            ds.TABLE_HOURLY_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_chu_h_historical_2000-2009.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+                destination_table=ds.TABLE_HOURLY_MEASUREMENTS.name,
+            ),
+        )
+
+        with engine.connect() as conn:
+            db.insert_monthly_wind_stats(conn, 2000, 2000)
+
+            # Read raw data
+            cur = conn.execute(
+                sa.select(ds.sa_table_x_monthly_wind_stats)
+                .where(
+                    sa.and_(
+                        ds.sa_table_x_monthly_wind_stats.c.station_abbr == "CHU",
+                        ds.sa_table_x_monthly_wind_stats.c.year_range == "2000",
+                    )
+                )
+                .order_by(ds.sa_table_x_monthly_wind_stats.c.month)
+            )
+            rows = cur.mappings().all()
+            self.assertEqual(len(rows), 12, "Expect one row per month")
+            r = rows[0]
+            self.assertEqual(r["month"], 1)
+            self.assertGreater(r["wind_dir_total_count"], 500)
+            self.assertGreater(r["wind_dir_ne_count"], 100)
+            self.assertEqual(
+                r["wind_dir_total_count"],
+                r["wind_dir_n_count"]
+                + r["wind_dir_ne_count"]
+                + r["wind_dir_e_count"]
+                + r["wind_dir_se_count"]
+                + r["wind_dir_s_count"]
+                + r["wind_dir_sw_count"]
+                + r["wind_dir_w_count"]
+                + r["wind_dir_nw_count"],
+            )
+
+            # Read data via intended API
+            stats = db.read_monthly_wind_stats(conn, "CHU", "2000", "all")
+            self.assertIsNotNone(stats)
+            self.assertEqual(stats.main_wind_dir, "S")
+            self.assertTrue(25 < stats.main_wind_dir_percent < 35)
+
+            stats = db.read_monthly_wind_stats(conn, "CHU", "NOT_EXIST", "all")
+            self.assertIsNone(stats)

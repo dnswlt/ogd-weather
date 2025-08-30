@@ -14,10 +14,12 @@ from .db import (
     read_measurement_infos,
     read_monthly_hom_measurements,
     read_monthly_measurements,
+    read_monthly_wind_stats,
     read_nearby_stations,
     read_station,
     read_stations,
     read_summary_stats,
+    read_table_stats,
     read_update_status,
     read_var_summary_stats_all,
     read_var_summary_stats_month,
@@ -28,7 +30,6 @@ from .db import (
     recreate_station_var_availability,
     recreate_views,
     save_update_status,
-    table_stats,
 )
 
 from .schema import (
@@ -53,10 +54,12 @@ __all__ = [
     "read_measurement_infos",
     "read_monthly_hom_measurements",
     "read_monthly_measurements",
+    "read_monthly_wind_stats",
     "read_nearby_stations",
     "read_station",
     "read_stations",
     "read_summary_stats",
+    "read_table_stats",
     "read_update_status",
     "read_var_summary_stats_all",
     "read_var_summary_stats_month",
@@ -67,7 +70,6 @@ __all__ = [
     "recreate_station_var_availability",
     "recreate_views",
     "save_update_status",
-    "table_stats",
     # schema
     "DataTableSpec",
     "VarSummaryStatsTable",

@@ -170,6 +170,15 @@ class StationYearHighlights(BaseModel):
     max_snow_depth_cm: float | None = None
 
 
+class WindStats(BaseModel):
+    station_abbr: str
+    moderate_breeze_days: float
+    strong_breeze_days: float
+    gust_factor: float
+    main_wind_dir: str  # N, NE, E, etc.
+    main_wind_dir_percent: float  # [0..100]
+
+
 ################################################################
 # Geo locations
 ################################################################
