@@ -27,6 +27,7 @@ var (
 		"vegaSpecHTMLID":     VegaSpecHTMLID,
 		"first":              PrefixSlice,
 		"stationVarsPercent": StationVarsPercent,
+		"scaleSegment":       SVGScaleSegment,
 	}
 )
 
@@ -73,6 +74,19 @@ func Periods(selected string) []Option {
 		}
 	}
 	return opts
+}
+
+func SVGScaleSegment(baseValue float64, percentVals map[string]float64, key string) string {
+	var m float64
+	for _, v := range percentVals {
+		m = max(m, v)
+	}
+	p, ok := percentVals[key]
+	if !ok {
+		return "scale(0)"
+	}
+
+	return fmt.Sprintf("scale(%.1f)", math.Sqrt(p/m)*baseValue)
 }
 
 func FloatFormat(f float64) string {

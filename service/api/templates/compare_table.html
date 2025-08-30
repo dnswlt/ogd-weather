@@ -40,6 +40,19 @@
             </td>
         </tr>
         {{ end }}
-
+        {{ if .Response.Data.WindStats}}
+        <tr class="border-b">
+            <td class="py-2 pr-2 text-gray-800 text-left">
+                Wind directions
+            </td>
+            {{ range .Response.Data.WindStats }}
+            <td class="py-2 pr-2">
+                <div class="flex justify-end">
+                    {{ template "wind_rose.html" . }}
+                </div>
+            </td>
+            {{ end }}
+        </tr>
+        {{ end }}
     </tbody>
 </table>

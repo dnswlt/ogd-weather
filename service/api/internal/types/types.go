@@ -290,9 +290,20 @@ type StationComparisonRow struct {
 	Values     []NullFloat64 `json:"values"`
 }
 
+type WindStats struct {
+	StationAbbr        string             `json:"station_abbr"`
+	ModerateBreezeDays float64            `json:"moderate_breeze_days"`
+	StrongBreezeDays   float64            `json:"strong_breeze_days"`
+	GustFactor         float64            `json:"gust_factor"`
+	MainWindDir        string             `json:"main_wind_dir"` // N, NE, E, ...
+	WindDirPercent     map[string]float64 `json:"wind_dir_percent"`
+	MeasurementCount   int64              `json:"measurement_count"`
+}
+
 type StationComparisonData struct {
-	Stations []*Station              `json:"stations"`
-	Rows     []*StationComparisonRow `json:"rows"`
+	Stations  []*Station              `json:"stations"`
+	Rows      []*StationComparisonRow `json:"rows"`
+	WindStats []*WindStats            `json:"wind_stats"`
 }
 
 type StationComparisonResponse struct {

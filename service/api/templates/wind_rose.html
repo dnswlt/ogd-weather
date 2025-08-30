@@ -1,0 +1,40 @@
+<svg width="64" height="64" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- 
+    Wind Rose with 8 segments (45 degrees each).
+  -->
+  <defs>
+    <style>
+      .wind-rose-segment {
+        stroke: #fff;
+        stroke-width: 0.5px; /* Adjusted for scaling */
+        vector-effect: non-scaling-stroke; /* Keeps stroke width consistent */
+      }
+      .wind-rose-label {
+        font-family: sans-serif;
+        font-size: 30px;
+        font-weight: bold;
+        text-anchor: middle;
+        fill: #333;
+      }
+    </style>
+  </defs>
+
+  <g class="wind-rose-segments" transform="translate(100, 100)">
+    <!-- 
+      A single "unit wedge" shape (radius 1) is defined in the 'd' attribute.
+      Each segment is an instance of this shape, rotated and then scaled to its desired radius.
+      To change a segment's radius, just change its scale() value.
+    -->
+    <path id="rose-n" class="wind-rose-segment" fill="#45a2b9" d="M 0 0 L 1 0 A 1 1 0 0 1 0.7071 0.7071 Z" transform='rotate(-112.5) {{scaleSegment 80 .WindDirPercent "N"}}' />
+    <path id="rose-ne" class="wind-rose-segment" fill="#45a2b9" d="M 0 0 L 1 0 A 1 1 0 0 1 0.7071 0.7071 Z" transform='rotate(-67.5) {{scaleSegment 80 .WindDirPercent "NE"}}' />
+    <path id="rose-e" class="wind-rose-segment" fill="#45a2b9" d="M 0 0 L 1 0 A 1 1 0 0 1 0.7071 0.7071 Z" transform='rotate(-22.5) {{scaleSegment 80 .WindDirPercent "E"}}' />
+    <path id="rose-se" class="wind-rose-segment" fill="#45a2b9" d="M 0 0 L 1 0 A 1 1 0 0 1 0.7071 0.7071 Z" transform='rotate(22.5) {{scaleSegment 80 .WindDirPercent "SE"}}' />
+    <path id="rose-s" class="wind-rose-segment" fill="#45a2b9" d="M 0 0 L 1 0 A 1 1 0 0 1 0.7071 0.7071 Z" transform='rotate(67.5) {{scaleSegment 80 .WindDirPercent "S"}}' />
+    <path id="rose-sw" class="wind-rose-segment" fill="#45a2b9" d="M 0 0 L 1 0 A 1 1 0 0 1 0.7071 0.7071 Z" transform='rotate(112.5) {{scaleSegment 80 .WindDirPercent "SW"}}' />
+    <path id="rose-w" class="wind-rose-segment" fill="#45a2b9" d="M 0 0 L 1 0 A 1 1 0 0 1 0.7071 0.7071 Z" transform='rotate(157.5) {{scaleSegment 80 .WindDirPercent "W"}}' />
+    <path id="rose-nw" class="wind-rose-segment" fill="#45a2b9" d="M 0 0 L 1 0 A 1 1 0 0 1 0.7071 0.7071 Z" transform='rotate(202.5) {{scaleSegment 80 .WindDirPercent "NW"}}' />
+  </g>
+
+  <!-- Label for North -->
+  <text x="100" y="32" class="wind-rose-label">N</text>
+</svg>
