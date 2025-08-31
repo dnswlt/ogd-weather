@@ -1804,13 +1804,28 @@ def daily_atm_pressure_line_chart(
 
     return daily_line_chart(
         ser,
-        y_title="Atm. pressure (hPa)",
+        y_title="hPa",
         title=f"Atmospheric pressure at barometric altitude on {date_str}",
         color=_C["LeafGreen"],
         y_domain=y_domain,
         points=True,
         band_low=pnorm["low"],
         band_high=pnorm["high"],
+    )
+
+
+def daily_vapor_pressure_line_chart(
+    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+) -> AltairChart:
+
+    date_str = from_date.strftime("%a, %d %b %Y")
+
+    return daily_line_chart(
+        df[dc.VAPOR_PRESSURE_HOURLY_MEAN],
+        y_title="hPa",
+        title=f"Vapor pressure on {date_str}",
+        color=_C["CocoaBrown"],
+        points=True,
     )
 
 
@@ -1837,7 +1852,7 @@ def daily_gust_peak_bar_chart(
 
     return daily_bar_chart(
         df[dc.GUST_PEAK_HOURLY_MAX] * 3.6,
-        y_title="Peak speed (km/h)",
+        y_title="km/h",
         title=f"Max. hourly gust peak speed (km/h) on {date_str}",
         color=_C["Teal"],
     )
@@ -1851,9 +1866,23 @@ def daily_wind_speed_bar_chart(
 
     return daily_bar_chart(
         df[dc.WIND_SPEED_HOURLY_MEAN] * 3.6,
-        y_title="Wind speed (km/h)",
+        y_title="km/h",
         title=f"Average hourly wind speed (km/h) on {date_str}",
         color=_C["Tan"],
+    )
+
+
+def daily_global_radiation_bar_chart(
+    df: pd.DataFrame, from_date: datetime.datetime, station_abbr: str
+) -> AltairChart:
+
+    date_str = from_date.strftime("%a, %d %b %Y")
+
+    return daily_bar_chart(
+        df[dc.GLOBAL_RADIATION_HOURLY_MEAN],
+        y_title="W/m²",
+        title=f"Average hourly global radiation on {date_str}",
+        color=_C["MustardYellow"],
     )
 
 
@@ -1865,7 +1894,7 @@ def daily_sunshine_bar_chart(
 
     return daily_bar_chart(
         df[dc.SUNSHINE_HOURLY_MINUTES],
-        y_title="Sunshine (minutes)",
+        y_title="Minutes",
         title=f"Sunshine minutes on {date_str}",
         y_domain=[0, 60],
         color=_C["PaleGold"],

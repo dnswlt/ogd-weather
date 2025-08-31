@@ -625,6 +625,14 @@ async def get_daily_chart(
         df = _read_hourly([dc.REL_HUMIDITY_HOURLY_MEAN])
         chart = charts.daily_humidity_line_chart(df, from_date, station_abbr)
 
+    elif chart_type == "global_radiation":
+        df = _read_hourly([dc.GLOBAL_RADIATION_HOURLY_MEAN])
+        chart = charts.daily_global_radiation_bar_chart(df, from_date, station_abbr)
+
+    elif chart_type == "vapor_pressure":
+        df = _read_hourly([dc.VAPOR_PRESSURE_HOURLY_MEAN])
+        chart = charts.daily_vapor_pressure_line_chart(df, from_date, station_abbr)
+
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
 
