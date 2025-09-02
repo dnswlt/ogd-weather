@@ -31,14 +31,139 @@ def psql_total_bytes(user: str) -> sa.TextClause:
     return sql.bindparams(user=user)
 
 
+def insert_into_x_ogd_smn_daily_derived(
+    engine: sa.Engine,
+    from_date: datetime.datetime,
+    to_date: datetime.datetime,
+) -> sa.TextClause:
+    """Returns the INSERT statement with bound params to populate daily derived data.
+
+    NOTE that the SQL statement has to use the *end* times of the hourly intervals
+    (e.g. '08:00' represents the interval 07:00-08:00), since that's the meaning
+    of the hourly reference_timestamp values.
+    """
+    if engine.dialect.name == "postgresql":
+        sql = f"""
+            INSERT INTO {ds.sa_table_x_ogd_smn_daily_derived}
+            WITH 
+                LocalTimeValues AS (
+                    SELECT
+                        station_abbr,
+                        (reference_timestamp::timestamptz AT TIME ZONE 'Europe/Zurich')::date AS local_date,
+                        (reference_timestamp::timestamptz AT TIME ZONE 'Europe/Zurich')::time AS local_time,
+                        {dc.PRECIP_HOURLY_MM},
+                        {dc.VAPOR_PRESSURE_HOURLY_MEAN},
+                        {dc.WIND_SPEED_HOURLY_MEAN},
+                        {dc.GUST_PEAK_HOURLY_MAX}
+                    FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
+                    WHERE reference_timestamp >= :from_date
+                        AND reference_timestamp < :to_date
+                ),
+                DaytimeValues AS (
+                    SELECT
+                        *
+                    FROM LocalTimeValues
+                    WHERE 
+                        (
+                            CASE
+                                WHEN EXTRACT(MONTH FROM local_date) IN (5, 6, 7, 8)
+                                    THEN local_time BETWEEN '08:00'::time AND '22:00'::time
+                                WHEN EXTRACT(MONTH FROM local_date) IN (3, 4, 9, 10)
+                                    THEN local_time BETWEEN '08:00'::time AND '21:00'::time
+                                ELSE local_time BETWEEN '08:00'::time AND '18:00'::time
+                            END
+                        )
+                )
+            SELECT
+                station_abbr,
+                to_char(local_date, 'YYYY-MM-DD') AS reference_timestamp,
+                SUM({dc.PRECIP_HOURLY_MM}) AS {dc.DX_PRECIP_DAYTIME_DAILY_MM},
+                MAX({dc.VAPOR_PRESSURE_HOURLY_MEAN}) AS {dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
+                MAX({dc.WIND_SPEED_HOURLY_MEAN}) AS {dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
+                MAX({dc.GUST_PEAK_HOURLY_MAX}) AS {dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX}
+            FROM DaytimeValues
+            GROUP BY station_abbr, reference_timestamp
+            """
+
+    elif engine.dialect.name == "sqlite":
+        # Make simplifying assumptions about daylight-saving time due to sqlite's limited
+        # datetime support:
+        # Treat April to October (inclusive) as summer time (CEST), and November to March as
+        # regular CET.
+        sql = f"""
+            INSERT INTO {ds.sa_table_x_ogd_smn_daily_derived}
+            WITH
+                TimeOffsets AS (
+                    SELECT
+                        reference_timestamp,
+                        station_abbr,
+                        {dc.PRECIP_HOURLY_MM},
+                        {dc.VAPOR_PRESSURE_HOURLY_MEAN},
+                        {dc.WIND_SPEED_HOURLY_MEAN},
+                        {dc.GUST_PEAK_HOURLY_MAX},
+                        CASE
+                            WHEN STRFTIME('%m', reference_timestamp) BETWEEN '04' AND '10'
+                            THEN '+2 hours'
+                            ELSE '+1 hour'
+                        END AS tz_offset
+                    FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
+                    WHERE
+                        reference_timestamp >= :from_date
+                        AND reference_timestamp < :to_date
+                ),
+                LocalTimeValues AS (
+                    SELECT
+                        DATE(reference_timestamp, tz_offset) AS local_date,
+                        TIME(reference_timestamp, tz_offset) AS local_time,
+                        station_abbr,
+                        {dc.PRECIP_HOURLY_MM},
+                        {dc.VAPOR_PRESSURE_HOURLY_MEAN},
+                        {dc.WIND_SPEED_HOURLY_MEAN},
+                        {dc.GUST_PEAK_HOURLY_MAX}
+                    FROM TimeOffsets
+                ),
+                DaytimeValues AS (
+                    SELECT
+                        *
+                    FROM LocalTimeValues
+                    WHERE
+                        (
+                            CASE
+                                WHEN CAST(STRFTIME('%m', local_date) AS INTEGER) IN (5, 6, 7, 8)
+                                    THEN local_time BETWEEN '08:00:00' AND '22:00:00'
+                                WHEN CAST(STRFTIME('%m', local_date) AS INTEGER) IN (3, 4, 9, 10)
+                                    THEN local_time BETWEEN '08:00:00' AND '21:00:00'
+                                ELSE local_time BETWEEN '08:00:00' AND '18:00:00'
+                            END
+                        )
+                )
+            SELECT
+                station_abbr,
+                local_date AS reference_timestamp,
+                SUM({dc.PRECIP_HOURLY_MM}) AS {dc.DX_PRECIP_DAYTIME_DAILY_MM},
+                MAX({dc.VAPOR_PRESSURE_HOURLY_MEAN}) AS {dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
+                MAX({dc.WIND_SPEED_HOURLY_MEAN}) AS {dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
+                MAX({dc.GUST_PEAK_HOURLY_MAX}) AS {dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX}
+            FROM DaytimeValues
+            GROUP BY station_abbr, reference_timestamp
+        """
+
+    else:
+        raise NotImplementedError(f"Unsupported engine dialect: {engine.dialect.name}")
+
+    return sa.text(sql).bindparams(
+        from_date=utc_timestr(from_date),
+        to_date=utc_timestr(to_date),
+    )
+
+
 def insert_into_monthly_wind_stats(
     from_date: datetime.datetime,
     to_date: datetime.datetime,
     date_range: str,
 ) -> sa.TextClause:
-    """Returns the INSERT INTO statement and params to populate monthly wind stats."""
-    sql = sa.text(
-        f"""
+    """Returns the INSERT statement with bound params to populate monthly wind stats."""
+    sql = f"""
         INSERT INTO {ds.sa_table_x_monthly_wind_stats.name}
         WITH
             DailyMaxes AS (
@@ -106,15 +231,15 @@ def insert_into_monthly_wind_stats(
                 SELECT
                     station_abbr,
                     month,
-                    SUM(CASE WHEN bucket_index = 0 THEN value_count ELSE 0 END) AS wind_dir_n_count,
-                    SUM(CASE WHEN bucket_index = 1 THEN value_count ELSE 0 END) AS wind_dir_ne_count,
-                    SUM(CASE WHEN bucket_index = 2 THEN value_count ELSE 0 END) AS wind_dir_e_count,
-                    SUM(CASE WHEN bucket_index = 3 THEN value_count ELSE 0 END) AS wind_dir_se_count,
-                    SUM(CASE WHEN bucket_index = 4 THEN value_count ELSE 0 END) AS wind_dir_s_count,
-                    SUM(CASE WHEN bucket_index = 5 THEN value_count ELSE 0 END) AS wind_dir_sw_count,
-                    SUM(CASE WHEN bucket_index = 6 THEN value_count ELSE 0 END) AS wind_dir_w_count,
-                    SUM(CASE WHEN bucket_index = 7 THEN value_count ELSE 0 END) AS wind_dir_nw_count,
-                    SUM(value_count) AS wind_dir_total_count
+                    SUM(CASE WHEN bucket_index = 0 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_N_COUNT},
+                    SUM(CASE WHEN bucket_index = 1 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_NE_COUNT},
+                    SUM(CASE WHEN bucket_index = 2 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_E_COUNT},
+                    SUM(CASE WHEN bucket_index = 3 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_SE_COUNT},
+                    SUM(CASE WHEN bucket_index = 4 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_S_COUNT},
+                    SUM(CASE WHEN bucket_index = 5 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_SW_COUNT},
+                    SUM(CASE WHEN bucket_index = 6 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_W_COUNT},
+                    SUM(CASE WHEN bucket_index = 7 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_NW_COUNT},
+                    SUM(value_count) AS {dc.DX_WIND_DIR_TOTAL_COUNT}
                 FROM StationWindDirectionsLong
                 GROUP BY station_abbr, month
             )
@@ -126,21 +251,21 @@ def insert_into_monthly_wind_stats(
             SDC.strong_breeze_days,
             SGF.gust_factor,
             SDC.value_count,
-            SWD.wind_dir_n_count,
-            SWD.wind_dir_ne_count,
-            SWD.wind_dir_e_count,
-            SWD.wind_dir_se_count,
-            SWD.wind_dir_s_count,
-            SWD.wind_dir_sw_count,
-            SWD.wind_dir_w_count,
-            SWD.wind_dir_nw_count,
-            SWD.wind_dir_total_count
+            SWD.{dc.DX_WIND_DIR_N_COUNT},
+            SWD.{dc.DX_WIND_DIR_NE_COUNT},
+            SWD.{dc.DX_WIND_DIR_E_COUNT},
+            SWD.{dc.DX_WIND_DIR_SE_COUNT},
+            SWD.{dc.DX_WIND_DIR_S_COUNT},
+            SWD.{dc.DX_WIND_DIR_SW_COUNT},
+            SWD.{dc.DX_WIND_DIR_W_COUNT},
+            SWD.{dc.DX_WIND_DIR_NW_COUNT},
+            SWD.{dc.DX_WIND_DIR_TOTAL_COUNT}
         FROM StationDayCounts AS SDC
         JOIN StationGustFactor SGF USING (station_abbr, month)
         LEFT JOIN StationWindDirections AS SWD USING (station_abbr, month)
     """
-    )
-    return sql.bindparams(
+
+    return sa.text(sql).bindparams(
         date_range=date_range,
         from_date=utc_timestr(from_date),
         to_date=utc_timestr(to_date),

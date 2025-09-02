@@ -161,7 +161,11 @@ VARIABLE_API_NAMES = {
     SNOW_DEPTH_DAILY_CM: "snow_depth_daily_cm",
 }
 
+############################################################
 # Derived metric names (prefix DX_):
+############################################################
+
+# Day counts
 DX_SUNNY_DAYS_ANNUAL_COUNT = "sunny_days_annual_count"
 DX_SUMMER_DAYS_ANNUAL_COUNT = "summer_days_annual_count"
 DX_RAIN_DAYS_ANNUAL_COUNT = "rain_days_annual_count"
@@ -174,6 +178,31 @@ DX_SUMMER_DAYS_MONTHLY_COUNT = "summer_days_monthly_count"
 DX_FROST_DAYS_MONTHLY_COUNT = "frost_days_monthly_count"
 DX_TROPICAL_NIGHTS_MONTHLY_COUNT = "tropical_nights_monthly_count"
 DX_GROWING_DEGREE_DAYS_MONTHLY_SUM = "growing_degree_days_monthly_sum"
+
+# Wind
+DX_WIND_SPEED_DAILY_MAX_OF_HOURLY_MEAN = "wind_speed_dxh0"
+DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN = "wind_speed_dt_dxh0"
+DX_GUST_PEAK_DAYTIME_DAILY_MAX = "gust_peak_dt_dx"
+DX_GUST_FACTOR_DAILY_MEAN = "gust_factor_d0"
+
+# For the wind rose histogram. For simplicity, these variables
+# do not contain an interval qualifier.
+DX_WIND_DIR_N_COUNT = "wind_dir_n_count"
+DX_WIND_DIR_NE_COUNT = "wind_dir_ne_count"
+DX_WIND_DIR_E_COUNT = "wind_dir_e_count"
+DX_WIND_DIR_SE_COUNT = "wind_dir_se_count"
+DX_WIND_DIR_S_COUNT = "wind_dir_s_count"
+DX_WIND_DIR_SW_COUNT = "wind_dir_sw_count"
+DX_WIND_DIR_W_COUNT = "wind_dir_w_count"
+DX_WIND_DIR_NW_COUNT = "wind_dir_nw_count"
+DX_WIND_DIR_TOTAL_COUNT = "wind_dir_total_count"
+
+# Precipitation
+DX_PRECIP_DAYTIME_DAILY_MM = "precip_dt_d0"
+
+# Air humidity
+DX_VAPOR_PRESSURE_DAILY_MAX_OF_HOURLY_MEAN = "vapor_pressure_dxh0"
+DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN = "vapor_pressure_dt_dxh0"
 
 # Total precipitation per given time slice and year.
 # E.g., in monthly summary stats for the 1991-2020 reference

@@ -19,11 +19,13 @@ ECR_REGISTRY = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
 CLUSTER = weather-cluster
 
+TEST_POSTGRES_URL ?= postgresql+psycopg://ogd_weather_test@localhost:5432/ogd_weather
+
 .PHONY: npm-build build rebuild up down restart update-db recreate-views logs clean
 .PHONY: aws-login aws-build aws-push aws-redeploy aws-roll aws-update-db
 
 ## Local testing =====================================================
-.PHONY: test test-api test-db-updater test-charts test-integration
+.PHONY: test test-api test-db-updater test-charts test-integration test-integration-pg
 
 # --- General Test Commands ---
 
@@ -46,6 +48,9 @@ test-integration:
 	@echo "--- Running integration tests for Python service/db_updater ---"
 	pytest -m integration -o log_cli=true --log-cli-level=INFO service/db_updater
 
+test-integration-pg:
+	@echo "--- Running integration tests for Python service/db_updater on PostgreSQL ---"
+	pytest -m integration -o log_cli=true --log-cli-level=INFO service/db_updater --test-postgres-url '$(TEST_POSTGRES_URL)'
 
 ## Local Dev =========================================================
 

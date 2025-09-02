@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from service.charts import models
 from service.charts.base.errors import StationNotFoundError
+from service.charts.db import sql_queries
 from service.charts.testutils import PandasTestCase
 
 from . import db
@@ -1548,3 +1549,46 @@ class TestCreateWindStats(unittest.TestCase):
 
             stats = db.read_monthly_wind_stats(conn, "CHU", "NOT_EXIST", "all")
             self.assertIsNone(stats)
+
+
+class TestCreateDailyDerived(unittest.TestCase):
+    def test_create(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        ds.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        db.insert_csv_data(
+            _testdata_dir(),
+            engine,
+            ds.TABLE_HOURLY_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href="file:///ogd-smn_chu_h_historical_2000-2009.csv",
+                resource_updated_time=now,
+                table_updated_time=now,
+                destination_table=ds.TABLE_HOURLY_MEASUREMENTS.name,
+            ),
+        )
+        db.recreate_x_ogd_smn_daily_derived(engine)
+
+        with engine.begin() as conn:
+            t = ds.sa_table_x_ogd_smn_daily_derived
+            stmt = (
+                sa.select(t)
+                .where(
+                    sa.and_(
+                        t.c.reference_timestamp >= "2000-01-01",
+                        t.c.reference_timestamp < "2001-01-01",
+                    )
+                )
+                .order_by(t.c.reference_timestamp)
+            )
+            rows = conn.execute(stmt).mappings().all()
+        self.assertEqual(len(rows), 366)
+        r = rows[17]
+        self.assertEqual(r["station_abbr"], "CHU")
+        self.assertEqual(r["reference_timestamp"], "2000-01-18")
+        # Manually verified these values in the app itself:
+        self.assertEqual(r[dc.DX_PRECIP_DAYTIME_DAILY_MM], 3.1)
+        self.assertEqual(r[dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN], 6.6)
+        self.assertEqual(r[dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN], 9.8)
+        self.assertEqual(r[dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX], 19.7)

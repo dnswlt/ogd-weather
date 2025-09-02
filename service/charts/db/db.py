@@ -263,7 +263,6 @@ def insert_csv_data(
                     """
                 )
             )
-            staging_table = sa.Table(staging_name, sa.MetaData(), autoload_with=conn)
 
             # Bulk insert into staging table
             if engine.name == "postgresql":
@@ -287,6 +286,9 @@ def insert_csv_data(
                         copy.write(output.getvalue())
             else:
                 # Standard path: INSERT INTO staging table.
+                staging_table = sa.Table(
+                    staging_name, sa.MetaData(), autoload_with=conn
+                )
                 insert_stmt = sa.insert(staging_table)
                 # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
                 records = df.replace({np.nan: None}).to_dict(orient="records")
@@ -302,7 +304,7 @@ def insert_csv_data(
             insert_sql = f"""
                 INSERT INTO {table_spec.name}
                 SELECT StagingTable.*
-                FROM {staging_table.name} AS StagingTable
+                FROM {staging_name} AS StagingTable
                 WHERE NOT EXISTS (
                     SELECT 1
                     FROM {table_spec.name} AS DataTable
@@ -434,11 +436,28 @@ def read_latest_update_log_entry(conn: sa.Connection) -> UpdateLogEntry | None:
 
 def recreate_views(engine: sa.Engine) -> None:
     recreate_all_meta_parameters(engine)
+
+    recreate_x_ogd_smn_daily_derived(engine)
+
     recreate_station_data_summary(engine)
     recreate_station_var_availability(engine)
     recreate_nearby_stations(engine)
     recreate_climate_normals_stats_tables(engine)
     recreate_wind_stats(engine)
+
+
+def recreate_x_ogd_smn_daily_derived(engine: sa.Engine) -> None:
+    logger.info("Recreating x_ogd_smn_daily_derived table")
+    with engine.begin() as conn:
+        ds.sa_table_x_ogd_smn_daily_derived.drop(conn, checkfirst=True)
+        ds.sa_table_x_ogd_smn_daily_derived.create(conn)
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        insert_sql = sql_queries.insert_into_x_ogd_smn_daily_derived(
+            engine,
+            datetime.datetime(1990, 1, 1, tzinfo=datetime.timezone.utc),
+            now + datetime.timedelta(days=1),
+        )
+        conn.execute(insert_sql)
 
 
 def recreate_wind_stats(engine: sa.Engine) -> None:

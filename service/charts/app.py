@@ -144,6 +144,15 @@ def _date_from_year(year: str | None, dy=0) -> datetime.date | None:
 
 
 def _daily_range(date: str) -> tuple[datetime.datetime, datetime.datetime]:
+    """Returns the start and end datetimes for the given date in the Europe/Zurich time zone.
+
+    The start date is inclusive, the end date is exclusive.
+    The returned values should be used when querying hourly measurement data for a given day.
+
+    For hourly MeteoSwiss measurements, the reference_timestamp 16:00 represents measurements
+    for the period 15:00 to 16:00 (i.e., the previous hour).
+    https://opendatadocs.meteoswiss.ch/general/download#how-datetime-time-intervals-and-missing-values-are-represented
+    """
     try:
         d = datetime.date.fromisoformat(date)
     except ValueError:

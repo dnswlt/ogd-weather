@@ -60,9 +60,8 @@ def test_match_csv_resource_filter():
 
 
 @pytest.mark.integration
-def test_integration_import_ogd_data(tmp_path):
-    engine = sa.create_engine("sqlite:///:memory:")
-    ds.metadata.create_all(engine)
+def test_integration_import_ogd_data(tmp_path, db_engine):
+    engine = db_engine
 
     base_dir = tmp_path / "data"
     base_dir.mkdir()
@@ -122,3 +121,4 @@ def test_integration_import_ogd_data(tmp_path):
         assert row_count(ds.sa_table_nime_meta_stations) > 0
         assert row_count(ds.sa_table_nbcn_meta_stations) > 0
         assert row_count(ds.sa_table_x_station_var_availability) > 0
+        assert row_count(ds.sa_table_x_ogd_smn_daily_derived) > 0

@@ -460,6 +460,29 @@ sa_table_x_monthly_wind_stats = sa.Table(
     sa.Column("wind_dir_total_count", sa.Integer),
 )
 
+sa_table_x_ogd_smn_daily_derived = sa.Table(
+    "x_ogd_smn_daily_derived",
+    metadata,
+    sa.Column("station_abbr", sa.Text, primary_key=True),
+    sa.Column("reference_timestamp", sa.Text, primary_key=True),
+    sa.Column(dc.DX_PRECIP_DAYTIME_DAILY_MM, sa.REAL),
+    # sa.Column(dc.DX_VAPOR_PRESSURE_DAILY_MAX_OF_HOURLY_MEAN, sa.REAL),
+    sa.Column(dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN, sa.REAL),
+    # sa.Column(dc.DX_WIND_SPEED_DAILY_MAX_OF_HOURLY_MEAN, sa.REAL),
+    sa.Column(dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN, sa.REAL),
+    sa.Column(dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX, sa.REAL),
+    # sa.Column(dc.DX_GUST_FACTOR_DAILY_MEAN, sa.REAL),
+    # sa.Column(dc.DX_WIND_DIR_N_COUNT, sa.Integer),
+    # sa.Column(dc.DX_WIND_DIR_NE_COUNT, sa.Integer),
+    # sa.Column(dc.DX_WIND_DIR_E_COUNT, sa.Integer),
+    # sa.Column(dc.DX_WIND_DIR_SE_COUNT, sa.Integer),
+    # sa.Column(dc.DX_WIND_DIR_S_COUNT, sa.Integer),
+    # sa.Column(dc.DX_WIND_DIR_SW_COUNT, sa.Integer),
+    # sa.Column(dc.DX_WIND_DIR_W_COUNT, sa.Integer),
+    # sa.Column(dc.DX_WIND_DIR_NW_COUNT, sa.Integer),
+    # sa.Column(dc.DX_WIND_DIR_TOTAL_COUNT, sa.Integer),
+)
+
 
 class VarSummaryStatsTable:
 
