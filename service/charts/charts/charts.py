@@ -375,11 +375,11 @@ def sunny_days_chart(
     df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# sunny days" chart for the given station and period."""
-    _verify_day_count_data(df, station_abbr, period, dc.SUNSHINE_DAILY_MINUTES)
+    _verify_day_count_data(df, station_abbr, period, dc.SUNSHINE_DAILY_PCT_OF_MAX)
     return day_count_chart(
-        predicate=df[dc.SUNSHINE_DAILY_MINUTES] >= 6 * 60,
+        predicate=df[dc.SUNSHINE_DAILY_PCT_OF_MAX] >= 70,
         period=period,
-        title="Number of sunny days (≥ 6 h of sunshine)",
+        title="Number of sunny days (≥ 70% rel. sunshine duration)",
         palette=colors.Tab20("Apricot"),
         trendline=False,
     )
@@ -1175,7 +1175,7 @@ def monthly_sunny_days_bar_chart(
 ) -> AltairChart:
 
     ser = df[dc.SUNSHINE_DAILY_PCT_OF_MAX]
-    sunny_day = (ser >= 80).astype(float)
+    sunny_day = (ser >= 70).astype(float)
 
     # Sum daily precipitation for each month.
     data = sunny_day.groupby(sunny_day.index.month).agg([("value", "sum")])
@@ -1192,7 +1192,7 @@ def monthly_sunny_days_bar_chart(
         data = data.join(ref_stats, on=join_key, how="left")
 
     title = (
-        f"Number of sunny days (≥ 80% rel. sunshine duration) per month in {year}",
+        f"Number of sunny days (≥ 70% rel. sunshine duration) per month in {year}",
     )
     color = _C["Apricot"]
 

@@ -307,7 +307,7 @@ async def get_annual_chart(
         df = _read_daily([dc.SUNSHINE_DAILY_MINUTES])
         chart = charts.sunshine_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "sunny_days":
-        df = _read_daily([dc.SUNSHINE_DAILY_MINUTES])
+        df = _read_daily([dc.SUNSHINE_DAILY_PCT_OF_MAX])
         chart = charts.sunny_days_chart(df, station_abbr=station_abbr, period=period)
     elif chart_type == "summer_days":
         df = _read_daily([dc.TEMP_DAILY_MAX])
