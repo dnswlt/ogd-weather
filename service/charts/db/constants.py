@@ -184,6 +184,14 @@ DX_WIND_SPEED_DAILY_MAX_OF_HOURLY_MEAN = "wind_speed_dxh0"
 DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN = "wind_speed_dt_dxh0"
 DX_GUST_PEAK_DAYTIME_DAILY_MAX = "gust_peak_dt_dx"
 DX_GUST_FACTOR_DAILY_MEAN = "gust_factor_d0"
+DX_GUST_FACTOR_MONTHLY_MEAN = "gust_factor_m0"
+DX_MODERATE_BREEZE_DAYS_MONTHLY_COUNT = "moderate_breeze_days_m0"
+DX_STRONG_BREEZE_DAYS_MONTHLY_COUNT = "strong_breeze_days_m0"
+
+# Generic column: Value counts (for aggregate data: indicates
+# the number of values or measurements from which the aggregates
+# were calculated).
+DX_VALUE_COUNT = "value_count"
 
 # For the wind rose histogram. For simplicity, these variables
 # do not contain an interval qualifier.
@@ -196,6 +204,16 @@ DX_WIND_DIR_SW_COUNT = "wind_dir_sw_count"
 DX_WIND_DIR_W_COUNT = "wind_dir_w_count"
 DX_WIND_DIR_NW_COUNT = "wind_dir_nw_count"
 DX_WIND_DIR_TOTAL_COUNT = "wind_dir_total_count"
+DX_WIND_DIR_COUNT_MAP = {
+    "N": DX_WIND_DIR_N_COUNT,
+    "NE": DX_WIND_DIR_NE_COUNT,
+    "E": DX_WIND_DIR_E_COUNT,
+    "SE": DX_WIND_DIR_SE_COUNT,
+    "S": DX_WIND_DIR_S_COUNT,
+    "SW": DX_WIND_DIR_SW_COUNT,
+    "W": DX_WIND_DIR_W_COUNT,
+    "NW": DX_WIND_DIR_NW_COUNT,
+}
 
 # Precipitation
 DX_PRECIP_DAYTIME_DAILY_MM = "precip_dt_d0"

@@ -152,7 +152,6 @@ class StationComparisonRow(BaseModel):
 
 
 class WindStats(BaseModel):
-    station_abbr: str
     moderate_breeze_days: float
     strong_breeze_days: float
     gust_factor: float

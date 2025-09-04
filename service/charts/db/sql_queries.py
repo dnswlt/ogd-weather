@@ -157,80 +157,78 @@ def insert_into_x_ogd_smn_daily_derived(
     )
 
 
-def insert_into_monthly_wind_stats(
+def insert_into_x_wind_stats_monthly(
+    engine: sa.Engine,
     from_date: datetime.datetime,
     to_date: datetime.datetime,
-    date_range: str,
 ) -> sa.TextClause:
     """Returns the INSERT statement with bound params to populate monthly wind stats."""
+    if engine.dialect.name == "postgresql":
+        local_timestamp = "to_char(reference_timestamp::timestamptz AT TIME ZONE 'Europe/Zurich', 'YYYY-MM-DD HH24:MI:SS')"
+    elif engine.dialect.name == "sqlite":
+        local_timestamp = "datetime(reference_timestamp, 'localtime')"
+    else:
+        raise ValueError(f"Unsupported dialect: {engine.dialect.name}")
+
     sql = f"""
-        INSERT INTO {ds.sa_table_x_monthly_wind_stats.name}
+        INSERT INTO {ds.sa_table_x_wind_stats_monthly.name}
         WITH
-            DailyMaxes AS (
+            LocalHourlyMeasurements AS (
                 SELECT
                     station_abbr,
-                    SUBSTR(reference_timestamp, 1, 10) AS day,
-                    MAX({dc.WIND_SPEED_HOURLY_MEAN} * 3.6) AS max_hourly_avg_wind_kmh,
-                    MAX({dc.GUST_PEAK_HOURLY_MAX} * 3.6) AS max_gust_kmh,
-                    COUNT(*) AS value_count
-                FROM
-                    {ds.TABLE_HOURLY_MEASUREMENTS.name}
+                    {local_timestamp} AS local_timestamp,
+                    {dc.WIND_SPEED_HOURLY_MEAN},
+                    {dc.GUST_PEAK_HOURLY_MAX},
+                    {dc.WIND_DIRECTION_HOURLY_MEAN}
+                FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
                 WHERE
                     reference_timestamp >= :from_date
                     AND reference_timestamp < :to_date
-                GROUP BY station_abbr, day
             ),
-            StationDayCountsAnnual AS (
+            DailyMaxes AS (
                 SELECT
                     station_abbr,
-                    CAST(SUBSTR(day, 1, 4) AS INTEGER) AS year,
-                    CAST(SUBSTR(day, 6, 2) AS INTEGER) AS month,
+                    SUBSTR(local_timestamp, 1, 10) AS local_date,
+                    MAX({dc.WIND_SPEED_HOURLY_MEAN} * 3.6) AS max_hourly_avg_wind_kmh,
+                    MAX({dc.GUST_PEAK_HOURLY_MAX} * 3.6) AS max_gust_kmh,
+                    COUNT(*) AS value_count
+                FROM LocalHourlyMeasurements
+                GROUP BY station_abbr, local_date
+            ),
+            StationDayCountsMonthly AS (
+                SELECT
+                    station_abbr,
+                    SUBSTR(local_date, 1, 7) AS local_month,
                     SUM(CASE WHEN max_hourly_avg_wind_kmh >= 20 THEN 1 ELSE 0 END) AS moderate_breeze_days,
                     SUM(CASE WHEN max_gust_kmh >= 39 THEN 1 ELSE 0 END) AS strong_breeze_days,
                     SUM(value_count) AS value_count
                 FROM DailyMaxes
-                GROUP BY station_abbr, year, month
+                GROUP BY station_abbr, local_month
             ),
-            StationDayCounts AS (
+            StationGustFactorMonthly AS (
                 SELECT
                     station_abbr,
-                    month,
-                    AVG(moderate_breeze_days) AS moderate_breeze_days,
-                    AVG(strong_breeze_days) AS strong_breeze_days,
-                    SUM(value_count) AS value_count
-                FROM StationDayCountsAnnual
-                GROUP BY station_abbr, month
-            ),
-            StationGustFactor AS (
-                SELECT
-                    station_abbr,
-                    CAST(SUBSTR(reference_timestamp, 6, 2) AS INTEGER) AS month,
+                    SUBSTR(local_timestamp, 1, 7) AS local_month,
                     AVG({dc.GUST_PEAK_HOURLY_MAX} / {dc.WIND_SPEED_HOURLY_MEAN}) AS gust_factor
-                FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
-                WHERE
-                    reference_timestamp >= :from_date
-                    AND reference_timestamp < :to_date
-                    AND {dc.WIND_SPEED_HOURLY_MEAN} > 0
-                GROUP BY station_abbr, month
+                FROM LocalHourlyMeasurements
+                WHERE {dc.WIND_SPEED_HOURLY_MEAN} > 0
+                GROUP BY station_abbr, local_month
             ),
             StationWindDirectionsLong AS (
                 SELECT
                     station_abbr,
-                    CAST(SUBSTR(reference_timestamp, 6, 2) AS INTEGER) AS month,
+                    SUBSTR(local_timestamp, 1, 7) AS local_month,
                     -- 45 degree buckets, where -22.5 to 22.5 is N.
                     (CAST(FLOOR(({dc.WIND_DIRECTION_HOURLY_MEAN} + 22.5) / 45.0) AS INTEGER) % 8) AS bucket_index,
                     COUNT(*) AS value_count
-                FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
-                WHERE
-                    reference_timestamp >= :from_date
-                    AND reference_timestamp < :to_date
-                    AND {dc.WIND_DIRECTION_HOURLY_MEAN} IS NOT NULL
-                GROUP BY station_abbr, month, bucket_index
+                FROM LocalHourlyMeasurements
+                WHERE {dc.WIND_DIRECTION_HOURLY_MEAN} IS NOT NULL
+                GROUP BY station_abbr, local_month, bucket_index
             ),
-            StationWindDirections AS (
+            StationWindDirectionsMonthly AS (
                 SELECT
                     station_abbr,
-                    month,
+                    local_month,
                     SUM(CASE WHEN bucket_index = 0 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_N_COUNT},
                     SUM(CASE WHEN bucket_index = 1 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_NE_COUNT},
                     SUM(CASE WHEN bucket_index = 2 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_E_COUNT},
@@ -241,16 +239,15 @@ def insert_into_monthly_wind_stats(
                     SUM(CASE WHEN bucket_index = 7 THEN value_count ELSE 0 END) AS {dc.DX_WIND_DIR_NW_COUNT},
                     SUM(value_count) AS {dc.DX_WIND_DIR_TOTAL_COUNT}
                 FROM StationWindDirectionsLong
-                GROUP BY station_abbr, month
+                GROUP BY station_abbr, local_month
             )
         SELECT
-            :date_range AS date_range,
             station_abbr,
-            month,
-            SDC.moderate_breeze_days,
-            SDC.strong_breeze_days,
-            SGF.gust_factor,
-            SDC.value_count,
+            (local_month || '-01') AS reference_timestamp,
+            SDC.moderate_breeze_days AS {dc.DX_MODERATE_BREEZE_DAYS_MONTHLY_COUNT},
+            SDC.strong_breeze_days AS {dc.DX_STRONG_BREEZE_DAYS_MONTHLY_COUNT},
+            SGF.gust_factor AS {dc.DX_GUST_FACTOR_MONTHLY_MEAN},
+            SDC.value_count AS {dc.DX_VALUE_COUNT},
             SWD.{dc.DX_WIND_DIR_N_COUNT},
             SWD.{dc.DX_WIND_DIR_NE_COUNT},
             SWD.{dc.DX_WIND_DIR_E_COUNT},
@@ -260,13 +257,12 @@ def insert_into_monthly_wind_stats(
             SWD.{dc.DX_WIND_DIR_W_COUNT},
             SWD.{dc.DX_WIND_DIR_NW_COUNT},
             SWD.{dc.DX_WIND_DIR_TOTAL_COUNT}
-        FROM StationDayCounts AS SDC
-        JOIN StationGustFactor SGF USING (station_abbr, month)
-        LEFT JOIN StationWindDirections AS SWD USING (station_abbr, month)
+        FROM StationDayCountsMonthly AS SDC
+        JOIN StationGustFactorMonthly SGF USING (station_abbr, local_month)
+        LEFT JOIN StationWindDirectionsMonthly AS SWD USING (station_abbr, local_month)
     """
 
     return sa.text(sql).bindparams(
-        date_range=date_range,
         from_date=utc_timestr(from_date),
         to_date=utc_timestr(to_date),
     )

@@ -1,6 +1,7 @@
 from pathlib import Path
 import unittest
 import datetime
+import zoneinfo
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
@@ -991,7 +992,7 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
                 p("BER", "1991-01-01", -3, 0.5),
                 p("BER", "1991-01-02", -4, 1.5),
                 p("BER", "2001-06-03", 22, None),
-                p("XXX", "2001-06-03", 30, 12),
+                p("XYZ", "2001-06-03", 30, 12),
             ],
         )
         conn.commit()
@@ -1506,49 +1507,54 @@ class TestCreateWindStats(unittest.TestCase):
             ),
         )
 
-        with engine.connect() as conn:
-            db.insert_monthly_wind_stats(conn, 2000, 2000)
-
-            # Read raw data
-            cur = conn.execute(
-                sa.select(ds.sa_table_x_monthly_wind_stats)
-                .where(
-                    sa.and_(
-                        ds.sa_table_x_monthly_wind_stats.c.station_abbr == "CHU",
-                        ds.sa_table_x_monthly_wind_stats.c.year_range == "2000",
-                    )
-                )
-                .order_by(ds.sa_table_x_monthly_wind_stats.c.month)
+        with engine.begin() as conn:
+            zrh = zoneinfo.ZoneInfo("Europe/Zurich")
+            insert_sql = sql_queries.insert_into_x_wind_stats_monthly(
+                engine,
+                from_date=datetime.datetime(2000, 1, 1, tzinfo=zrh),
+                to_date=datetime.datetime(2001, 1, 1, tzinfo=zrh),
             )
-            rows = cur.mappings().all()
-            self.assertEqual(len(rows), 12, "Expect one row per month")
-            r = rows[0]
-            self.assertEqual(r["month"], 1)
-            self.assertEqual(r["wind_dir_total_count"], 31 * 24)
-            self.assertGreater(r["wind_dir_ne_count"], 100)
+            conn.execute(insert_sql)
+
+            # Read whole year
+            df = db.read_x_wind_stats_monthly(
+                conn,
+                "CHU",
+                datetime.date(2000, 1, 1),
+                datetime.date(2001, 1, 1),
+            )
+            self.assertEqual(len(df), 12, "Expect one row per month")
+            r = df.iloc[0]
+            self.assertEqual(df.index[0], pd.Timestamp("2000-01-01"))
+            # 1 Jan lacks one hour, since the CSV starts at 00:00 UTC (01:00 CET)
+            self.assertEqual(r[dc.DX_WIND_DIR_TOTAL_COUNT], 31 * 24 - 1)
             self.assertEqual(
-                r["wind_dir_total_count"],
-                r["wind_dir_n_count"]
-                + r["wind_dir_ne_count"]
-                + r["wind_dir_e_count"]
-                + r["wind_dir_se_count"]
-                + r["wind_dir_s_count"]
-                + r["wind_dir_sw_count"]
-                + r["wind_dir_w_count"]
-                + r["wind_dir_nw_count"],
+                r[list(dc.DX_WIND_DIR_COUNT_MAP.values())].sum(), 31 * 24 - 1
             )
+            # Feb should have all hours:
+            self.assertEqual(df.index[1], pd.Timestamp("2000-02-01"))
+            r = df.iloc[1]
+            self.assertEqual(r[dc.DX_WIND_DIR_TOTAL_COUNT], 29 * 24)
 
-            # Read data via intended API
-            stats = db.read_monthly_wind_stats(conn, "CHU", "2000", "all")
-            self.assertIsNotNone(stats)
-            self.assertEqual(stats.main_wind_dir, "S")
-            self.assertTrue(25 < stats.wind_dir_percent[stats.main_wind_dir] < 35)
-            self.assertEqual(stats.measurement_count, 366 * 24)
-            pctSum = sum(stats.wind_dir_percent.values())
-            self.assertAlmostEqual(pctSum, 100.0, places=4)
+            # Read data for June period (6).
+            df = db.read_x_wind_stats_monthly(
+                conn,
+                "CHU",
+                datetime.date(2000, 1, 1),
+                datetime.date(2001, 1, 1),
+                period="6",
+            )
+            self.assertIsNotNone(df)
+            self.assertEqual(len(df), 1)  # only June
+            s = df.iloc[0]
+            self.assertEqual(s[dc.DX_VALUE_COUNT], 30 * 24)
+            self.assertEqual(s[dc.DX_WIND_DIR_TOTAL_COUNT], 30 * 24)
+            self.assertEqual(s[list(dc.DX_WIND_DIR_COUNT_MAP.values())].sum(), 30 * 24)
 
-            stats = db.read_monthly_wind_stats(conn, "CHU", "NOT_EXIST", "all")
-            self.assertIsNone(stats)
+            self.assertGreater(s[dc.DX_GUST_FACTOR_MONTHLY_MEAN], 2.5)
+            self.assertLess(s[dc.DX_GUST_FACTOR_MONTHLY_MEAN], 3.5)
+            self.assertEqual(s[dc.DX_MODERATE_BREEZE_DAYS_MONTHLY_COUNT], 17)
+            self.assertEqual(s[dc.DX_STRONG_BREEZE_DAYS_MONTHLY_COUNT], 23)
 
 
 class TestCreateDailyDerived(unittest.TestCase):

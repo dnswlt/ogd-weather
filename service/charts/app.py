@@ -954,13 +954,19 @@ async def compare_stations(
                 to_date=to_date,
                 period=period,
             )
-            wind_stats = db.read_monthly_wind_stats(conn, s, year_range, period)
+            df_wind = db.read_x_wind_stats_monthly(
+                conn,
+                s,
+                columns=None,  # All columns are needed
+                from_date=from_date,
+                to_date=to_date,
+            )
             per_station_data.append(
                 stats.PerStationData(
                     station=station,
                     daily_measurements=df,
                     daily_manual_measurements=df_man,
-                    wind_stats=wind_stats,
+                    monthly_wind_stats=df_wind,
                 )
             )
 

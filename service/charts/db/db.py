@@ -438,12 +438,12 @@ def recreate_views(engine: sa.Engine) -> None:
     recreate_all_meta_parameters(engine)
 
     recreate_x_ogd_smn_daily_derived(engine)
+    recreate_x_wind_stats_monthly(engine)
 
     recreate_station_data_summary(engine)
     recreate_station_var_availability(engine)
     recreate_nearby_stations(engine)
     recreate_climate_normals_stats_tables(engine)
-    recreate_wind_stats(engine)
 
 
 def recreate_x_ogd_smn_daily_derived(engine: sa.Engine) -> None:
@@ -452,39 +452,30 @@ def recreate_x_ogd_smn_daily_derived(engine: sa.Engine) -> None:
         ds.sa_table_x_ogd_smn_daily_derived.drop(conn, checkfirst=True)
         ds.sa_table_x_ogd_smn_daily_derived.create(conn)
         now = datetime.datetime.now(tz=datetime.timezone.utc)
+        from_date = datetime.datetime(1990, 1, 1, tzinfo=datetime.timezone.utc)
+        to_date = now + datetime.timedelta(days=1)
+
         insert_sql = sql_queries.insert_into_x_ogd_smn_daily_derived(
-            engine,
-            datetime.datetime(1990, 1, 1, tzinfo=datetime.timezone.utc),
-            now + datetime.timedelta(days=1),
+            engine, from_date, to_date
         )
         conn.execute(insert_sql)
 
 
-def recreate_wind_stats(engine: sa.Engine) -> None:
-    logger.info("Recreating wind stats table")
+def recreate_x_wind_stats_monthly(engine: sa.Engine) -> None:
+    logger.info("Recreating monthly wind stats table")
     with engine.begin() as conn:
-        ds.sa_table_x_monthly_wind_stats.drop(conn, checkfirst=True)
-        ds.sa_table_x_monthly_wind_stats.create(conn)
+        ds.sa_table_x_wind_stats_monthly.drop(conn, checkfirst=True)
+        ds.sa_table_x_wind_stats_monthly.create(conn)
 
-        year_ranges = [(1991, 2020), (2020, 2024)]
-        for from_year, to_year in year_ranges:
-            insert_monthly_wind_stats(conn, from_year, to_year)
+        utc = datetime.timezone.utc
+        now = datetime.datetime.now(tz=utc)
+        from_date = datetime.datetime(1990, 1, 1, tzinfo=utc)
+        to_date = now + datetime.timedelta(days=1)
 
-
-def insert_monthly_wind_stats(
-    conn: sa.Connection,
-    from_year: int,
-    to_year: int,
-) -> None:
-    utc = datetime.timezone.utc
-    from_date = datetime.datetime(from_year, 1, 1, tzinfo=utc)
-    to_date = datetime.datetime(to_year + 1, 1, 1, tzinfo=utc)
-    date_range = f"{from_year}-{to_year}" if from_year != to_year else f"{from_year}"
-
-    insert_sql = sql_queries.insert_into_monthly_wind_stats(
-        from_date, to_date, date_range
-    )
-    conn.execute(insert_sql)
+        insert_sql = sql_queries.insert_into_x_wind_stats_monthly(
+            engine, from_date, to_date
+        )
+        conn.execute(insert_sql)
 
 
 def recreate_all_meta_parameters(engine: sa.Engine) -> None:
@@ -1199,7 +1190,7 @@ def _validate_column_names(columns: list[str]) -> None:
 
 def _read_measurements_table(
     conn: sa.Connection,
-    table_spec: ds.DataTableSpec,
+    table: sa.Table,
     station_abbr: str,
     from_date: datetime.datetime | datetime.date | None,
     to_date: datetime.datetime | datetime.date | None,
@@ -1210,7 +1201,7 @@ def _read_measurements_table(
     """Reads rows from the specified monthly measurements table.
 
     Args:
-        table_spec: the table to read data from.
+        table: the table to read data from.
         from_date: inclusive lower bound of the time range to read.
         to_date: exclusive upper bound of the time range to read.
         period: a string indicating the month or season to read. Valid values:
@@ -1221,15 +1212,16 @@ def _read_measurements_table(
     Returns:
         A pd.DataFrame with a "reference_timestamp" index of type datetime.
     """
+    key_columns = ["station_abbr", "reference_timestamp"]
     if columns is None:
-        columns = table_spec.measurements
+        columns = [c.name for c in table.columns if c.name not in key_columns]
+    else:
+        _validate_column_names(columns)
 
-    _validate_column_names(columns)
-
-    select_columns = ["station_abbr", "reference_timestamp"] + columns
+    select_columns = key_columns + columns
     sql = f"""
         SELECT {', '.join(select_columns)}
-        FROM {table_spec.name}
+        FROM {table.name}
     """
     # Filter by station.
     filters = ["station_abbr = :station_abbr"]
@@ -1289,7 +1281,7 @@ def read_hourly_measurements(
 
     return _read_measurements_table(
         conn,
-        ds.TABLE_HOURLY_MEASUREMENTS,
+        ds.TABLE_HOURLY_MEASUREMENTS.sa_table,
         station_abbr=station_abbr,
         from_date=from_date,
         to_date=to_date,
@@ -1312,7 +1304,7 @@ def read_daily_measurements(
     """
     return _read_measurements_table(
         conn,
-        ds.TABLE_DAILY_MEASUREMENTS,
+        ds.TABLE_DAILY_MEASUREMENTS.sa_table,
         station_abbr=station_abbr,
         from_date=from_date,
         to_date=to_date,
@@ -1335,7 +1327,7 @@ def read_daily_hom_measurements(
     """
     return _read_measurements_table(
         conn,
-        ds.TABLE_DAILY_HOM_MEASUREMENTS,
+        ds.TABLE_DAILY_HOM_MEASUREMENTS.sa_table,
         station_abbr=station_abbr,
         from_date=from_date,
         to_date=to_date,
@@ -1367,7 +1359,7 @@ def read_daily_manual_measurements(
     """
     return _read_measurements_table(
         conn,
-        ds.TABLE_DAILY_MAN_MEASUREMENTS,
+        ds.TABLE_DAILY_MAN_MEASUREMENTS.sa_table,
         station_abbr=station_abbr,
         from_date=from_date,
         to_date=to_date,
@@ -1397,7 +1389,7 @@ def read_monthly_measurements(
     """
     return _read_measurements_table(
         conn,
-        ds.TABLE_MONTHLY_MEASUREMENTS,
+        ds.TABLE_MONTHLY_MEASUREMENTS.sa_table,
         station_abbr=station_abbr,
         from_date=from_date,
         to_date=to_date,
@@ -1428,7 +1420,7 @@ def read_monthly_hom_measurements(
     """
     return _read_measurements_table(
         conn,
-        ds.TABLE_MONTHLY_HOM_MEASUREMENTS,
+        ds.TABLE_MONTHLY_HOM_MEASUREMENTS.sa_table,
         station_abbr=station_abbr,
         from_date=from_date,
         to_date=to_date,
@@ -1456,11 +1448,34 @@ def read_annual_hom_measurements(
     """
     return _read_measurements_table(
         conn,
-        ds.TABLE_ANNUAL_HOM_MEASUREMENTS,
+        ds.TABLE_ANNUAL_HOM_MEASUREMENTS.sa_table,
         station_abbr=station_abbr,
         from_date=from_date,
         to_date=to_date,
         columns=columns,
+        limit=limit,
+    )
+
+
+def read_x_wind_stats_monthly(
+    conn: sa.Connection,
+    station_abbr: str,
+    from_date: datetime.date | None = None,
+    to_date: datetime.date | None = None,
+    columns: list[str] | None = None,
+    period: str | None = None,
+    limit: int = -1,
+) -> pd.DataFrame:
+    """Reads rows from the derived monthly wind stats table."""
+
+    return _read_measurements_table(
+        conn,
+        ds.sa_table_x_wind_stats_monthly,
+        station_abbr=station_abbr,
+        from_date=from_date,
+        to_date=to_date,
+        columns=columns,
+        period=period,
         limit=limit,
     )
 
@@ -1677,57 +1692,3 @@ def read_table_stats(engine: sa.Engine, user: str) -> list[models.DBTableStats]:
             )
             for r in result
         ]
-
-
-def read_monthly_wind_stats(
-    conn: sa.Connection, station_abbr: str, year_range: str, period: str
-) -> models.WindStats | None:
-    """Returns a DataFrame with lekker wind stats."""
-
-    months = _period_to_months(period)
-
-    t = ds.sa_table_x_monthly_wind_stats
-    sql_query = sa.select(t).where(
-        t.c.station_abbr == station_abbr,
-        t.c.year_range == year_range,
-        t.c.month.in_(months),
-    )
-
-    df = pd.read_sql(
-        sql_query,
-        conn,
-        dtype={
-            c.name: _column_to_dtype(c)
-            for c in ds.sa_table_x_monthly_wind_stats.columns
-        },
-    )
-    if df.empty or df["value_count"].sum() == 0:
-        return None
-
-    gust_factor = (df["gust_factor"] * df["value_count"]).sum() / df[
-        "value_count"
-    ].sum()
-
-    total_count = df["wind_dir_total_count"].sum()
-    if total_count > 0:
-        dirs = ["n", "ne", "e", "se", "s", "sw", "w", "nw"]
-        dir_cols = [f"wind_dir_{d}_count" for d in dirs]
-        dir_sums = df[dir_cols].sum()
-        max_dir_col = dir_sums.idxmax()
-        main_wind_dir = dirs[dir_cols.index(max_dir_col)].upper()
-        wind_dir_pct = {
-            d.upper(): df[c].sum() / total_count * 100 for d, c in zip(dirs, dir_cols)
-        }
-    else:
-        main_wind_dir = None
-        wind_dir_pct = None
-
-    return models.WindStats(
-        station_abbr=station_abbr,
-        moderate_breeze_days=float(df["moderate_breeze_days"].sum()),
-        strong_breeze_days=float(df["strong_breeze_days"].sum()),
-        gust_factor=float(gust_factor),
-        main_wind_dir=main_wind_dir,
-        wind_dir_percent=wind_dir_pct,
-        measurement_count=total_count,
-    )

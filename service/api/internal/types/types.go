@@ -291,7 +291,6 @@ type StationComparisonRow struct {
 }
 
 type WindStats struct {
-	StationAbbr        string             `json:"station_abbr"`
 	ModerateBreezeDays float64            `json:"moderate_breeze_days"`
 	StrongBreezeDays   float64            `json:"strong_breeze_days"`
 	GustFactor         float64            `json:"gust_factor"`
