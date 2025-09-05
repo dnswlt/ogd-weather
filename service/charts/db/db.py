@@ -1229,24 +1229,6 @@ def _sql_filter_by_period(period: str) -> str:
     raise ValueError(f"Invalid period {period} for SQL filter")
 
 
-def _period_to_months(period: str) -> list[int]:
-    """Returns the list of months that belong to the given period."""
-    if period.isdigit():
-        return [int(period)]
-    elif period == "spring":
-        return [3, 4, 5]
-    elif period == "summer":
-        return [6, 7, 8]
-    elif period == "autumn":
-        return [9, 10, 11]
-    elif period == "winter":
-        return [1, 2, 12]
-    elif period == "all":
-        return list(range(1, 13))
-    else:
-        raise ValueError(f"invalid period: {period}")
-
-
 _COLUMN_NAME_RE = re.compile(r"^[a-z][a-zA-Z0-9_]*$")
 
 

@@ -43,113 +43,51 @@ def insert_into_x_ogd_smn_daily_derived(
     of the hourly reference_timestamp values.
     """
     if engine.dialect.name == "postgresql":
-        sql = f"""
-            INSERT INTO {ds.sa_table_x_ogd_smn_daily_derived}
-            WITH 
-                LocalTimeValues AS (
-                    SELECT
-                        station_abbr,
-                        (reference_timestamp::timestamptz AT TIME ZONE 'Europe/Zurich')::date AS local_date,
-                        (reference_timestamp::timestamptz AT TIME ZONE 'Europe/Zurich')::time AS local_time,
-                        {dc.PRECIP_HOURLY_MM},
-                        {dc.VAPOR_PRESSURE_HOURLY_MEAN},
-                        {dc.WIND_SPEED_HOURLY_MEAN},
-                        {dc.GUST_PEAK_HOURLY_MAX}
-                    FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
-                    WHERE reference_timestamp >= :from_date
-                        AND reference_timestamp < :to_date
-                ),
-                DaytimeValues AS (
-                    SELECT
-                        *
-                    FROM LocalTimeValues
-                    WHERE 
-                        (
-                            CASE
-                                WHEN EXTRACT(MONTH FROM local_date) IN (5, 6, 7, 8)
-                                    THEN local_time BETWEEN '08:00'::time AND '22:00'::time
-                                WHEN EXTRACT(MONTH FROM local_date) IN (3, 4, 9, 10)
-                                    THEN local_time BETWEEN '08:00'::time AND '21:00'::time
-                                ELSE local_time BETWEEN '08:00'::time AND '18:00'::time
-                            END
-                        )
-                )
-            SELECT
-                station_abbr,
-                to_char(local_date, 'YYYY-MM-DD') AS reference_timestamp,
-                SUM({dc.PRECIP_HOURLY_MM}) AS {dc.DX_PRECIP_DAYTIME_DAILY_MM},
-                MAX({dc.VAPOR_PRESSURE_HOURLY_MEAN}) AS {dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
-                MAX({dc.WIND_SPEED_HOURLY_MEAN}) AS {dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
-                MAX({dc.GUST_PEAK_HOURLY_MAX}) AS {dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX}
-            FROM DaytimeValues
-            GROUP BY station_abbr, reference_timestamp
-            """
-
+        local_timestamp = "to_char(reference_timestamp::timestamptz AT TIME ZONE 'Europe/Zurich', 'YYYY-MM-DD HH24:MI:SS')"
     elif engine.dialect.name == "sqlite":
-        # Make simplifying assumptions about daylight-saving time due to sqlite's limited
-        # datetime support:
-        # Treat April to October (inclusive) as summer time (CEST), and November to March as
-        # regular CET.
-        sql = f"""
-            INSERT INTO {ds.sa_table_x_ogd_smn_daily_derived}
-            WITH
-                TimeOffsets AS (
-                    SELECT
-                        reference_timestamp,
-                        station_abbr,
-                        {dc.PRECIP_HOURLY_MM},
-                        {dc.VAPOR_PRESSURE_HOURLY_MEAN},
-                        {dc.WIND_SPEED_HOURLY_MEAN},
-                        {dc.GUST_PEAK_HOURLY_MAX},
-                        CASE
-                            WHEN STRFTIME('%m', reference_timestamp) BETWEEN '04' AND '10'
-                            THEN '+2 hours'
-                            ELSE '+1 hour'
-                        END AS tz_offset
-                    FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
-                    WHERE
-                        reference_timestamp >= :from_date
-                        AND reference_timestamp < :to_date
-                ),
-                LocalTimeValues AS (
-                    SELECT
-                        DATE(reference_timestamp, tz_offset) AS local_date,
-                        TIME(reference_timestamp, tz_offset) AS local_time,
-                        station_abbr,
-                        {dc.PRECIP_HOURLY_MM},
-                        {dc.VAPOR_PRESSURE_HOURLY_MEAN},
-                        {dc.WIND_SPEED_HOURLY_MEAN},
-                        {dc.GUST_PEAK_HOURLY_MAX}
-                    FROM TimeOffsets
-                ),
-                DaytimeValues AS (
-                    SELECT
-                        *
-                    FROM LocalTimeValues
-                    WHERE
-                        (
-                            CASE
-                                WHEN CAST(STRFTIME('%m', local_date) AS INTEGER) IN (5, 6, 7, 8)
-                                    THEN local_time BETWEEN '08:00:00' AND '22:00:00'
-                                WHEN CAST(STRFTIME('%m', local_date) AS INTEGER) IN (3, 4, 9, 10)
-                                    THEN local_time BETWEEN '08:00:00' AND '21:00:00'
-                                ELSE local_time BETWEEN '08:00:00' AND '18:00:00'
-                            END
-                        )
-                )
-            SELECT
-                station_abbr,
-                local_date AS reference_timestamp,
-                SUM({dc.PRECIP_HOURLY_MM}) AS {dc.DX_PRECIP_DAYTIME_DAILY_MM},
-                MAX({dc.VAPOR_PRESSURE_HOURLY_MEAN}) AS {dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
-                MAX({dc.WIND_SPEED_HOURLY_MEAN}) AS {dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
-                MAX({dc.GUST_PEAK_HOURLY_MAX}) AS {dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX}
-            FROM DaytimeValues
-            GROUP BY station_abbr, reference_timestamp
-        """
-
+        local_timestamp = "datetime(reference_timestamp, 'localtime')"
     else:
-        raise NotImplementedError(f"Unsupported engine dialect: {engine.dialect.name}")
+        raise ValueError(f"Unsupported dialect: {engine.dialect.name}")
+    sql = f"""
+        INSERT INTO {ds.sa_table_x_ogd_smn_daily_derived}
+        WITH 
+            LocalHourlyMeasurements AS (
+                SELECT
+                    station_abbr,
+                    {local_timestamp} AS local_timestamp,
+                    {dc.PRECIP_HOURLY_MM},
+                    {dc.VAPOR_PRESSURE_HOURLY_MEAN},
+                    {dc.WIND_SPEED_HOURLY_MEAN},
+                    {dc.GUST_PEAK_HOURLY_MAX}
+                FROM {ds.TABLE_HOURLY_MEASUREMENTS.name}
+                WHERE reference_timestamp >= :from_date
+                    AND reference_timestamp < :to_date
+            ),
+            DaytimeValues AS (
+                SELECT
+                    *
+                FROM LocalHourlyMeasurements
+                WHERE 
+                    (
+                        CASE
+                            WHEN SUBSTR(local_timestamp, 6, 2) IN ('05', '06', '07', '08')
+                                THEN SUBSTR(local_timestamp, 12, 5) BETWEEN '08:00' AND '22:00'
+                            WHEN SUBSTR(local_timestamp, 6, 2) IN ('03', '04', '09', '10')
+                                THEN SUBSTR(local_timestamp, 12, 5) BETWEEN '08:00' AND '21:00'
+                            ELSE SUBSTR(local_timestamp, 12, 5) BETWEEN '08:00' AND '18:00'
+                        END
+                    )
+            )
+        SELECT
+            station_abbr,
+            SUBSTR(local_timestamp, 1, 10) AS reference_timestamp,
+            SUM({dc.PRECIP_HOURLY_MM}) AS {dc.DX_PRECIP_DAYTIME_DAILY_MM},
+            MAX({dc.VAPOR_PRESSURE_HOURLY_MEAN}) AS {dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
+            MAX({dc.WIND_SPEED_HOURLY_MEAN}) AS {dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
+            MAX({dc.GUST_PEAK_HOURLY_MAX}) AS {dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX}
+        FROM DaytimeValues
+        GROUP BY station_abbr, reference_timestamp
+        """
 
     return sa.text(sql).bindparams(
         from_date=utc_timestr(from_date),
