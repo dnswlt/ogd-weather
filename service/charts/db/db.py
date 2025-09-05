@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Collection
+from typing import Any, Callable, Collection
 from urllib.parse import urlparse
 import uuid
 import numpy as np
@@ -484,15 +484,19 @@ def recreate_views(engine: sa.Engine | None, importer: Importer | None = None) -
     recreate_climate_normals_stats_tables(engine)
 
 
-def recreate_x_ogd_smn_daily_derived(
-    engine: sa.Engine, importer: Importer | None = None
+def _recreate_x_table(
+    engine: sa.Engine,
+    x_table: sa.Table,
+    source_table_name: str,
+    importer: Importer | None,
+    insert_sql_fn: Callable[
+        [sa.Engine, datetime.datetime, datetime.datetime], sa.TextClause
+    ],
 ) -> None:
-    t = ds.sa_table_x_ogd_smn_daily_derived
+    t = x_table
 
     if importer is not None:
-        min_date = importer.min_date(
-            ds.TABLE_HOURLY_MEASUREMENTS.name, "reference_timestamp"
-        )
+        min_date = importer.min_date(source_table_name, "reference_timestamp")
         if min_date is None:
             logger.info("Skipping x_ogd_smn_daily_derived: no new hourly data.")
             return
@@ -500,12 +504,12 @@ def recreate_x_ogd_smn_daily_derived(
             min_date.year, min_date.month, min_date.day, tzinfo=datetime.timezone.utc
         )
         drop = False
-        logger.info("Updating x_ogd_smn_daily_derived table from %s", from_date)
+        logger.info("Updating table %s from %s", x_table.name, from_date)
     else:
         # Rebuild all
         from_date = datetime.datetime(1990, 1, 1, tzinfo=datetime.timezone.utc)
         drop = True
-        logger.info("Recreating x_ogd_smn_daily_derived table")
+        logger.info("Recreating table %s", x_table.name)
 
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     to_date = now + datetime.timedelta(days=1)
@@ -520,50 +524,30 @@ def recreate_x_ogd_smn_daily_derived(
             )
             conn.execute(delete_stmt)
 
-        insert_sql = sql_queries.insert_into_x_ogd_smn_daily_derived(
-            engine, from_date, to_date
-        )
+        insert_sql = insert_sql_fn(engine, from_date, to_date)
         conn.execute(insert_sql)
+
+
+def recreate_x_ogd_smn_daily_derived(
+    engine: sa.Engine, importer: Importer | None = None
+) -> None:
+    _recreate_x_table(
+        engine=engine,
+        x_table=ds.sa_table_x_ogd_smn_daily_derived,
+        source_table_name=ds.TABLE_HOURLY_MEASUREMENTS.name,
+        importer=importer,
+        insert_sql_fn=sql_queries.insert_into_x_ogd_smn_daily_derived,
+    )
 
 
 def recreate_x_wind_stats_monthly(engine: sa.Engine, importer: Importer) -> None:
-    t = ds.sa_table_x_wind_stats_monthly
-
-    if importer is not None:
-        min_date = importer.min_date(
-            ds.TABLE_HOURLY_MEASUREMENTS.name, "reference_timestamp"
-        )
-        if min_date is None:
-            logger.info("Skipping x_wind_stats_monthly: no new hourly data.")
-            return
-        from_date = datetime.datetime(
-            min_date.year, min_date.month, min_date.day, tzinfo=datetime.timezone.utc
-        )
-        drop = False
-        logger.info("Updating x_wind_stats_monthly table from %s", from_date)
-    else:
-        # Rebuild all
-        from_date = datetime.datetime(1990, 1, 1, tzinfo=datetime.timezone.utc)
-        drop = True
-        logger.info("Recreating x_wind_stats_monthly table")
-
-    now = datetime.datetime.now(tz=datetime.timezone.utc)
-    to_date = now + datetime.timedelta(days=1)
-
-    with engine.begin() as conn:
-        if drop:
-            t.drop(conn, checkfirst=True)
-            t.create(conn)
-        else:
-            delete_stmt = t.delete().where(
-                t.c.reference_timestamp >= utc_datestr(from_date)
-            )
-            conn.execute(delete_stmt)
-
-        insert_sql = sql_queries.insert_into_x_wind_stats_monthly(
-            engine, from_date, to_date
-        )
-        conn.execute(insert_sql)
+    _recreate_x_table(
+        engine=engine,
+        x_table=ds.sa_table_x_wind_stats_monthly,
+        source_table_name=ds.TABLE_HOURLY_MEASUREMENTS.name,
+        importer=importer,
+        insert_sql_fn=sql_queries.insert_into_x_wind_stats_monthly,
+    )
 
 
 def recreate_all_meta_parameters(engine: sa.Engine) -> None:
