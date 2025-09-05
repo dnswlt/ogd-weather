@@ -103,264 +103,302 @@ def _normalize_timestamp(series: pd.Series) -> pd.Series:
         return series.dt.tz_localize("UTC").dt.strftime("%Y-%m-%d %H:%M:%SZ")
 
 
-def insert_csv_metadata(
-    base_dir: str,
-    engine: sa.Engine,
-    table: sa.Table,
-    update: UpdateStatus,
-    drop_existing: bool = True,
-) -> None:
-    """Loads CSV and insert rows into an existing metadata table.
+class Importer:
 
-    Existing rows in the metadata table are dropped if `drop_existing` is True.
+    def __init__(self, base_dir: str, engine: sa.Engine):
+        self.base_dir = base_dir
+        self.engine = engine
+        self._imported_files_count = 0
+        self._imported_rows_count = 0
+        self._is_postgres = self.engine.dialect.name == "postgresql"
+        # Maintains the minimum dates seen for each (table, column).
+        # Used to determine time range of derived tables to be updated.
+        self._min_dates: dict[tuple[str, str], datetime.datetime] = {}
 
-    - Requires all table columns to be present in the CSV.
-    """
+    def min_date(self, table: str, column: str) -> datetime.datetime | None:
+        """Returns the minimum timestamp seen for (table, column) so far.
 
-    # Columns defined in the SQLAlchemy table (in order)
-    table_columns = [col.name for col in table.columns]
+        Returns None if no values were seen for this column.
+        """
+        return self._min_dates.get((table, column))
 
-    # Load CSV
-    csv_file = update.filename()
-    df = pd.read_csv(os.path.join(base_dir, csv_file), sep=";", encoding="cp1252")
+    def imported_files_count(self):
+        return self._imported_files_count
 
-    # Validate all columns present
-    missing = [c for c in table_columns if c not in df.columns]
-    if missing:
-        raise ValueError(f"CSV {csv_file} is missing required columns: {missing}")
+    def imported_rows_count(self):
+        return self._imported_rows_count
 
-    # Select only required columns, in correct order
-    df = df[table_columns]
+    def _record_min_date(self, table: str, column: str, date: datetime.datetime):
+        current_min = self.min_date(table, column)
 
-    with engine.begin() as conn:
-        if drop_existing:
-            conn.execute(sa.delete(table))
-        records = df.replace({np.nan: None}).to_dict(orient="records")
-        conn.execute(sa.insert(table), records)
-        # Update status
-        save_update_status(conn, update)
+        if current_min is None:
+            self._min_dates[(table, column)] = date
+            return
 
+        self._min_dates[(table, column)] = min(current_min, date)
 
-def insert_csv_data(
-    base_dir: str,
-    engine: sa.Engine,
-    table_spec: ds.DataTableSpec,
-    update: UpdateStatus,
-    insert_mode: str = "insert_missing",
-) -> None:
-    """Inserts data from a CSV file specified in `update`.
+    def insert_csv_metadata(
+        self,
+        table: sa.Table,
+        update: UpdateStatus,
+        drop_existing: bool = True,
+    ) -> None:
+        """Loads CSV and insert rows into an existing metadata table.
 
-    *  Column names in the DB tables are identical to column names in the CSV (e.g.,
-    station_abbr, reference_timestamp, tre200d0).
+        Existing rows in the metadata table are dropped if `drop_existing` is True.
 
-    *  Dates are stored as TEXT in ISO format "YYYY-MM-DD HH:MM:SSZ" and use UTC time.
+        - Requires all table columns to be present in the CSV.
+        """
 
-    *  Measurements are stored as REAL (32 bit).
+        # Columns defined in the SQLAlchemy table (in order)
+        table_columns = [col.name for col in table.columns]
 
-    *  The time part is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
+        # Load CSV
+        csv_file = update.filename()
+        df = pd.read_csv(
+            os.path.join(self.base_dir, csv_file), sep=";", encoding="cp1252"
+        )
 
-    *  The UpdateStatus DB table is updated in the same transaction.
+        # Validate all columns present
+        missing = [c for c in table_columns if c not in df.columns]
+        if missing:
+            raise ValueError(f"CSV {csv_file} is missing required columns: {missing}")
 
-    Args:
-        base_dir: the directory in which CSV files are expected.
-        engine: the SQLAlchemy engine.
-        table_spec: the table to insert/upsert data into.
-        update: information about the CSV file to insert. Also used to update
-            the status_update table.
-        mode: the insert mode; must be one of
-            * "append" - Appends all CSV rows directly to the destination table.
-                This ignores existing rows and will fail if duplicate primary keys
-                are found.
-            * "merge" - Inserts or updates all CSV rows. Existing rows with the
-                same primary key will be updated.
-            * "insert_missing" - Only inserts CSV rows whose primary keys do not exist
-                in the table yet.
-    """
+        # Select only required columns, in correct order
+        df = df[table_columns]
 
-    if insert_mode not in ("append", "merge", "insert_missing"):
-        raise ValueError(f"Invalid mode: {insert_mode}")
-
-    filename = os.path.join(base_dir, update.filename())
-
-    csv_dtype = {}
-    for c in table_spec.measurements:
-        csv_dtype[c] = float
-
-    columns = table_spec.columns()
-    logger.info(f"Importing {filename} into database")
-    df = pd.read_csv(
-        filename,
-        sep=";",
-        encoding="cp1252",
-        date_format=table_spec.date_format,
-        parse_dates=list(table_spec.date_format.keys()),
-        dtype=csv_dtype,
-        usecols=columns,
-    )
-    df = df[columns]  # Reorder columns to match the order in table_spec.
-    # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
-    for col in table_spec.date_format.keys():
-        df[col] = _normalize_timestamp(df[col])
-
-    start_time = time.time()
-    # Insert rows, ignoring duplicates
-    with engine.begin() as conn:
-        if insert_mode == "merge":
-            if engine.name != "postgresql":
-                raise ValueError("Merge is only supported for postgresql")
-            # Use ON CONFLICT DO UPDATE for PostgreSQL:
-            insert_stmt = postgresql.insert(table_spec.sa_table)
-            insert_stmt = insert_stmt.on_conflict_do_update(
-                index_elements=table_spec.sa_table.primary_key,
-                set_={
-                    c: insert_stmt.excluded[c]
-                    for c in df.columns
-                    if c not in table_spec.primary_key
-                },
-            )
+        with self.engine.begin() as conn:
+            if drop_existing:
+                conn.execute(sa.delete(table))
             records = df.replace({np.nan: None}).to_dict(orient="records")
-            conn.execute(insert_stmt, records)
-            logger.info(
-                f"Inserted {len(records)} rows into {table_spec.name} (PostgreSQL upsert path)"
-            )
-        elif insert_mode == "append":
-            if engine.name == "postgresql":
-                # Fast path using PostgreSQL's COPY FROM
-                output = io.StringIO()
-                df.to_csv(output, sep=",", header=False, index=False, na_rep="")
-                output.seek(0)
-                # Grab psycopg3 cursor to run the COPY command.
-                with conn.connection.cursor() as cur:
-                    with cur.copy(
-                        f"""
-                        COPY {table_spec.name} ({', '.join(df.columns)}) FROM STDIN
-                        WITH (
-                            FORMAT csv,
-                            DELIMITER ',',
-                            NULL '',
-                            HEADER false
-                        )"""
-                    ) as copy:
-                        copy.write(output.getvalue())
-            else:
-                # Standard path: use INSERT INTO measurements table.
-                insert_stmt = sa.insert(table_spec.sa_table)
-                # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
+            conn.execute(sa.insert(table), records)
+            # Update status
+            self.save_update_status(conn, update)
+            self._imported_files_count += 1
+            self._imported_rows_count += len(df)
+
+    def insert_csv_data(
+        self,
+        table_spec: ds.DataTableSpec,
+        update: UpdateStatus,
+        insert_mode: str = "insert_missing",
+    ) -> None:
+        """Inserts data from a CSV file specified in `update`.
+
+        *  Column names in the DB tables are identical to column names in the CSV (e.g.,
+        station_abbr, reference_timestamp, tre200d0).
+
+        *  Dates are stored as TEXT in ISO format "YYYY-MM-DD HH:MM:SSZ" and use UTC time.
+
+        *  Measurements are stored as REAL (32 bit).
+
+        *  The time part is included only for sub-daily measurements, otherwise "YYYY-MM-DD" is used.
+
+        *  The UpdateStatus DB table is updated in the same transaction.
+
+        Args:
+            base_dir: the directory in which CSV files are expected.
+            engine: the SQLAlchemy engine.
+            table_spec: the table to insert/upsert data into.
+            update: information about the CSV file to insert. Also used to update
+                the status_update table.
+            insert_mode: the insert mode; must be one of
+                * "append" - Appends all CSV rows directly to the destination table.
+                    This ignores existing rows and will fail if duplicate primary keys
+                    are found.
+                * "merge" - Inserts or updates all CSV rows. Existing rows with the
+                    same primary key will be updated.
+                * "insert_missing" - Only inserts CSV rows whose primary keys do not exist
+                    in the table yet.
+        """
+
+        if insert_mode not in ("append", "merge", "insert_missing"):
+            raise ValueError(f"Invalid mode: {insert_mode}")
+
+        filename = os.path.join(self.base_dir, update.filename())
+
+        csv_dtype = {}
+        for c in table_spec.measurements:
+            csv_dtype[c] = float
+
+        columns = table_spec.columns()
+        logger.info(f"Importing {filename} into database")
+        df = pd.read_csv(
+            filename,
+            sep=";",
+            encoding="cp1252",
+            date_format=table_spec.date_format,
+            parse_dates=list(table_spec.date_format.keys()),
+            dtype=csv_dtype,
+            usecols=columns,
+        )
+        df = df[columns]  # Reorder columns to match the order in table_spec.
+        for col in table_spec.date_format.keys():
+            self._record_min_date(table_spec.name, col, df[col].min())
+            # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
+            df[col] = _normalize_timestamp(df[col])
+
+        start_time = time.time()
+        with self.engine.begin() as conn:
+            if insert_mode == "merge":
+                if not self._is_postgres:
+                    raise ValueError("Merge is only supported for postgresql")
+                # Use ON CONFLICT DO UPDATE for PostgreSQL:
+                insert_stmt = postgresql.insert(table_spec.sa_table)
+                insert_stmt = insert_stmt.on_conflict_do_update(
+                    index_elements=table_spec.sa_table.primary_key,
+                    set_={
+                        c: insert_stmt.excluded[c]
+                        for c in df.columns
+                        if c not in table_spec.primary_key
+                    },
+                )
                 records = df.replace({np.nan: None}).to_dict(orient="records")
                 conn.execute(insert_stmt, records)
 
-        elif insert_mode == "insert_missing":
-            # Use staging table to identify new (missing) rows.
+            elif insert_mode == "append":
+                if self._is_postgres:
+                    # Fast path using PostgreSQL's COPY FROM
+                    output = io.StringIO()
+                    df.to_csv(output, sep=",", header=False, index=False, na_rep="")
+                    output.seek(0)
+                    # Grab psycopg3 cursor to run the COPY command.
+                    with conn.connection.cursor() as cur:
+                        with cur.copy(
+                            f"""
+                            COPY {table_spec.name} ({', '.join(df.columns)}) FROM STDIN
+                            WITH (
+                                FORMAT csv,
+                                DELIMITER ',',
+                                NULL '',
+                                HEADER false
+                            )"""
+                        ) as copy:
+                            copy.write(output.getvalue())
+                else:
+                    # Standard path: use INSERT INTO measurements table.
+                    insert_stmt = sa.insert(table_spec.sa_table)
+                    # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
+                    records = df.replace({np.nan: None}).to_dict(orient="records")
+                    conn.execute(insert_stmt, records)
 
-            # Create staging table for bulk update
-            staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
-            conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
-            conn.execute(
-                sa.text(
-                    f"""
-                    CREATE TEMP TABLE {staging_name} AS
-                    SELECT * FROM {table_spec.name} WHERE 0=1;
+            elif insert_mode == "insert_missing":
+                # Use staging table to identify new (missing) rows.
+
+                # Create staging table for bulk update
+                staging_name = f"{table_spec.name}_staging_{str(uuid.uuid4())[:8]}"
+                conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+                conn.execute(
+                    sa.text(
+                        f"""
+                        CREATE TEMP TABLE {staging_name} AS
+                        SELECT * FROM {table_spec.name} WHERE 0=1;
+                        """
+                    )
+                )
+
+                # Bulk insert into staging table
+                if self._is_postgres:
+                    # Fast path using PostgreSQL's COPY FROM
+                    # https://www.postgresql.org/docs/current/sql-copy.html
+                    output = io.StringIO()
+                    df.to_csv(output, sep=",", header=False, index=False, na_rep="")
+                    output.seek(0)
+                    # Grab psycopg3 cursor to run the COPY command.
+                    with conn.connection.cursor() as cur:
+                        with cur.copy(
+                            f"""
+                            COPY {staging_name} ({', '.join(df.columns)}) FROM STDIN
+                            WITH (
+                                FORMAT csv,
+                                DELIMITER ',',
+                                NULL '',
+                                HEADER false
+                            )"""
+                        ) as copy:
+                            copy.write(output.getvalue())
+                else:
+                    # Standard path: INSERT INTO staging table.
+                    staging_table = sa.Table(
+                        staging_name, sa.MetaData(), autoload_with=conn
+                    )
+                    insert_stmt = sa.insert(staging_table)
+                    # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
+                    records = df.replace({np.nan: None}).to_dict(orient="records")
+                    conn.execute(insert_stmt, records)
+
+                # Merge into data table
+                where_conditions = " AND ".join(
+                    [
+                        f"DataTable.{pk} = StagingTable.{pk}"
+                        for pk in table_spec.primary_key
+                    ]
+                )
+                # Construct the final query
+                insert_sql = f"""
+                    INSERT INTO {table_spec.name}
+                    SELECT StagingTable.*
+                    FROM {staging_name} AS StagingTable
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM {table_spec.name} AS DataTable
+                        WHERE {where_conditions}
+                    )
                     """
-                )
-            )
 
-            # Bulk insert into staging table
-            if engine.name == "postgresql":
-                # Fast path using PostgreSQL's COPY FROM
-                # https://www.postgresql.org/docs/current/sql-copy.html
-                output = io.StringIO()
-                df.to_csv(output, sep=",", header=False, index=False, na_rep="")
-                output.seek(0)
-                # Grab psycopg3 cursor to run the COPY command.
-                with conn.connection.cursor() as cur:
-                    with cur.copy(
-                        f"""
-                        COPY {staging_name} ({', '.join(df.columns)}) FROM STDIN
-                        WITH (
-                            FORMAT csv,
-                            DELIMITER ',',
-                            NULL '',
-                            HEADER false
-                        )"""
-                    ) as copy:
-                        copy.write(output.getvalue())
+                c = conn.execute(sa.text(insert_sql))
+                conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+
             else:
-                # Standard path: INSERT INTO staging table.
-                staging_table = sa.Table(
-                    staging_name, sa.MetaData(), autoload_with=conn
-                )
-                insert_stmt = sa.insert(staging_table)
-                # Ensure NaNs (for missing values from the CSV file) get inserted as NULLs.
-                records = df.replace({np.nan: None}).to_dict(orient="records")
-                conn.execute(insert_stmt, records)
+                raise AssertionError(f"Case not handled: mode={insert_mode}")
 
-            logger.info(f"Inserted {len(df)} rows into staging table")
+            self._imported_files_count += 1
+            self._imported_rows_count += len(df)
 
-            # Merge into data table
-            where_conditions = " AND ".join(
-                [f"DataTable.{pk} = StagingTable.{pk}" for pk in table_spec.primary_key]
+            duration = time.time() - start_time
+            logger.info(
+                "Inserted %d rows (mode=%s) into %s in %.2fs.",
+                len(df),
+                insert_mode,
+                table_spec.name,
+                duration,
             )
-            # Construct the final query
-            insert_sql = f"""
-                INSERT INTO {table_spec.name}
-                SELECT StagingTable.*
-                FROM {staging_name} AS StagingTable
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM {table_spec.name} AS DataTable
-                    WHERE {where_conditions}
-                )
-                """
 
-            c = conn.execute(sa.text(insert_sql))
-            conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
+            # Update UpdateStatus in same transaction
+            self.save_update_status(conn, update)
+
+    def save_update_status(self, conn: sa.Connection, s: UpdateStatus) -> None:
+        if s.id is None:
+            # INSERT new row
+            conn.execute(
+                sa.insert(ds.sa_table_update_status).values(
+                    id=str(uuid.uuid4()),
+                    href=s.href,
+                    table_updated_time=s.table_updated_time.isoformat(),
+                    resource_updated_time=(
+                        s.resource_updated_time.isoformat()
+                        if s.resource_updated_time
+                        else None
+                    ),
+                    etag=s.etag,
+                    destination_table=s.destination_table,
+                )
+            )
         else:
-            raise AssertionError(f"Case not handled: mode={insert_mode}")
-
-        duration = time.time() - start_time
-        logger.info(
-            "Inserted rows (mode=%s) into %s in %.2fs.",
-            insert_mode,
-            table_spec.name,
-            duration,
-        )
-
-        # Update UpdateStatus in same transaction
-        save_update_status(conn, update)
-
-
-def save_update_status(conn: sa.Connection, s: UpdateStatus) -> None:
-    if s.id is None:
-        # INSERT new row
-        conn.execute(
-            sa.insert(ds.sa_table_update_status).values(
-                id=str(uuid.uuid4()),
-                href=s.href,
-                table_updated_time=s.table_updated_time.isoformat(),
-                resource_updated_time=(
-                    s.resource_updated_time.isoformat()
-                    if s.resource_updated_time
-                    else None
-                ),
-                etag=s.etag,
-                destination_table=s.destination_table,
+            # UPDATE existing row
+            conn.execute(
+                sa.update(ds.sa_table_update_status)
+                .where(ds.sa_table_update_status.c.id == s.id)
+                .values(
+                    table_updated_time=s.table_updated_time.isoformat(),
+                    resource_updated_time=(
+                        s.resource_updated_time.isoformat()
+                        if s.resource_updated_time
+                        else None
+                    ),
+                    etag=s.etag,
+                )
             )
-        )
-    else:
-        # UPDATE existing row
-        conn.execute(
-            sa.update(ds.sa_table_update_status)
-            .where(ds.sa_table_update_status.c.id == s.id)
-            .values(
-                table_updated_time=s.table_updated_time.isoformat(),
-                resource_updated_time=(
-                    s.resource_updated_time.isoformat()
-                    if s.resource_updated_time
-                    else None
-                ),
-                etag=s.etag,
-            )
-        )
 
 
 def read_update_status(engine: sa.Engine) -> list[UpdateStatus]:
@@ -434,11 +472,11 @@ def read_latest_update_log_entry(conn: sa.Connection) -> UpdateLogEntry | None:
     )
 
 
-def recreate_views(engine: sa.Engine) -> None:
+def recreate_views(engine: sa.Engine | None, importer: Importer | None = None) -> None:
     recreate_all_meta_parameters(engine)
 
-    recreate_x_ogd_smn_daily_derived(engine)
-    recreate_x_wind_stats_monthly(engine)
+    recreate_x_ogd_smn_daily_derived(engine, importer)
+    recreate_x_wind_stats_monthly(engine, importer)
 
     recreate_station_data_summary(engine)
     recreate_station_var_availability(engine)
@@ -446,14 +484,41 @@ def recreate_views(engine: sa.Engine) -> None:
     recreate_climate_normals_stats_tables(engine)
 
 
-def recreate_x_ogd_smn_daily_derived(engine: sa.Engine) -> None:
-    logger.info("Recreating x_ogd_smn_daily_derived table")
-    with engine.begin() as conn:
-        ds.sa_table_x_ogd_smn_daily_derived.drop(conn, checkfirst=True)
-        ds.sa_table_x_ogd_smn_daily_derived.create(conn)
-        now = datetime.datetime.now(tz=datetime.timezone.utc)
+def recreate_x_ogd_smn_daily_derived(
+    engine: sa.Engine, importer: Importer | None = None
+) -> None:
+    t = ds.sa_table_x_ogd_smn_daily_derived
+
+    if importer is not None:
+        min_date = importer.min_date(
+            ds.TABLE_HOURLY_MEASUREMENTS.name, "reference_timestamp"
+        )
+        if min_date is None:
+            logger.info("Skipping x_ogd_smn_daily_derived: no new hourly data.")
+            return
+        from_date = datetime.datetime(
+            min_date.year, min_date.month, min_date.day, tzinfo=datetime.timezone.utc
+        )
+        drop = False
+        logger.info("Updating x_ogd_smn_daily_derived table from %s", from_date)
+    else:
+        # Rebuild all
         from_date = datetime.datetime(1990, 1, 1, tzinfo=datetime.timezone.utc)
-        to_date = now + datetime.timedelta(days=1)
+        drop = True
+        logger.info("Recreating x_ogd_smn_daily_derived table")
+
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    to_date = now + datetime.timedelta(days=1)
+
+    with engine.begin() as conn:
+        if drop:
+            t.drop(conn, checkfirst=True)
+            t.create(conn)
+        else:
+            delete_stmt = t.delete().where(
+                t.c.reference_timestamp >= utc_datestr(from_date)
+            )
+            conn.execute(delete_stmt)
 
         insert_sql = sql_queries.insert_into_x_ogd_smn_daily_derived(
             engine, from_date, to_date
@@ -461,16 +526,39 @@ def recreate_x_ogd_smn_daily_derived(engine: sa.Engine) -> None:
         conn.execute(insert_sql)
 
 
-def recreate_x_wind_stats_monthly(engine: sa.Engine) -> None:
-    logger.info("Recreating monthly wind stats table")
-    with engine.begin() as conn:
-        ds.sa_table_x_wind_stats_monthly.drop(conn, checkfirst=True)
-        ds.sa_table_x_wind_stats_monthly.create(conn)
+def recreate_x_wind_stats_monthly(engine: sa.Engine, importer: Importer) -> None:
+    t = ds.sa_table_x_wind_stats_monthly
 
-        utc = datetime.timezone.utc
-        now = datetime.datetime.now(tz=utc)
-        from_date = datetime.datetime(1990, 1, 1, tzinfo=utc)
-        to_date = now + datetime.timedelta(days=1)
+    if importer is not None:
+        min_date = importer.min_date(
+            ds.TABLE_HOURLY_MEASUREMENTS.name, "reference_timestamp"
+        )
+        if min_date is None:
+            logger.info("Skipping x_wind_stats_monthly: no new hourly data.")
+            return
+        from_date = datetime.datetime(
+            min_date.year, min_date.month, min_date.day, tzinfo=datetime.timezone.utc
+        )
+        drop = False
+        logger.info("Updating x_wind_stats_monthly table from %s", from_date)
+    else:
+        # Rebuild all
+        from_date = datetime.datetime(1990, 1, 1, tzinfo=datetime.timezone.utc)
+        drop = True
+        logger.info("Recreating x_wind_stats_monthly table")
+
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    to_date = now + datetime.timedelta(days=1)
+
+    with engine.begin() as conn:
+        if drop:
+            t.drop(conn, checkfirst=True)
+            t.create(conn)
+        else:
+            delete_stmt = t.delete().where(
+                t.c.reference_timestamp >= utc_datestr(from_date)
+            )
+            conn.execute(delete_stmt)
 
         insert_sql = sql_queries.insert_into_x_wind_stats_monthly(
             engine, from_date, to_date

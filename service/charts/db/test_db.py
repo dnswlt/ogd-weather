@@ -237,9 +237,8 @@ class TestDbStationVarAvailability(TestDb):
         super().setUpClass()
 
         now = datetime.datetime(2025, 1, 1, 0, 0, 0, 0, tzinfo=datetime.timezone.utc)
-        db.insert_csv_metadata(
-            _testdata_dir(),
-            cls.engine,
+        importer = db.Importer(_testdata_dir(), cls.engine)
+        importer.insert_csv_metadata(
             ds.sa_table_smn_meta_parameters,
             db.UpdateStatus(
                 id=None,
@@ -248,9 +247,7 @@ class TestDbStationVarAvailability(TestDb):
                 table_updated_time=now,
             ),
         )
-        db.insert_csv_metadata(
-            _testdata_dir(),
-            cls.engine,
+        importer.insert_csv_metadata(
             ds.sa_table_nbcn_meta_parameters,
             db.UpdateStatus(
                 id=None,
@@ -572,9 +569,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_DAILY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -604,9 +600,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_DAILY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -622,11 +617,10 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
+        importer = db.Importer(_testdata_dir(), engine)
 
         def _insert(update_id, mode):
-            db.insert_csv_data(
-                _testdata_dir(),
-                engine,
+            importer.insert_csv_data(
                 ds.TABLE_DAILY_MEASUREMENTS,
                 db.UpdateStatus(
                     id=update_id,
@@ -654,9 +648,8 @@ class TestCreateDb(unittest.TestCase):
         now = datetime.datetime.now()
         # insert_mode="merge" only works for Postgres and should fail for sqlite.
         with self.assertRaises(ValueError):
-            db.insert_csv_data(
-                _testdata_dir(),
-                engine,
+            importer = db.Importer(_testdata_dir(), engine)
+            importer.insert_csv_data(
                 ds.TABLE_DAILY_MEASUREMENTS,
                 db.UpdateStatus(
                     id=None,
@@ -671,9 +664,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_HOURLY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -701,9 +693,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_MONTHLY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -735,9 +726,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_DAILY_MAN_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -767,9 +757,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_DAILY_HOM_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -801,9 +790,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_DAILY_HOM_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -835,9 +823,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_MONTHLY_HOM_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -877,9 +864,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_ANNUAL_HOM_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -911,9 +897,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now(datetime.timezone.utc)
-        db.insert_csv_metadata(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_metadata(
             ds.sa_table_smn_meta_stations,
             db.UpdateStatus(
                 id=None,
@@ -937,9 +922,8 @@ class TestCreateDb(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now(datetime.timezone.utc)
-        db.insert_csv_metadata(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_metadata(
             ds.sa_table_smn_meta_stations,
             db.UpdateStatus(
                 id=None,
@@ -1494,9 +1478,8 @@ class TestCreateWindStats(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_HOURLY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,
@@ -1562,9 +1545,8 @@ class TestCreateDailyDerived(unittest.TestCase):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
         now = datetime.datetime.now()
-        db.insert_csv_data(
-            _testdata_dir(),
-            engine,
+        importer = db.Importer(_testdata_dir(), engine)
+        importer.insert_csv_data(
             ds.TABLE_HOURLY_MEASUREMENTS,
             db.UpdateStatus(
                 id=None,

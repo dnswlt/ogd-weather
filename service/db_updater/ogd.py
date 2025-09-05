@@ -264,8 +264,7 @@ def fetch_metadata_csv_resources(base_url: str) -> list[CsvResource]:
 
 
 def import_into_db(
-    engine: sa.Engine,
-    weather_dir: str,
+    importer: db.Importer,
     resource: CsvResource,
     insert_mode: str,
 ):
@@ -278,9 +277,7 @@ def import_into_db(
     if table_spec is not None:
         # Ensure the destination_table gets stored in the udpate_status table.
         resource.status.destination_table = table_spec.name
-        db.insert_csv_data(
-            weather_dir,
-            engine,
+        importer.insert_csv_data(
             table_spec=table_spec,
             update=resource.status,
             insert_mode=insert_mode,
@@ -292,9 +289,7 @@ def import_into_db(
             logger.warning("Ignoring unknown metadata CSV file %s", csv_file)
             return
         resource.status.destination_table = table.name
-        db.insert_csv_metadata(
-            weather_dir,
-            engine,
+        importer.insert_csv_metadata(
             table=table,
             update=resource.status,
         )
@@ -433,8 +428,6 @@ def run_import(
     # Now download CSVs concurrently and feed them to the importer thread
     # via a queue:
     import_queue = queue.SimpleQueue()
-    # Count how many actual DB imports were done. If zero, don't recreate views.
-    import_count = 0
     with ThreadPoolExecutor(max_workers=8) as executor:
 
         futures = fetch_latest_data(
@@ -444,6 +437,7 @@ def run_import(
             import_queue=import_queue,
             force_update=force_update,
         )
+        importer = db.Importer(base_dir, engine)
         # Receive UpdateStatus items to import into the DB:
         for _ in range(len(futures)):
             work_item = import_queue.get()
@@ -453,19 +447,18 @@ def run_import(
             if resource.status.is_not_modified():
                 # Not Modified => Just update timestamps.
                 with engine.begin() as conn:
-                    db.save_update_status(conn, resource.status)
+                    importer.save_update_status(conn, resource.status)
             else:
-                import_into_db(engine, base_dir, resource, insert_mode=insert_mode)
-                import_count += 1
+                import_into_db(importer, resource, insert_mode=insert_mode)
 
         # Consume futures (they're all done)
         for fut in as_completed(futures):
             fut.result()  # Raise exception if any occurred (indicates programming error)
 
     # Recreate materialized views
-    if import_count > 0:
+    if importer.imported_files_count() > 0:
         logger.info("Recreating materialized views...")
-        db.recreate_views(engine)
+        db.recreate_views(engine, importer=importer)
     else:
         logger.info("No new CSV files imported, won't update views.")
 
@@ -475,13 +468,17 @@ def run_import(
             update_time=datetime.datetime.fromtimestamp(
                 started_time, tz=datetime.timezone.utc
             ),
-            imported_files_count=import_count,
+            imported_files_count=importer.imported_files_count(),
             args=sys.argv,
         ),
     )
 
     logger.info(
-        "Done. DB %s updated in %.1fs.", engine.name, time.time() - started_time
+        "Done. DB %s updated: Imported %d files (%d rows) in %.1fs.",
+        engine.name,
+        importer.imported_files_count(),
+        importer.imported_rows_count(),
+        time.time() - started_time,
     )
 
 

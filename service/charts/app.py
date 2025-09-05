@@ -268,15 +268,12 @@ async def get_annual_chart(
     period: str | None = None,
     from_year: str | None = None,
     to_year: str | None = None,
-    window: str | None = None,
 ):
     period = _period_default(period)
 
     station_abbr = station_abbr.upper()
     from_date = _date_from_year(from_year)
     to_date = _date_from_year(to_year, dy=1)
-    # Internal code treats window=None as "no window"
-    window_int = int(window) if window and window.isdigit() else 1
 
     def _read_daily(columns):
         with app.state.engine.begin() as conn:
