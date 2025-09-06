@@ -9,9 +9,6 @@ __all__ = [
     "Palette",
     "Tab20",
     # charts
-    "MONTH_NAMES",
-    "PERIOD_ALL",
-    "SEASON_NAMES",
     "TempFacet",
     "VEGA_LEGEND_LABELS",
     "annual_agg",
@@ -53,7 +50,6 @@ __all__ = [
     "rainiest_day_chart",
     "rolling_mean",
     "snow_days_chart",
-    "station_stats",
     "summer_days_chart",
     "sunny_days_chart",
     "sunshine_chart",

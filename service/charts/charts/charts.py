@@ -6,14 +6,16 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
+from service.charts.base import constants as bc
+from service.charts.base.dates import period_to_title
 from service.charts.base.pandas_funcs import pctl
 from service.charts.base.errors import NoDataError
 from service.charts.calc import atm
+from service.charts.calc import transform as tf
 from service.charts.db import constants as dc
 from service.charts import models
 
 from . import colors
-from . import transform as tf
 
 AltairChart: TypeAlias = Union[alt.Chart, alt.LayerChart]
 
@@ -29,48 +31,10 @@ VEGA_LEGEND_LABELS = {
     dc.PRECIP_HOURLY_MM: "precip mm",
 }
 
-MONTH_NAMES = {
-    1: "January",
-    2: "February",
-    3: "March",
-    4: "April",
-    5: "May",
-    6: "June",
-    7: "July",
-    8: "August",
-    9: "September",
-    10: "October",
-    11: "November",
-    12: "December",
-}
-
-SEASON_NAMES = {
-    "spring": "Spring (Mar-May)",
-    "summer": "Summer (Jun-Aug)",
-    "autumn": "Autumn (Sep-Nov)",
-    "winter": "Winter (Jan-Feb,Dec)",
-}
-
-PERIOD_ALL = "all"
-
-VALID_PERIODS = set(
-    [str(i) for i in range(1, 13)] + list(SEASON_NAMES.keys()) + [PERIOD_ALL]
-)
-
 
 # Short names for the color palettes, for concise code.
 _C = colors.COLORS_TABLEAU20
 _G = colors.COLORS_COMMON_GRAYS
-
-
-def period_to_title(period: str) -> str:
-    if period.isdigit():
-        return MONTH_NAMES[int(period)]
-    elif period in SEASON_NAMES:
-        return SEASON_NAMES[period]
-    elif period == PERIOD_ALL:
-        return "Whole Year"
-    return "Unknown Period"
 
 
 def _verify_columns(df: pd.DataFrame, columns: Iterable[str]):
@@ -80,9 +44,20 @@ def _verify_columns(df: pd.DataFrame, columns: Iterable[str]):
         )
 
 
+_SEASONS = {
+    "spring": [3, 4, 5],
+    "summer": [6, 7, 8],
+    "autumn": [9, 10, 11],
+    "winter": [12, 1, 2],
+}
+
+
 def _verify_period(df: pd.DataFrame, period: str):
     """Verifies that all dates in the DataFrame match the given period."""
     if df.empty:
+        return
+    if period == bc.PERIOD_ALL:
+        # All months are fine
         return
 
     months_in_df = df.index.month.unique()
@@ -99,9 +74,6 @@ def _verify_period(df: pd.DataFrame, period: str):
             raise ValueError(
                 f"Data contains months outside the expected season {period} ({expected_months})"
             )
-    elif period == PERIOD_ALL:
-        # All months are fine
-        pass
     else:
         # Should not happen if validation is done before, but good to have
         raise ValueError(f"Unknown period: {period}")
@@ -145,14 +117,6 @@ def _verify_annual_data(df: pd.DataFrame, station_abbr: str, year: int):
         raise ValueError(f"Not all rows are for station {station_abbr}")
     if not (df.index.year == year).all():
         raise ValueError(f"Not all rows are for year {year}")
-
-
-_SEASONS = {
-    "spring": [3, 4, 5],
-    "summer": [6, 7, 8],
-    "autumn": [9, 10, 11],
-    "winter": [12, 1, 2],
-}
 
 
 def _year_to_dt(df: pd.DataFrame) -> pd.DataFrame:
@@ -339,7 +303,7 @@ def day_count_chart_data(
 
 def day_count_chart(
     predicate: pd.Series,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     title: str = "Untitled chart",
     palette: colors.Palette | None = None,
     trendline: bool = True,
@@ -357,7 +321,7 @@ def day_count_chart(
 
 
 def raindays_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# rain days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, dc.PRECIP_DAILY_MM)
@@ -371,7 +335,7 @@ def raindays_chart(
 
 
 def sunny_days_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# sunny days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, dc.SUNSHINE_DAILY_PCT_OF_MAX)
@@ -385,7 +349,7 @@ def sunny_days_chart(
 
 
 def frost_days_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# frost days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, dc.TEMP_DAILY_MIN)
@@ -399,7 +363,7 @@ def frost_days_chart(
 
 
 def summer_days_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     """Creates a "# summer days" chart for the given station and period."""
     _verify_day_count_data(df, station_abbr, period, dc.TEMP_DAILY_MAX)
@@ -413,7 +377,7 @@ def summer_days_chart(
 
 
 def sunshine_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     _verify_timeline_data(df, [dc.SUNSHINE_DAILY_MINUTES], station_abbr, period)
 
@@ -435,7 +399,7 @@ def sunshine_chart(
 
 
 def rainiest_day_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     _verify_timeline_data(df, [dc.PRECIP_DAILY_MM], station_abbr, period)
 
@@ -454,7 +418,7 @@ def rainiest_day_chart(
 
 
 def max_snow_depth_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     _verify_timeline_data(df, [dc.SNOW_DEPTH_MAN_DAILY_CM], station_abbr, period)
 
@@ -473,7 +437,7 @@ def max_snow_depth_chart(
 
 
 def max_fresh_snow_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     _verify_timeline_data(df, [dc.FRESH_SNOW_MAN_DAILY_CM], station_abbr, period)
 
@@ -492,7 +456,7 @@ def max_fresh_snow_chart(
 
 
 def snow_days_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     _verify_day_count_data(df, station_abbr, period, dc.SNOW_DEPTH_MAN_DAILY_CM)
     return day_count_chart(
@@ -505,7 +469,7 @@ def snow_days_chart(
 
 
 def fresh_snow_days_chart(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
 ) -> AltairChart:
     _verify_day_count_data(df, station_abbr, period, dc.FRESH_SNOW_MAN_DAILY_CM)
     return day_count_chart(
@@ -520,7 +484,7 @@ def fresh_snow_days_chart(
 def hom_annual_temperature_chart(
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     window: int = 1,
 ) -> AltairChart:
 
@@ -558,7 +522,7 @@ def hom_annual_temperature_chart(
 def hom_precipitation_chart(
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     window: int | None = None,
 ) -> AltairChart:
     _verify_timeline_data(df, [tf.PRECIP_MM], station_abbr, period)
@@ -585,7 +549,7 @@ def hom_precipitation_chart(
 def hom_temperature_deviation_chart(
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     window: int | None = None,
 ) -> AltairChart:
     if not (df["station_abbr"] == station_abbr).all():
@@ -614,7 +578,7 @@ def hom_temperature_deviation_chart(
 def hom_summer_days_chart(
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     window: int | None = None,
 ):
     _verify_timeline_data(df, [tf.SUMMER_DAYS], station_abbr, period)
@@ -642,7 +606,7 @@ def hom_summer_days_chart(
 def hom_frost_days_chart(
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     window: int | None = None,
 ):
     _verify_timeline_data(df, [tf.FROST_DAYS], station_abbr, period)
@@ -670,7 +634,7 @@ def hom_frost_days_chart(
 def hom_ice_days_chart(
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     window: int | None = None,
 ):
     _verify_timeline_data(df, [tf.ICE_DAYS], station_abbr, period)
@@ -698,7 +662,7 @@ def hom_ice_days_chart(
 def hom_tropical_nights_chart(
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     window: int | None = None,
 ):
     _verify_timeline_data(df, [tf.TROPICAL_NIGHTS], station_abbr, period)
@@ -726,7 +690,7 @@ def hom_tropical_nights_chart(
 def hom_heat_days_chart(
     df: pd.DataFrame,
     station_abbr: str,
-    period: str = PERIOD_ALL,
+    period: str = bc.PERIOD_ALL,
     window: int | None = None,
 ):
     _verify_timeline_data(df, [tf.HEAT_DAYS], station_abbr, period)
@@ -2128,48 +2092,3 @@ def daily_temp_precip_chart(
     )
 
     return chart
-
-
-def station_stats(
-    df: pd.DataFrame, station_abbr: str, period: str = PERIOD_ALL
-) -> models.StationStats:
-    if not (df["station_abbr"] == station_abbr).all():
-        raise ValueError(f"Not all rows are for station {station_abbr}")
-    if df.empty:
-        raise NoDataError(f"No stats data for {station_abbr}")
-    _verify_period(df, period)
-
-    df = df[[tf.TEMP_MEAN, tf.PRECIP_MM]]
-    first_date = df.index.min().to_pydatetime().date()
-    last_date = df.index.max().to_pydatetime().date()
-
-    result = models.StationStats(
-        first_date=first_date, last_date=last_date, period=period_to_title(period)
-    )
-
-    # pydantic JSON serialization does not like numpy, so lots of conversions here.
-    df_m = tf.annual_agg(df[[tf.TEMP_MEAN]], "mean")
-    temp_dm = df_m[tf.TEMP_MEAN].dropna()
-    if not temp_dm.empty:
-        result.coldest_year = int(temp_dm.idxmin())
-        result.coldest_year_temp = float(temp_dm.min())
-        result.warmest_year = int(temp_dm.idxmax())
-        result.warmest_year_temp = float(temp_dm.max())
-
-    df_s = tf.annual_agg(df[[tf.PRECIP_MM]], "sum")
-    precip = df_s[tf.PRECIP_MM].dropna()
-    if not precip.empty:
-        result.driest_year = int(precip.idxmin())
-        result.driest_year_precip_mm = float(precip.min())
-        result.wettest_year = int(precip.idxmax())
-        result.wettest_year_precip_mm = float(precip.max())
-
-    if not temp_dm.empty:
-        try:
-            coeffs, _ = tf.polyfit_columns(df_m[[tf.TEMP_MEAN]], deg=1)
-            result.annual_temp_increase = float(coeffs[tf.TEMP_MEAN].iloc[1])
-        except ValueError:
-            # Could not fit a curve
-            pass
-
-    return result

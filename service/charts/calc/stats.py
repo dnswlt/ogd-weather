@@ -4,9 +4,12 @@ from pydantic import BaseModel, ConfigDict
 
 
 from service.charts import models
+from service.charts.base.dates import period_to_title
+from service.charts.base.errors import NoDataError
+from service.charts.base import constants as bc
 from service.charts.db import constants as dc
 
-from service.charts.charts import transform as tf
+from . import transform as tf
 
 
 class PerStationData(BaseModel):
@@ -50,6 +53,50 @@ def station_period_stats(s: pd.Series) -> models.StationPeriodStats:
         end_date=datetime.date(2020, 12, 31),
         variable_stats=variable_stats,
     )
+
+
+def station_stats(
+    df: pd.DataFrame, station_abbr: str, period: str = bc.PERIOD_ALL
+) -> models.StationStats:
+    if not (df["station_abbr"] == station_abbr).all():
+        raise ValueError(f"Not all rows are for station {station_abbr}")
+    if df.empty:
+        raise NoDataError(f"No stats data for {station_abbr}")
+
+    df = df[[tf.TEMP_MEAN, tf.PRECIP_MM]]
+    first_date = df.index.min().to_pydatetime().date()
+    last_date = df.index.max().to_pydatetime().date()
+
+    result = models.StationStats(
+        first_date=first_date, last_date=last_date, period=period_to_title(period)
+    )
+
+    # pydantic JSON serialization does not like numpy, so lots of conversions here.
+    df_m = tf.annual_agg(df[[tf.TEMP_MEAN]], "mean")
+    temp_dm = df_m[tf.TEMP_MEAN].dropna()
+    if not temp_dm.empty:
+        result.coldest_year = int(temp_dm.idxmin())
+        result.coldest_year_temp = float(temp_dm.min())
+        result.warmest_year = int(temp_dm.idxmax())
+        result.warmest_year_temp = float(temp_dm.max())
+
+    df_s = tf.annual_agg(df[[tf.PRECIP_MM]], "sum")
+    precip = df_s[tf.PRECIP_MM].dropna()
+    if not precip.empty:
+        result.driest_year = int(precip.idxmin())
+        result.driest_year_precip_mm = float(precip.min())
+        result.wettest_year = int(precip.idxmax())
+        result.wettest_year_precip_mm = float(precip.max())
+
+    if not temp_dm.empty:
+        try:
+            coeffs, _ = tf.polyfit_columns(df_m[[tf.TEMP_MEAN]], deg=1)
+            result.annual_temp_increase = float(coeffs[tf.TEMP_MEAN].iloc[1])
+        except ValueError:
+            # Could not fit a curve
+            pass
+
+    return result
 
 
 def daily_measurements(

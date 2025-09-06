@@ -18,10 +18,11 @@ from service.charts import db
 from service.charts import geo
 from service.charts import models
 from service.charts.base import constants as bc
+from service.charts.base import dates
 from service.charts.base.errors import NoDataError, StationNotFoundError
 from service.charts.calc import stats
+from service.charts.calc import transform as tf
 from service.charts.charts import vega
-from service.charts.charts import transform as tf
 from service.charts.db import constants as dc
 from service.charts.db.dbconn import PgConnectionInfo
 
@@ -106,9 +107,9 @@ def _period_default(period: str | None) -> str:
         HTTPException (400 Bad Request) if the period is invalid.
     """
     if period is None:
-        return charts.PERIOD_ALL
+        return bc.PERIOD_ALL
 
-    if period not in charts.VALID_PERIODS:
+    if period not in dates.VALID_PERIODS:
         _bad_request(f"Invalid period: {period}")
 
     return period
@@ -360,7 +361,7 @@ async def get_trends_chart(
 
     def _read_hom(columns_m, columns_y):
         with app.state.engine.begin() as conn:
-            if period == charts.PERIOD_ALL:
+            if period == bc.PERIOD_ALL:
                 df = db.read_annual_hom_measurements(
                     conn,
                     station_abbr,
@@ -796,7 +797,7 @@ async def get_summary(
     to_date = _date_from_year(to_year, dy=1)
 
     with app.state.engine.begin() as conn:
-        if period == charts.PERIOD_ALL:
+        if period == bc.PERIOD_ALL:
             df = db.read_annual_hom_measurements(
                 conn,
                 station_abbr,
@@ -819,7 +820,7 @@ async def get_summary(
                 from_date=from_date,
                 to_date=to_date,
             )
-        stats = charts.station_stats(
+        stn_stats = stats.station_stats(
             tf.timeless_column_names(df), station_abbr, period=period
         )
         station = db.read_station(conn, station_abbr)
@@ -829,7 +830,7 @@ async def get_summary(
     return {
         "summary": models.StationSummary(
             station=station,
-            stats=stats,
+            stats=stn_stats,
         ),
     }
 

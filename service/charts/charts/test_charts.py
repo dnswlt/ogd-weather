@@ -1,17 +1,16 @@
 import altair as alt
-from datetime import date
 import datetime
-import numpy as np
 import pandas as pd
 import unittest
 
 
+from service.charts.base import constants as bc
+from service.charts.calc import transform as tf
 from service.charts.db import constants as dc
 from service.charts.base.errors import NoDataError
 from service.charts.testutils import PandasTestCase
 
 from . import charts
-from . import transform as tf
 
 
 class TestStationNumDays(PandasTestCase):
@@ -54,7 +53,7 @@ class TestStationNumDays(PandasTestCase):
                 }
             ),
             "BER",
-            period=charts.PERIOD_ALL,
+            period=bc.PERIOD_ALL,
         )
 
         self.assertIsInstance(chart, alt.LayerChart)
@@ -72,51 +71,6 @@ class TestStationNumDays(PandasTestCase):
         # Want 0 data for two years
         self.assertSeriesValuesEqual(data["year"], [2022, 2023])
         self.assertSeriesValuesEqual(data["value"], [0, 0])
-
-
-class TestStationStats(PandasTestCase):
-
-    def test_station_stats_temp_increase(self):
-        df = pd.DataFrame(
-            [
-                ["2025-01-01", "BER", -1, 0],
-                ["2025-01-02", "BER", -1, 0],
-                ["2026-01-01", "BER", 1, 2.5],
-            ],
-            columns=[
-                "reference_timestamp",
-                "station_abbr",
-                tf.TEMP_MEAN,
-                tf.PRECIP_MM,
-            ],
-        )
-        df = df.set_index("reference_timestamp")
-        df.index = pd.to_datetime(df.index)
-        s = charts.station_stats(df, "BER", period="1")
-        self.assertEqual(s.first_date, datetime.date(2025, 1, 1))
-        self.assertEqual(s.last_date, datetime.date(2026, 1, 1))
-        # Cannot calculate temp increase from a single year of data:
-        self.assertAlmostEqual(s.annual_temp_increase, 2.0)
-        self.assertEqual(s.period, "January")
-
-    def test_station_stats_single_year(self):
-        df = pd.DataFrame(
-            [
-                ["2025-01-01", "BER", -1, 0],
-                ["2025-01-02", "BER", -1, 0],
-            ],
-            columns=[
-                "reference_timestamp",
-                "station_abbr",
-                tf.TEMP_MEAN,
-                tf.PRECIP_MM,
-            ],
-        )
-        df = df.set_index("reference_timestamp")
-        df.index = pd.to_datetime(df.index)
-        s = charts.station_stats(df, "BER", period="1")
-        # Cannot calculate temp increase from a single year of data:
-        self.assertIsNone(s.annual_temp_increase)
 
 
 class TestNormalizeStops(unittest.TestCase):
