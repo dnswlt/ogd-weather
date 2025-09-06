@@ -1493,7 +1493,7 @@ class TestCreateWindStats(unittest.TestCase):
         with engine.begin() as conn:
             zrh = zoneinfo.ZoneInfo("Europe/Zurich")
             insert_sql = sql_queries.insert_into_x_wind_stats_monthly(
-                engine,
+                engine.dialect,
                 from_date=datetime.datetime(2000, 1, 1, tzinfo=zrh),
                 to_date=datetime.datetime(2001, 1, 1, tzinfo=zrh),
             )

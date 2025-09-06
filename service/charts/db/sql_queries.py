@@ -9,6 +9,53 @@ from . import constants as dc
 from . import schema as ds
 
 
+def ts_local(dialect: sa.Dialect, col: str) -> str:
+    """Returns the local date and time in Europe/Zurich for a timestamp.
+
+    The returned timestamp does NOT contain a time zone offset suffix.
+
+    Example: '2024-07-31 15:30:59' for '2024-07-31 13:30:59Z'
+    """
+    if dialect.name == "postgresql":
+        return f"to_char({col}::timestamptz AT TIME ZONE 'Europe/Zurich', 'YYYY-MM-DD HH24:MI:SS')"
+    elif dialect.name == "sqlite":
+        return f"datetime({col}, 'localtime')"
+    else:
+        raise ValueError(f"Unsupported dialect: {dialect.name}")
+
+
+def ts_month(col: str) -> str:
+    """Returns the month of a timestamp.
+
+    Example: '07' for '2024-07-31 13:30:59Z'
+    """
+    return f"SUBSTR({col}, 6, 2)"
+
+
+def ts_yearmonth(col: str) -> str:
+    """Returns the year and month of a timestamp.
+
+    Example: '2024-07' for '2024-07-31 13:30:59Z'
+    """
+    return f"SUBSTR({col}, 1, 7)"
+
+
+def ts_date(col: str) -> str:
+    """Returns the date part of a timestamp.
+
+    Example: '2024-07-31' for '2024-07-31 13:30:59Z'
+    """
+    return f"SUBSTR({col}, 1, 10)"
+
+
+def ts_hourminute(col: str) -> str:
+    """Returns the hour and minute of a timestamp.
+
+    Example: '13:30' for '2024-07-31 13:30:59Z'
+    """
+    return f"SUBSTR({col}, 12, 5)"
+
+
 def psql_total_bytes(user: str) -> sa.TextClause:
     sql = sa.text(
         f"""
@@ -32,7 +79,7 @@ def psql_total_bytes(user: str) -> sa.TextClause:
 
 
 def insert_into_x_ogd_smn_daily_derived(
-    engine: sa.Engine,
+    dialect: sa.Dialect,
     from_date: datetime.datetime,
     to_date: datetime.datetime,
 ) -> sa.TextClause:
@@ -42,19 +89,13 @@ def insert_into_x_ogd_smn_daily_derived(
     (e.g. '08:00' represents the interval 07:00-08:00), since that's the meaning
     of the hourly reference_timestamp values.
     """
-    if engine.dialect.name == "postgresql":
-        local_timestamp = "to_char(reference_timestamp::timestamptz AT TIME ZONE 'Europe/Zurich', 'YYYY-MM-DD HH24:MI:SS')"
-    elif engine.dialect.name == "sqlite":
-        local_timestamp = "datetime(reference_timestamp, 'localtime')"
-    else:
-        raise ValueError(f"Unsupported dialect: {engine.dialect.name}")
     sql = f"""
         INSERT INTO {ds.sa_table_x_ogd_smn_daily_derived}
         WITH 
             LocalHourlyMeasurements AS (
                 SELECT
                     station_abbr,
-                    {local_timestamp} AS local_timestamp,
+                    {ts_local(dialect, "reference_timestamp")} AS local_timestamp,
                     {dc.PRECIP_HOURLY_MM},
                     {dc.VAPOR_PRESSURE_HOURLY_MEAN},
                     {dc.WIND_SPEED_HOURLY_MEAN},
@@ -70,17 +111,17 @@ def insert_into_x_ogd_smn_daily_derived(
                 WHERE 
                     (
                         CASE
-                            WHEN SUBSTR(local_timestamp, 6, 2) IN ('05', '06', '07', '08')
-                                THEN SUBSTR(local_timestamp, 12, 5) BETWEEN '08:00' AND '22:00'
-                            WHEN SUBSTR(local_timestamp, 6, 2) IN ('03', '04', '09', '10')
-                                THEN SUBSTR(local_timestamp, 12, 5) BETWEEN '08:00' AND '21:00'
-                            ELSE SUBSTR(local_timestamp, 12, 5) BETWEEN '08:00' AND '18:00'
+                            WHEN {ts_month("local_timestamp")} IN ('05', '06', '07', '08')
+                                THEN {ts_hourminute("local_timestamp")} BETWEEN '08:00' AND '22:00'
+                            WHEN {ts_month("local_timestamp")} IN ('03', '04', '09', '10')
+                                THEN {ts_hourminute("local_timestamp")} BETWEEN '08:00' AND '21:00'
+                            ELSE {ts_hourminute("local_timestamp")} BETWEEN '08:00' AND '18:00'
                         END
                     )
             )
         SELECT
             station_abbr,
-            SUBSTR(local_timestamp, 1, 10) AS reference_timestamp,
+            {ts_date("local_timestamp")} AS reference_timestamp,
             SUM({dc.PRECIP_HOURLY_MM}) AS {dc.DX_PRECIP_DAYTIME_DAILY_MM},
             MAX({dc.VAPOR_PRESSURE_HOURLY_MEAN}) AS {dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
             MAX({dc.WIND_SPEED_HOURLY_MEAN}) AS {dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
@@ -96,17 +137,11 @@ def insert_into_x_ogd_smn_daily_derived(
 
 
 def insert_into_x_wind_stats_monthly(
-    engine: sa.Engine,
+    dialect: sa.Dialect,
     from_date: datetime.datetime,
     to_date: datetime.datetime,
 ) -> sa.TextClause:
     """Returns the INSERT statement with bound params to populate monthly wind stats."""
-    if engine.dialect.name == "postgresql":
-        local_timestamp = "to_char(reference_timestamp::timestamptz AT TIME ZONE 'Europe/Zurich', 'YYYY-MM-DD HH24:MI:SS')"
-    elif engine.dialect.name == "sqlite":
-        local_timestamp = "datetime(reference_timestamp, 'localtime')"
-    else:
-        raise ValueError(f"Unsupported dialect: {engine.dialect.name}")
 
     sql = f"""
         INSERT INTO {ds.sa_table_x_wind_stats_monthly.name}
@@ -114,7 +149,7 @@ def insert_into_x_wind_stats_monthly(
             LocalHourlyMeasurements AS (
                 SELECT
                     station_abbr,
-                    {local_timestamp} AS local_timestamp,
+                    {ts_local(dialect, "reference_timestamp")} AS local_timestamp,
                     {dc.WIND_SPEED_HOURLY_MEAN},
                     {dc.GUST_PEAK_HOURLY_MAX},
                     {dc.WIND_DIRECTION_HOURLY_MEAN}
@@ -126,7 +161,7 @@ def insert_into_x_wind_stats_monthly(
             DailyMaxes AS (
                 SELECT
                     station_abbr,
-                    SUBSTR(local_timestamp, 1, 10) AS local_date,
+                    {ts_date("local_timestamp")} AS local_date,
                     MAX({dc.WIND_SPEED_HOURLY_MEAN} * 3.6) AS max_hourly_avg_wind_kmh,
                     MAX({dc.GUST_PEAK_HOURLY_MAX} * 3.6) AS max_gust_kmh,
                     COUNT(*) AS value_count
@@ -136,7 +171,7 @@ def insert_into_x_wind_stats_monthly(
             StationDayCountsMonthly AS (
                 SELECT
                     station_abbr,
-                    SUBSTR(local_date, 1, 7) AS local_month,
+                    {ts_yearmonth("local_date")} AS local_month,
                     SUM(CASE WHEN max_hourly_avg_wind_kmh >= 20 THEN 1 ELSE 0 END) AS moderate_breeze_days,
                     SUM(CASE WHEN max_gust_kmh >= 39 THEN 1 ELSE 0 END) AS strong_breeze_days,
                     SUM(value_count) AS value_count
@@ -146,7 +181,7 @@ def insert_into_x_wind_stats_monthly(
             StationGustFactorMonthly AS (
                 SELECT
                     station_abbr,
-                    SUBSTR(local_timestamp, 1, 7) AS local_month,
+                    {ts_yearmonth("local_timestamp")} AS local_month,
                     AVG({dc.GUST_PEAK_HOURLY_MAX} / {dc.WIND_SPEED_HOURLY_MEAN}) AS gust_factor
                 FROM LocalHourlyMeasurements
                 WHERE {dc.WIND_SPEED_HOURLY_MEAN} > 0
@@ -155,7 +190,7 @@ def insert_into_x_wind_stats_monthly(
             StationWindDirectionsLong AS (
                 SELECT
                     station_abbr,
-                    SUBSTR(local_timestamp, 1, 7) AS local_month,
+                    {ts_yearmonth("local_timestamp")} AS local_month,
                     -- 45 degree buckets, where -22.5 to 22.5 is N.
                     (CAST(FLOOR(({dc.WIND_DIRECTION_HOURLY_MEAN} + 22.5) / 45.0) AS INTEGER) % 8) AS bucket_index,
                     COUNT(*) AS value_count

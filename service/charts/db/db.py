@@ -490,7 +490,7 @@ def _recreate_x_table(
     source_table_name: str,
     importer: Importer | None,
     insert_sql_fn: Callable[
-        [sa.Engine, datetime.datetime, datetime.datetime], sa.TextClause
+        [sa.Dialect, datetime.datetime, datetime.datetime], sa.TextClause
     ],
 ) -> None:
     t = x_table
@@ -524,7 +524,7 @@ def _recreate_x_table(
             )
             conn.execute(delete_stmt)
 
-        insert_sql = insert_sql_fn(engine, from_date, to_date)
+        insert_sql = insert_sql_fn(engine.dialect, from_date, to_date)
         conn.execute(insert_sql)
 
 
