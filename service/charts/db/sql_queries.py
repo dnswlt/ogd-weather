@@ -3,7 +3,7 @@
 import datetime
 import sqlalchemy as sa
 
-from service.charts.base.dates import utc_timestr
+from service.charts.base.dates import utc_timestr, utc_datestr
 
 from . import constants as dc
 from . import schema as ds
@@ -90,7 +90,7 @@ def insert_into_x_ogd_smn_daily_derived(
     of the hourly reference_timestamp values.
     """
     sql = f"""
-        INSERT INTO {ds.sa_table_x_ogd_smn_daily_derived}
+        INSERT INTO {ds.sa_table_x_ogd_smn_daily_derived.name}
         WITH 
             LocalHourlyMeasurements AS (
                 SELECT
@@ -238,4 +238,35 @@ def insert_into_x_wind_stats_monthly(
     return sa.text(sql).bindparams(
         from_date=utc_timestr(from_date),
         to_date=utc_timestr(to_date),
+    )
+
+
+def daily_nice_day_metrics(
+    station_abbr: str,
+    from_date: datetime.date,
+    to_date: datetime.date,
+) -> sa.TextClause:
+    sql = f"""
+        SELECT
+            station_abbr,
+            reference_timestamp,
+            D.{dc.TEMP_DAILY_MAX},
+            D.{dc.SUNSHINE_DAILY_PCT_OF_MAX},
+            DX.{dc.DX_PRECIP_DAYTIME_DAILY_MM},
+            DX.{dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
+            DX.{dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN},
+            DX.{dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX}
+        FROM {ds.TABLE_DAILY_MEASUREMENTS.name} AS D
+        JOIN {ds.sa_table_x_ogd_smn_daily_derived.name} AS DX
+            USING (station_abbr, reference_timestamp)
+        WHERE
+            station_abbr = :station_abbr
+            AND reference_timestamp >= :from_date
+            AND reference_timestamp < :to_date
+        ORDER BY reference_timestamp
+    """
+    return sa.text(sql).bindparams(
+        station_abbr=station_abbr,
+        from_date=utc_datestr(from_date),
+        to_date=utc_datestr(to_date),
     )

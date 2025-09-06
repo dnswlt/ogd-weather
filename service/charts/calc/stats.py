@@ -1,5 +1,6 @@
+import datetime
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 from service.charts import models
@@ -9,14 +10,46 @@ from service.charts.charts import transform as tf
 
 
 class PerStationData(BaseModel):
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
+
     station: models.Station
     daily_measurements: pd.DataFrame
     daily_manual_measurements: pd.DataFrame
     monthly_wind_stats: pd.DataFrame
 
-    class Config:
-        # Needed for pd.DataFrame fields.
-        arbitrary_types_allowed = True
+
+def station_period_stats(s: pd.Series) -> models.StationPeriodStats:
+    def _vstats(var: str):
+        v = s.loc[var]
+        return models.VariableStats(
+            min_value=float(v["min_value"]),
+            min_value_date=datetime.date.fromisoformat(v["min_value_date"]),
+            mean_value=float(v["mean_value"]),
+            max_value=float(v["max_value"]),
+            max_value_date=datetime.date.fromisoformat(v["max_value_date"]),
+            p10_value=v["p10_value"],
+            p25_value=v["p25_value"],
+            median_value=v["median_value"],
+            p75_value=v["p75_value"],
+            p90_value=v["p90_value"],
+            source_granularity=v["source_granularity"],
+            value_sum=v["value_sum"],
+            value_count=v["value_count"],
+        )
+
+    def _key(k: str) -> str:
+        if d := dc.VARIABLE_API_NAMES.get(k):
+            return d
+        return k
+
+    variable_stats = {_key(v): _vstats(v) for v in s.index.get_level_values(0).unique()}
+    return models.StationPeriodStats(
+        start_date=datetime.date(1991, 1, 1),
+        end_date=datetime.date(2020, 12, 31),
+        variable_stats=variable_stats,
+    )
 
 
 def daily_measurements(

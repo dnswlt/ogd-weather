@@ -1534,6 +1534,22 @@ def read_x_wind_stats_monthly(
     )
 
 
+def read_daily_nice_day_metrics(
+    conn: sa.Connection,
+    station_abbr: str,
+    from_date: datetime.date,
+    to_date: datetime.date,
+) -> pd.DataFrame:
+    """Reads all metrics required to calculate the number of "nice days" in a time range."""
+    query = sql_queries.daily_nice_day_metrics(station_abbr, from_date, to_date)
+    return pd.read_sql_query(
+        query,
+        conn,
+        parse_dates=["reference_timestamp"],
+        index_col="reference_timestamp",
+    )
+
+
 def _column_to_dtype(col: sa.Column) -> Any:
     if isinstance(col.type, sa.Float):
         return float

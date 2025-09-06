@@ -576,6 +576,18 @@ async def get_year_chart(
             }
         }
 
+    elif chart_type == "nice_score":
+        with app.state.engine.begin() as conn:
+            df = db.db.read_daily_nice_day_metrics(
+                conn,
+                station_abbr=station_abbr,
+                from_date=datetime.date(year, 1, 1),
+                to_date=datetime.date(year + 1, 1, 1),
+            )
+        return {
+            "length": len(df),
+        }
+
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
 
@@ -841,7 +853,7 @@ async def get_info(
         daily_measurement_infos = db.read_measurement_infos(conn, station_abbr)
 
     ref_period_stats = (
-        charts.station_period_stats(vars.loc[station_abbr]) if not vars.empty else None
+        stats.station_period_stats(vars.loc[station_abbr]) if not vars.empty else None
     )
 
     # Stations don't change often, use 1 day TTL for caching.

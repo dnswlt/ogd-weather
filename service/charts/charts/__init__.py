@@ -53,7 +53,6 @@ __all__ = [
     "rainiest_day_chart",
     "rolling_mean",
     "snow_days_chart",
-    "station_period_stats",
     "station_stats",
     "summer_days_chart",
     "sunny_days_chart",

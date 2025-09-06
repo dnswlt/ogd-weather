@@ -219,7 +219,6 @@ DX_WIND_DIR_COUNT_MAP = {
 DX_PRECIP_DAYTIME_DAILY_MM = "precip_dt_d0"
 
 # Air humidity
-DX_VAPOR_PRESSURE_DAILY_MAX_OF_HOURLY_MEAN = "vapor_pressure_dxh0"
 DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN = "vapor_pressure_dt_dxh0"
 
 # Total precipitation per given time slice and year.

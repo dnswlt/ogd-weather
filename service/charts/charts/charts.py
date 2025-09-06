@@ -1,5 +1,4 @@
 import calendar
-from datetime import date
 import datetime
 from typing import Any, Iterable, TypeAlias, Union
 import altair as alt
@@ -2174,35 +2173,3 @@ def station_stats(
             pass
 
     return result
-
-
-def station_period_stats(s: pd.Series) -> models.StationPeriodStats:
-    def _vstats(var: str):
-        v = s.loc[var]
-        return models.VariableStats(
-            min_value=float(v["min_value"]),
-            min_value_date=date.fromisoformat(v["min_value_date"]),
-            mean_value=float(v["mean_value"]),
-            max_value=float(v["max_value"]),
-            max_value_date=date.fromisoformat(v["max_value_date"]),
-            p10_value=v["p10_value"],
-            p25_value=v["p25_value"],
-            median_value=v["median_value"],
-            p75_value=v["p75_value"],
-            p90_value=v["p90_value"],
-            source_granularity=v["source_granularity"],
-            value_sum=v["value_sum"],
-            value_count=v["value_count"],
-        )
-
-    def _key(k: str) -> str:
-        if d := dc.VARIABLE_API_NAMES.get(k):
-            return d
-        return k
-
-    variable_stats = {_key(v): _vstats(v) for v in s.index.get_level_values(0).unique()}
-    return models.StationPeriodStats(
-        start_date=date(1991, 1, 1),
-        end_date=date(2020, 12, 31),
-        variable_stats=variable_stats,
-    )
