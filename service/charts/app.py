@@ -577,18 +577,6 @@ async def get_year_chart(
             }
         }
 
-    elif chart_type == "nice_score":
-        with app.state.engine.begin() as conn:
-            df = db.db.read_daily_nice_day_metrics(
-                conn,
-                station_abbr=station_abbr,
-                from_date=datetime.date(year, 1, 1),
-                to_date=datetime.date(year + 1, 1, 1),
-            )
-        return {
-            "length": len(df),
-        }
-
     else:
         raise _bad_request(f"Invalid chart type: {chart_type}")
 
@@ -658,35 +646,63 @@ async def get_daily_chart(
     return _vega_chart(request, {chart_type: chart})
 
 
-@app.get("/stations/{station_abbr}/stats/year/{year}/highlights")
+@app.get("/stations/{station_abbr}/stats/year/{year}/{stats_type}")
 async def get_year_highlights(
     station_abbr: str,
     year: int,
+    stats_type: str,
 ):
-    with app.state.engine.begin() as conn:
-        df = db.read_daily_measurements(
-            conn,
-            station_abbr,
-            columns=[
-                dc.TEMP_DAILY_MIN,
-                dc.TEMP_DAILY_MAX,
-                dc.SUNSHINE_DAILY_MINUTES,
-                dc.SNOW_DEPTH_DAILY_CM,
-            ],
-            from_date=datetime.datetime(year, 1, 1),
-            to_date=datetime.datetime(year + 1, 1, 1),
+
+    station_abbr = station_abbr.upper()
+    if year < 1800 or year > 2100:
+        raise _bad_request(f"year must be within [1800, 2100], was: {year}")
+
+    if stats_type == "nice_days_score":
+        from_date = datetime.date(year, 1, 1)
+        to_date = datetime.date(year + 1, 1, 1)
+        with app.state.engine.begin() as conn:
+            df = db.read_daily_nice_day_metrics(
+                conn,
+                station_abbr=station_abbr,
+                from_date=from_date,
+                to_date=to_date,
+            )
+            nice_days = stats.nice_days_stats(df, from_date, to_date)
+        return models.NiceDaysScoreResponse(
+            station_abbr=station_abbr,
+            from_date=from_date,
+            to_date=to_date,
+            nice_days=nice_days,
         )
-        if df.empty:
-            raise NoDataError(f"No data for {station_abbr} in year {year}")
 
-        station = db.read_station(conn, station_abbr)
+    elif stats_type == "highlights":
+        with app.state.engine.begin() as conn:
+            df = db.read_daily_measurements(
+                conn,
+                station_abbr,
+                columns=[
+                    dc.TEMP_DAILY_MIN,
+                    dc.TEMP_DAILY_MAX,
+                    dc.SUNSHINE_DAILY_MINUTES,
+                    dc.SNOW_DEPTH_DAILY_CM,
+                ],
+                from_date=datetime.datetime(year, 1, 1),
+                to_date=datetime.datetime(year + 1, 1, 1),
+            )
+            if df.empty:
+                raise NoDataError(f"No data for {station_abbr} in year {year}")
 
-    highlights = stats.year_highlights(df, station_abbr, year)
+            station = db.read_station(conn, station_abbr)
 
-    return {
-        "station": station,
-        "highlights": highlights,
-    }
+        highlights = stats.year_highlights(df, station_abbr, year)
+
+        return {
+            "station": station,
+            "highlights": highlights,
+        }
+
+    else:
+        raise _bad_request(f"Invalid stats type: {stats_type}")
 
 
 @app.get("/stations/{station_abbr}/stats/day/{date}/measurements")

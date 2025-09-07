@@ -520,6 +520,22 @@ func (s *Server) serveStationsChartSnippet(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+func (s *Server) serveStationsStatsSnippet(w http.ResponseWriter, r *http.Request) {
+	statsType := r.PathValue("statsType")
+	switch statsType {
+	case "highlights":
+		serveChartServiceURL[types.StationYearHighlightsResponse](s, w, r, "stats_year_highlights.html", nil)
+		return
+	case "nice_days_score":
+		serveChartServiceURL[types.NiceDaysScoreResponse](s, w, r, "nice_days_score_svg.html", nil)
+		return
+	default:
+		log.Printf("Missing {statsType} in URL path for %s", r.URL.Path)
+		http.Error(w, "Missing statsType in URL path", http.StatusInternalServerError)
+		return
+	}
+}
+
 func (s *Server) serveStatus(w http.ResponseWriter, r *http.Request) {
 
 	var backendStatus map[string]any
@@ -674,10 +690,10 @@ func (s *Server) Serve() error {
 			}
 			proxy.ServeHTTP(w, r)
 		})
-	mux.HandleFunc("GET /stations/{stationID}/stats/year/{year}/highlights",
+	mux.HandleFunc("GET /stations/{stationID}/stats/year/{year}/{statsType}",
 		func(w http.ResponseWriter, r *http.Request) {
 			if acceptsHTML(r.Header.Get("Accept")) {
-				serveChartServiceURL[types.StationYearHighlightsResponse](s, w, r, "stats_year_highlights.html", nil)
+				s.serveStationsStatsSnippet(w, r)
 				return
 			}
 			proxy.ServeHTTP(w, r)

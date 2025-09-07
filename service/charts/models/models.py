@@ -180,6 +180,18 @@ class StationYearHighlights(BaseModel):
     max_snow_depth_cm: float | None = None
 
 
+class NiceDaysStats(BaseModel):
+    days: int
+    score: float  # 0..100
+
+
+class NiceDaysScoreResponse(BaseModel):
+    station_abbr: str
+    from_date: datetime.date
+    to_date: datetime.date
+    nice_days: NiceDaysStats
+
+
 ################################################################
 # Geo locations
 ################################################################

@@ -445,3 +445,63 @@ def compare_stations(
     return models.StationComparisonData(
         stations=stations, rows=rows, wind_stats=wind_stats
     )
+
+
+def nice_days_stats(
+    df: pd.DataFrame, from_date: datetime.date, to_date: datetime.date
+) -> models.NiceDaysStats:
+    """Returns a "nice days score", i.e. a value between 0 and 100 that indicates how
+    many days in the given range satisfied the "nice day" criteria.
+    """
+    total_days = (df.index.max() - df.index.min()).days + 1
+    if total_days < 10:
+        raise NoDataError("Not enough data for nice_days_score")
+
+    month_to_min_temp = {
+        1: 0,
+        2: 0,
+        3: 15,
+        4: 15,
+        5: 18,
+        6: 20,
+        7: 20,
+        8: 20,
+        9: 15,
+        10: 15,
+        11: 0,
+        12: 0,
+    }
+    min_nice_temp = pd.Series(df.index.month.map(month_to_min_temp), index=df.index)
+    max_nice_temp = pd.Series(26, index=df.index)
+
+    temp_daily_max = df[dc.TEMP_DAILY_MAX]
+    sunshine_pct = df[dc.SUNSHINE_DAILY_PCT_OF_MAX]
+    precip_mm = df[dc.DX_PRECIP_DAYTIME_DAILY_MM]
+    vapor_pressure = df[dc.DX_VAPOR_PRESSURE_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN]
+    wind_speed_h = df[dc.DX_WIND_SPEED_DAYTIME_DAILY_MAX_OF_HOURLY_MEAN]
+    gust_peak = df[dc.DX_GUST_PEAK_DAYTIME_DAILY_MAX]
+
+    not_too_hot = temp_daily_max <= max_nice_temp
+    not_too_cold = temp_daily_max >= min_nice_temp
+    sunny = sunshine_pct >= 50
+    no_rain = precip_mm < 0.5
+    not_sultry = vapor_pressure < 18
+    not_windy = wind_speed_h < 20 / 3.6
+    not_gusty = gust_peak < 39 / 3.6
+
+    is_nice = (
+        not_too_hot
+        & not_too_cold
+        & sunny
+        & no_rain
+        & not_sultry
+        & not_windy
+        & not_gusty
+    )
+
+    nice_days = is_nice.astype(float).sum()
+
+    return models.NiceDaysStats(
+        days=int(nice_days),
+        score=(nice_days / total_days) ** (1 / 3) * 100,
+    )

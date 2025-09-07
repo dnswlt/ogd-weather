@@ -17,17 +17,18 @@ var (
 	zurichLoc = mustLoadLocation("Europe/Zurich")
 
 	AllFuncs = map[string]any{
-		"datefmt":            DateFmt,
-		"wgs84tosvg":         WGS84ToSVG,
-		"min2hours":          MinutesToHours,
-		"ms2kmh":             MetersPerSecondToKilometersPerHour,
-		"float":              PrintfFloat64,
-		"floatOr":            PrintfFloat64OrDefault,
-		"floatFormat":        FloatFormat,
-		"vegaSpecHTMLID":     VegaSpecHTMLID,
-		"first":              PrefixSlice,
-		"stationVarsPercent": StationVarsPercent,
-		"scaleSegment":       SVGScaleSegment,
+		"datefmt":                DateFmt,
+		"wgs84tosvg":             WGS84ToSVG,
+		"min2hours":              MinutesToHours,
+		"ms2kmh":                 MetersPerSecondToKilometersPerHour,
+		"float":                  PrintfFloat64,
+		"floatOr":                PrintfFloat64OrDefault,
+		"floatFormat":            FloatFormat,
+		"vegaSpecHTMLID":         VegaSpecHTMLID,
+		"first":                  PrefixSlice,
+		"stationVarsPercent":     StationVarsPercent,
+		"scaleSegment":           SVGScaleSegment,
+		"scoreIndicatorRotation": ScoreIndicatorRotation,
 	}
 )
 
@@ -418,4 +419,13 @@ func StationVarsPercent(row *types.StationComparisonRow) template.CSS {
 		vars[i] = fmt.Sprintf("--station%d: %.1f%%;", i, pct)
 	}
 	return template.CSS(strings.Join(vars, " "))
+}
+
+func ScoreIndicatorRotation(score types.NullFloat64) string {
+	if !score.HasValue {
+		return "-90"
+	}
+	v := 180 * (score.Value / 100)
+	d := math.Max(-90, math.Min(90, -90+v))
+	return fmt.Sprintf("%.3f", d)
 }

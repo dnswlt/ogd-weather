@@ -326,6 +326,18 @@ type StationYearHighlightsResponse struct {
 	Highlights *StationYearHighlights `json:"highlights"`
 }
 
+type NiceDaysStats struct {
+	Days  int64       `json:"days"`
+	Score NullFloat64 `json:"score"`
+}
+
+type NiceDaysScoreResponse struct {
+	StationAbbr string         `json:"station_abbr"`
+	FromDate    NullDate       `json:"from_date"`
+	ToDate      NullDate       `json:"to_date"`
+	NiceDays    *NiceDaysStats `json:"nice_days"`
+}
+
 func (r *StationComparisonRow) MinValue() NullFloat64 {
 	var mn NullFloat64
 	for _, v := range r.Values {

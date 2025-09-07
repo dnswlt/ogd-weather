@@ -88,6 +88,32 @@
 
         <!-- Charts -->
 
+        <!-- Nice days score -->
+        <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Nice days</h2>
+
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">
+            Number of &laquo;nice days&raquo; in the selected year.
+        </p>
+        <div class="grid grid-cols-2 gap-3 items-start">
+            <div class="mb-2 flex justify-center">
+                <div hx-ext="path-params" hx-trigger="change from:#chart-controls"
+                    hx-get="/stations/{station}/stats/year/{year}/nice_days_score" hx-include="#chart-controls"
+                    hx-target="this" hx-swap="innerHTML">
+                </div>
+            </div>
+            <div class="text-sm text-gray-600 leading-relaxed">
+                <ul class="list-disc list-outside pl-6 mt-2">
+                    <li>Temperature ≤ 26 °C</li>
+                    <li>Temp: ≥ 0 °C (Nov–Feb), ≥ 15 °C (Mar–Apr, Sep–Oct), ≥ 18 °C (May), ≥ 20 °C (Jun–Aug)
+                    </li>
+                    <li>Sunshine ≥ 70% of possible</li>
+                    <li>No daytime rain (&lt; 0.5 mm)</li>
+                    <li>No daytime sultriness (vapor pressure &lt; 18 hPa)</li>
+                    <li>No daytime wind extremes (no hour ≥ 20 km/h, no gusts ≥ 39 km/h)</li>
+                </ul>
+            </div>
+        </div>
+
         <!-- Dry / wet spells -->
         <h2 class="text-lg font-medium text-gray-800 mt-6 mb-2">Dry / wet spells</h2>
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
@@ -304,7 +330,7 @@
                 Climate Normals</a> period
             1991&ndash;2020, the orange line indicates its mean.
             {{ else }}
-            Total precipitation and number of rain days per month.    
+            Total precipitation and number of rain days per month.
             {{ end }}
         </p>
         <div class="tab-widget mb-12">

@@ -1,0 +1,44 @@
+{{ with .Response }}
+{{ if .NiceDays }}
+<svg width="400px" height="200px" viewBox="-50 -45 100 50" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <defs>
+        <!-- A single segment path, defined once and reused. This segment represents the last 12.5% of the score (from 87.5% to 100%). -->
+        <path id="segment-template" d="M 38.7938,-16.0726 A 42,42 0 0,1 42.0000,-0.0000 L 28.0000,-0.0000 A 28,28 0 0,0 25.8625,-10.7150 Z"></path>
+    </defs>
+    <g id="Score-Wheel" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <!-- 
+            This is a static SVG of an 8-segment, half-donut chart.
+            - It uses a single <path> definition which is then rotated for each segment.
+            - The viewBox is set so the origin (0,0) is the center of the donut.
+            - The indicator is statically set to a score of 75%.
+        -->
+        <g id="Segments">
+            <use xlink:href="#segment-template" fill="#d7392f" transform="rotate(-157.5)"></use>
+            <use xlink:href="#segment-template" fill="#f37c4a" transform="rotate(-135.0)"></use>
+            <use xlink:href="#segment-template" fill="#fdbc71" transform="rotate(-112.5)"></use>
+            <use xlink:href="#segment-template" fill="#fce99c" transform="rotate(-90.0)"></use>
+            <use xlink:href="#segment-template" fill="#e6f29c" transform="rotate(-67.5)"></use>
+            <use xlink:href="#segment-template" fill="#b5df79" transform="rotate(-45.0)"></use>
+            <use xlink:href="#segment-template" fill="#72c264" transform="rotate(-22.5)"></use>
+            <use xlink:href="#segment-template" fill="#299a51" transform="rotate(0)"></use>
+        </g>
+
+        <!-- Background for the text value -->
+        <path d="M -22,0 A 22,22 0 0,1 22,0" fill="#ffffff" stroke="#6b7280" stroke-width="1"></path>
+
+        <!-- Text for the score value -->
+        <text x="0" y="-7" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#6b7280">{{ .NiceDays.Days }}</text>
+        <text x="0" y="-1.5" font-family="sans-serif" font-size="4.5" font-weight="normal" text-anchor="middle" fill="#6b7280">days</text>
+
+        <!-- 
+            Indicator pointing to 75% score. 
+            A score of 0% corresponds to a rotation of -90 degrees, and 100% to +90 degrees.
+            Therefore, a 75% score is a rotation of 45 degrees.
+        -->
+        <g id="Indicator" transform="rotate({{ scoreIndicatorRotation .NiceDays.Score }})">
+            <polygon points="0,-38 -2,-22 2,-22" fill="#6b7280"></polygon>
+        </g>
+    </g>
+</svg>
+{{ end }}
+{{ end }}
