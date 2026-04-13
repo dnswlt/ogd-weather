@@ -26,6 +26,28 @@ import (
 	"github.com/dnswlt/ogd-weather/service/api/internal/types"
 	"github.com/dnswlt/ogd-weather/service/api/internal/ui"
 	"github.com/dnswlt/ogd-weather/service/api/internal/version"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+var (
+	httpRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests.",
+		},
+		[]string{"method", "path", "status"},
+	)
+	httpRequestDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:                        "http_request_duration_seconds",
+			Help:                        "Duration of HTTP requests in seconds.",
+			Buckets:                     prometheus.DefBuckets,
+			NativeHistogramBucketFactor: 1.1,
+		},
+		[]string{"method", "path", "status"},
+	)
 )
 
 type Server struct {
@@ -334,6 +356,29 @@ func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
 		lrw.WriteHeader(http.StatusOK)
 	}
 	return lrw.ResponseWriter.Write(b)
+}
+
+// withPrometheusMetrics wraps a handler and records Prometheus metrics.
+func (s *Server) withPrometheusMetrics(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		lrw := &loggingResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(lrw, r)
+
+		duration := time.Since(start).Seconds()
+		status := fmt.Sprintf("%d", lrw.statusCode)
+
+		// Use the registered pattern (e.g. "/stations/{stationID}/summary")
+		// instead of the raw path to avoid cardinality explosion.
+		path := r.Pattern
+		if path == "" {
+			path = "unmatched"
+		}
+
+		httpRequestsTotal.WithLabelValues(r.Method, path, status).Inc()
+		httpRequestDuration.WithLabelValues(r.Method, path, status).Observe(duration)
+	})
 }
 
 // withTemplateReload wraps a handler and reloads templates in debug mode,
@@ -651,6 +696,8 @@ func (s *Server) Serve() error {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "OK")
 	})
+	// Metrics for Prometheus
+	mux.Handle("/metrics", promhttp.Handler())
 	// Status page. Always a treasure in Cloud deployments.
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		s.serveStatus(w, r)
@@ -769,6 +816,7 @@ func (s *Server) Serve() error {
 	if s.opts.LogRequests {
 		handler = s.withRequestLogging(handler)
 	}
+	handler = s.withPrometheusMetrics(handler)
 
 	modeInfo := "(prod mode)"
 	if s.opts.DebugMode {
