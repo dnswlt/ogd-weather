@@ -44,9 +44,9 @@ COPY --from=builder /app/weather-api /app/
 COPY --from=builder /app/templates /app/templates
 COPY --from=builder /app/static /app/static
 
-EXPOSE 8080
+EXPOSE 8080 9090
 
 # Ensure Go app finds time zone infos for "Europe/Zurich" etc.
 ENV ZONEINFO=/usr/share/zoneinfo
 
-CMD ["/app/weather-api", "-addr", "0.0.0.0:8080"]
+CMD ["/app/weather-api", "-addr", "0.0.0.0:8080", "-metrics-addr", "0.0.0.0:9090"]

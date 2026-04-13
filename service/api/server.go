@@ -43,7 +43,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:                        "http_request_duration_seconds",
 			Help:                        "Duration of HTTP requests in seconds.",
-			Buckets:                     prometheus.DefBuckets,
+			Buckets:                     nil, // Don't expose classic histograms at all.
 			NativeHistogramBucketFactor: 1.1,
 		},
 		[]string{"method", "path", "status"},
@@ -65,6 +65,7 @@ type Server struct {
 
 type ServerOptions struct {
 	Addr                 string // Ex: "localhost:8080"
+	MetricsAddr          string // Ex: "localhost:9090"
 	ChartServiceEndpoint string // Ex: "http://localhost:8000"
 	BaseDir              string // Directory under which "templates" and "static" dirs are expected
 	DebugMode            bool
@@ -696,8 +697,6 @@ func (s *Server) Serve() error {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "OK")
 	})
-	// Metrics for Prometheus
-	mux.Handle("/metrics", promhttp.Handler())
 	// Status page. Always a treasure in Cloud deployments.
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		s.serveStatus(w, r)
@@ -817,6 +816,18 @@ func (s *Server) Serve() error {
 		handler = s.withRequestLogging(handler)
 	}
 	handler = s.withPrometheusMetrics(handler)
+
+	// Serve Prometheus metrics under a separate port, their visibility is typically different from the actual application.
+	if s.opts.MetricsAddr != "" {
+		go func() {
+			log.Printf("Prometheus metrics server on http://%s/metrics", s.opts.MetricsAddr)
+			metricsMux := http.NewServeMux()
+			metricsMux.Handle("/metrics", promhttp.Handler())
+			if err := http.ListenAndServe(s.opts.MetricsAddr, metricsMux); err != nil {
+				log.Printf("Metrics server failed: %v", err)
+			}
+		}()
+	}
 
 	modeInfo := "(prod mode)"
 	if s.opts.DebugMode {

@@ -19,6 +19,7 @@ func main() {
 	if addr == "" {
 		addr = "127.0.0.1:8080" // local default
 	}
+	metricsAddr := os.Getenv("OGD_METRICS_ADDR")
 	cacheSize, err := strconv.Atoi(os.Getenv("OGD_CACHE_SIZE"))
 	if err != nil {
 		cacheSize = 0
@@ -26,6 +27,7 @@ func main() {
 
 	var opts api.ServerOptions
 	flag.StringVar(&opts.Addr, "addr", addr, "Address that the server listens on.")
+	flag.StringVar(&opts.MetricsAddr, "metrics-addr", metricsAddr, "Address that the Prometheus metrics server listens on (e.g. \":9090\"). If empty, metrics server is disabled.")
 	flag.StringVar(&opts.ChartServiceEndpoint, "chart-service-endpoint", chartServiceEndpoint, "URL of the chart service backend.")
 	flag.StringVar(&opts.BaseDir, "base-dir", ".", "Base directory containing templates/ and static/ subdirectories.")
 	flag.BoolVar(&opts.DebugMode, "debug", false, "If specified, the server runs in debug mode.")
