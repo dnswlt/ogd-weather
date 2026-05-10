@@ -378,6 +378,7 @@ func (s *Server) withPrometheusMetrics(next http.Handler) http.Handler {
 		}
 
 		httpRequestsTotal.WithLabelValues(r.Method, path, status).Inc()
+		httpRequestsTotal.WithLabelValues(r.Method, path, status).Collect()
 		httpRequestDuration.WithLabelValues(r.Method, path, status).Observe(duration)
 	})
 }
@@ -822,7 +823,12 @@ func (s *Server) Serve() error {
 		go func() {
 			log.Printf("Prometheus metrics server on http://%s/metrics", s.opts.MetricsAddr)
 			metricsMux := http.NewServeMux()
-			metricsMux.Handle("/metrics", promhttp.Handler())
+			metricsMux.Handle("/metrics", promhttp.HandlerFor(
+				prometheus.DefaultGatherer,
+				promhttp.HandlerOpts{
+					EnableOpenMetrics: true, // Ensures support protobuf metrics (native histograms)
+				},
+			))
 			if err := http.ListenAndServe(s.opts.MetricsAddr, metricsMux); err != nil {
 				log.Printf("Metrics server failed: %v", err)
 			}
