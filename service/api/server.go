@@ -378,7 +378,6 @@ func (s *Server) withPrometheusMetrics(next http.Handler) http.Handler {
 		}
 
 		httpRequestsTotal.WithLabelValues(r.Method, path, status).Inc()
-		httpRequestsTotal.WithLabelValues(r.Method, path, status).Collect()
 		httpRequestDuration.WithLabelValues(r.Method, path, status).Observe(duration)
 	})
 }
