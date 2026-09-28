@@ -1,5 +1,6 @@
 from pathlib import Path
 import unittest
+from unittest import mock
 import datetime
 import zoneinfo
 import numpy as np
@@ -565,6 +566,31 @@ class TestDbHourly(TestDb):
 
 class TestCreateDb(unittest.TestCase):
 
+    def test_reference_period_rebuild_decision(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        importer = db.Importer(_testdata_dir(), engine)
+
+        # Explicit view recreation has no importer and always rebuilds.
+        self.assertTrue(db._reference_period_may_have_changed(None))
+        # Imports without automated daily measurements do not affect the period.
+        self.assertFalse(db._reference_period_may_have_changed(importer))
+
+        importer._record_date_range(
+            ds.TABLE_DAILY_MEASUREMENTS.name,
+            "reference_timestamp",
+            datetime.datetime(2025, 1, 1),
+            datetime.datetime(2025, 12, 31),
+        )
+        self.assertFalse(db._reference_period_may_have_changed(importer))
+
+        importer._record_date_range(
+            ds.TABLE_DAILY_MEASUREMENTS.name,
+            "reference_timestamp",
+            datetime.datetime(2020, 12, 31),
+            datetime.datetime(2020, 12, 31),
+        )
+        self.assertTrue(db._reference_period_may_have_changed(importer))
+
     def test_create_daily(self):
         engine = sa.create_engine("sqlite:///:memory:")
         ds.metadata.create_all(engine)
@@ -579,6 +605,17 @@ class TestCreateDb(unittest.TestCase):
                 table_updated_time=now,
             ),
         )
+        self.assertIsNotNone(
+            importer.min_date(
+                ds.TABLE_DAILY_MEASUREMENTS.name, "reference_timestamp"
+            )
+        )
+        self.assertIsNotNone(
+            importer.max_date(
+                ds.TABLE_DAILY_MEASUREMENTS.name, "reference_timestamp"
+            )
+        )
+        self.assertFalse(db._reference_period_may_have_changed(importer))
         with engine.connect() as conn:
             columns = [
                 dc.TEMP_DAILY_MAX,
@@ -641,6 +678,48 @@ class TestCreateDb(unittest.TestCase):
 
         # should just do nothing
         _insert(update_id, "insert_missing")
+
+    def test_insert_missing_does_not_record_unchanged_date_range(self):
+        engine = sa.create_engine("sqlite:///:memory:")
+        ds.metadata.create_all(engine)
+        now = datetime.datetime.now()
+        href = "file:///ogd-smn_vis_d_recent.csv"
+
+        first_importer = db.Importer(_testdata_dir(), engine)
+        first_importer.insert_csv_data(
+            ds.TABLE_DAILY_MEASUREMENTS,
+            db.UpdateStatus(
+                id=None,
+                href=href,
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+            insert_mode="append",
+        )
+
+        update_id = db.read_update_status(engine)[0].id
+        second_importer = db.Importer(_testdata_dir(), engine)
+        second_importer.insert_csv_data(
+            ds.TABLE_DAILY_MEASUREMENTS,
+            db.UpdateStatus(
+                id=update_id,
+                href=href,
+                resource_updated_time=now,
+                table_updated_time=now,
+            ),
+            insert_mode="insert_missing",
+        )
+
+        self.assertIsNone(
+            second_importer.min_date(
+                ds.TABLE_DAILY_MEASUREMENTS.name, "reference_timestamp"
+            )
+        )
+        self.assertIsNone(
+            second_importer.max_date(
+                ds.TABLE_DAILY_MEASUREMENTS.name, "reference_timestamp"
+            )
+        )
 
     def test_create_daily_merge_failure(self):
         engine = sa.create_engine("sqlite:///:memory:")
@@ -958,6 +1037,32 @@ class TestDbRefPeriod1991_2020(unittest.TestCase):
 
     def test_recreate_empty(self):
         db.recreate_climate_normals_stats_tables(self.engine)
+
+    def test_recreate_processes_one_station_at_a_time(self):
+        self._insert_var(
+            dc.TEMP_DAILY_MIN,
+            [
+                ("BER", "1991-01-01", -3),
+                ("BER", "1991-01-02", -4),
+                ("LUG", "1991-01-01", 3),
+                ("LUG", "1991-01-02", 4),
+            ],
+        )
+
+        station_counts = []
+        original = db._var_summary_stats
+
+        def capture_station_count(df, *args, **kwargs):
+            station_counts.append(df["station_abbr"].nunique())
+            return original(df, *args, **kwargs)
+
+        with mock.patch.object(
+            db, "_var_summary_stats", side_effect=capture_station_count
+        ):
+            db.recreate_climate_normals_stats_tables(self.engine)
+
+        self.assertGreater(len(station_counts), 0)
+        self.assertTrue(all(count == 1 for count in station_counts))
 
     def test_create_select(self):
         # Insert daily data.

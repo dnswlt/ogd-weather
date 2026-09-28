@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Callable, Collection
+from typing import Any, Callable, Collection, Iterator
 from urllib.parse import urlparse
 import uuid
 import numpy as np
@@ -30,6 +30,10 @@ from . import schema as ds
 
 
 logger = logging.getLogger("db")
+
+
+_REFERENCE_PERIOD_FROM = datetime.date(1991, 1, 1)
+_REFERENCE_PERIOD_TO = datetime.date(2021, 1, 1)
 
 
 class UpdateStatus(BaseModel):
@@ -111,9 +115,10 @@ class Importer:
         self._imported_files_count = 0
         self._imported_rows_count = 0
         self._is_postgres = self.engine.dialect.name == "postgresql"
-        # Maintains the minimum dates seen for each (table, column).
-        # Used to determine time range of derived tables to be updated.
+        # Maintains the date range changed for each (table, column).
+        # Used to determine the time range of derived tables to update.
         self._min_dates: dict[tuple[str, str], datetime.datetime] = {}
+        self._max_dates: dict[tuple[str, str], datetime.datetime] = {}
 
     def min_date(self, table: str, column: str) -> datetime.datetime | None:
         """Returns the minimum timestamp seen for (table, column) so far.
@@ -121,6 +126,13 @@ class Importer:
         Returns None if no values were seen for this column.
         """
         return self._min_dates.get((table, column))
+
+    def max_date(self, table: str, column: str) -> datetime.datetime | None:
+        """Returns the maximum timestamp seen for (table, column) so far.
+
+        Returns None if no values were seen for this column.
+        """
+        return self._max_dates.get((table, column))
 
     def imported_files_count(self):
         return self._imported_files_count
@@ -136,6 +148,27 @@ class Importer:
             return
 
         self._min_dates[(table, column)] = min(current_min, date)
+
+    def _record_max_date(self, table: str, column: str, date: datetime.datetime):
+        current_max = self.max_date(table, column)
+
+        if current_max is None:
+            self._max_dates[(table, column)] = date
+            return
+
+        self._max_dates[(table, column)] = max(current_max, date)
+
+    def _record_date_range(
+        self,
+        table: str,
+        column: str,
+        min_date: datetime.datetime,
+        max_date: datetime.datetime,
+    ) -> None:
+        if pd.isna(min_date) or pd.isna(max_date):
+            return
+        self._record_min_date(table, column, min_date)
+        self._record_max_date(table, column, max_date)
 
     def insert_csv_metadata(
         self,
@@ -233,8 +266,9 @@ class Importer:
             usecols=columns,
         )
         df = df[columns]  # Reorder columns to match the order in table_spec.
+        affected_date_ranges = {}
         for col in table_spec.date_format.keys():
-            self._record_min_date(table_spec.name, col, df[col].min())
+            affected_date_ranges[col] = (df[col].min(), df[col].max())
             # Normalize timestamps: use YYYY-MM-DD if time is always 00:00
             df[col] = _normalize_timestamp(df[col])
 
@@ -334,19 +368,45 @@ class Importer:
                         for pk in table_spec.primary_key
                     ]
                 )
+                missing_where = f"""
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM {table_spec.name} AS DataTable
+                        WHERE {where_conditions}
+                    )
+                """
+
+                # Only rows missing from the destination table will change it.
+                # Track their range so unchanged historical CSV contents do not
+                # trigger expensive derived-table rebuilds.
+                affected_date_ranges = {}
+                for col in table_spec.date_format.keys():
+                    min_date, max_date = conn.execute(
+                        sa.text(
+                            f"""
+                            SELECT
+                                MIN(StagingTable.{col}),
+                                MAX(StagingTable.{col})
+                            FROM {staging_name} AS StagingTable
+                            WHERE {missing_where}
+                            """
+                        )
+                    ).one()
+                    if min_date is not None and max_date is not None:
+                        affected_date_ranges[col] = (
+                            pd.Timestamp(min_date).to_pydatetime(),
+                            pd.Timestamp(max_date).to_pydatetime(),
+                        )
+
                 # Construct the final query
                 insert_sql = f"""
                     INSERT INTO {table_spec.name}
                     SELECT StagingTable.*
                     FROM {staging_name} AS StagingTable
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM {table_spec.name} AS DataTable
-                        WHERE {where_conditions}
-                    )
+                    WHERE {missing_where}
                     """
 
-                c = conn.execute(sa.text(insert_sql))
+                conn.execute(sa.text(insert_sql))
                 conn.execute(sa.text(f"DROP TABLE IF EXISTS {staging_name}"))
 
             else:
@@ -366,6 +426,9 @@ class Importer:
 
             # Update UpdateStatus in same transaction
             self.save_update_status(conn, update)
+
+        for col, (min_date, max_date) in affected_date_ranges.items():
+            self._record_date_range(table_spec.name, col, min_date, max_date)
 
     def save_update_status(self, conn: sa.Connection, s: UpdateStatus) -> None:
         if s.id is None:
@@ -481,7 +544,34 @@ def recreate_views(engine: sa.Engine | None, importer: Importer | None = None) -
     recreate_station_data_summary(engine)
     recreate_station_var_availability(engine)
     recreate_nearby_stations(engine)
-    recreate_climate_normals_stats_tables(engine)
+    if _reference_period_may_have_changed(importer):
+        recreate_climate_normals_stats_tables(engine)
+    else:
+        logger.info(
+            "Skipping climate-normal statistics: no imported daily measurements "
+            "overlap 1991-2020."
+        )
+
+
+def _reference_period_may_have_changed(importer: Importer | None) -> bool:
+    """Whether an import may have changed daily data in the reference period.
+
+    A missing importer means this is an explicit full rebuild, so reference-period
+    statistics are always recreated.
+    """
+    if importer is None:
+        return True
+
+    table = ds.TABLE_DAILY_MEASUREMENTS.name
+    min_date = importer.min_date(table, "reference_timestamp")
+    max_date = importer.max_date(table, "reference_timestamp")
+    if min_date is None or max_date is None:
+        return False
+
+    return (
+        min_date.date() < _REFERENCE_PERIOD_TO
+        and max_date.date() >= _REFERENCE_PERIOD_FROM
+    )
 
 
 def _recreate_x_table(
@@ -570,17 +660,10 @@ def recreate_all_meta_parameters(engine: sa.Engine) -> None:
 
 
 def recreate_climate_normals_stats_tables(engine: sa.Engine):
-    logger.info("Reading daily measurements (1991-2020) from DB")
-    daily_measurements = _read_all_daily_measurements(
-        engine, datetime.date(1991, 1, 1), datetime.date(2021, 1, 1)
-    )
-    logger.info("Recreating reference period (1991-2020) 'all' stats")
-    recreate_reference_period_stats(
-        engine, ds.var_summary_stats_all, daily_measurements
-    )
-    logger.info("Recreating reference period (1991-2020) 'month' stats")
-    recreate_reference_period_stats(
-        engine, ds.var_summary_stats_month, daily_measurements
+    logger.info("Recreating reference-period statistics one station at a time")
+    _recreate_reference_period_stats_tables(
+        engine,
+        [ds.var_summary_stats_all, ds.var_summary_stats_month],
     )
 
 
@@ -662,26 +745,43 @@ def recreate_reference_period_stats(
     stats_table: ds.VarSummaryStatsTable,
     daily_measurements: pd.DataFrame | None = None,
 ) -> None:
-    """(Re-)Creates a materialized view of summary data for the reference period 1991 to 2020.
+    """Recreates summary data for the reference period 1991 to 2020.
 
     Args:
         engine: The SQLAlchemy engine to use.
         stats_table: the summary stats table to write to.
     """
-    with engine.begin() as conn:
-        # Recreate table
-        stats_table.sa_table.drop(conn, checkfirst=True)
-        stats_table.sa_table.create(conn)
+    _recreate_reference_period_stats_tables(
+        engine, [stats_table], daily_measurements=daily_measurements
+    )
 
-        # Insert data for aggregations.
-        insert_summary_stats_from_daily_measurements(
+
+def _recreate_reference_period_stats_tables(
+    engine: sa.Engine,
+    stats_tables: Collection[ds.VarSummaryStatsTable],
+    daily_measurements: pd.DataFrame | None = None,
+) -> None:
+    """Recreates summary tables while bounding aggregation memory by station."""
+    with engine.begin() as conn:
+        for stats_table in stats_tables:
+            stats_table.sa_table.drop(conn, checkfirst=True)
+            stats_table.sa_table.create(conn)
+
+        for station_measurements in _iter_daily_measurements_by_station(
             conn,
-            stats_table=stats_table,
-            agg_name=dc.AGG_NAME_REF_1991_2020,
-            from_date=datetime.date(1991, 1, 1),
-            to_date=datetime.date(2021, 1, 1),
+            _REFERENCE_PERIOD_FROM,
+            _REFERENCE_PERIOD_TO,
             daily_measurements=daily_measurements,
-        )
+        ):
+            for stats_table in stats_tables:
+                insert_summary_stats_from_daily_measurements(
+                    conn,
+                    stats_table=stats_table,
+                    agg_name=dc.AGG_NAME_REF_1991_2020,
+                    from_date=_REFERENCE_PERIOD_FROM,
+                    to_date=_REFERENCE_PERIOD_TO,
+                    daily_measurements=station_measurements,
+                )
 
 
 def _var_summary_stats(
@@ -736,39 +836,87 @@ def _var_summary_stats(
     return records.to_dict(orient="records")
 
 
-def _read_all_daily_measurements(
-    engine: sa.Engine,
+def _read_daily_measurements(
+    conn: sa.Connection,
     from_date: datetime.date,
     to_date: datetime.date,
-):
-    """Reads ALL ROWS from ds.TABLE_DAILY_MEASUREMENTS in the range [from_date, to_date) into memory."""
+    station_abbr: str,
+) -> pd.DataFrame:
+    """Reads one station's daily rows in the range [from_date, to_date)."""
     daily_vars = ds.TABLE_DAILY_MEASUREMENTS.measurements
-    sql = f"""
+    sql = sa.text(
+        f"""
         SELECT
             station_abbr,
             reference_timestamp,
             {', '.join(daily_vars)}
         FROM {ds.TABLE_DAILY_MEASUREMENTS.name}
-        WHERE reference_timestamp >= '{utc_datestr(from_date)}' 
-            AND reference_timestamp < '{utc_datestr(to_date)}'
-    """
-    with engine.begin() as conn:
-        df = pd.read_sql_query(
-            sql,
-            conn,
-            dtype={
-                "station_abbr": str,
-                "reference_timestamp": str,
-                **{v: np.float32 for v in daily_vars},
-            },
-        )
+        WHERE reference_timestamp >= :from_date
+            AND reference_timestamp < :to_date
+            AND station_abbr = :station_abbr
+        ORDER BY reference_timestamp
+        """
+    )
+    df = pd.read_sql_query(
+        sql,
+        conn,
+        params={
+            "from_date": utc_datestr(from_date),
+            "to_date": utc_datestr(to_date),
+            "station_abbr": station_abbr,
+        },
+        dtype={
+            "station_abbr": str,
+            "reference_timestamp": str,
+            **{v: np.float32 for v in daily_vars},
+        },
+    )
     logger.info(
-        "Read %d rows from %s (%.1f MiB)",
+        "Read %d rows for station %s from %s (%.1f MiB)",
         len(df),
+        station_abbr,
         ds.TABLE_DAILY_MEASUREMENTS.name,
-        df.memory_usage().sum() / (1 << 20),
+        df.memory_usage(deep=True).sum() / (1 << 20),
     )
     return df
+
+
+def _iter_daily_measurements_by_station(
+    conn: sa.Connection,
+    from_date: datetime.date,
+    to_date: datetime.date,
+    daily_measurements: pd.DataFrame | None = None,
+) -> Iterator[pd.DataFrame]:
+    """Yields daily measurements in station-sized batches."""
+    if daily_measurements is not None:
+        for _, station_measurements in daily_measurements.groupby(
+            "station_abbr", sort=False
+        ):
+            yield station_measurements
+        return
+
+    stations_sql = sa.text(
+        f"""
+        SELECT DISTINCT station_abbr
+        FROM {ds.TABLE_DAILY_MEASUREMENTS.name}
+        WHERE reference_timestamp >= :from_date
+            AND reference_timestamp < :to_date
+        ORDER BY station_abbr
+        """
+    )
+    stations = (
+        conn.execute(
+            stations_sql,
+            {
+                "from_date": utc_datestr(from_date),
+                "to_date": utc_datestr(to_date),
+            },
+        )
+        .scalars()
+        .all()
+    )
+    for station_abbr in stations:
+        yield _read_daily_measurements(conn, from_date, to_date, station_abbr)
 
 
 def insert_summary_stats_from_daily_measurements(
@@ -784,9 +932,37 @@ def insert_summary_stats_from_daily_measurements(
     daily_vars = ds.TABLE_DAILY_MEASUREMENTS.measurements
 
     if daily_measurements is None:
-        df = _read_all_daily_measurements(conn.engine, from_date, to_date)
-    else:
-        df = daily_measurements.copy()
+        for station_measurements in _iter_daily_measurements_by_station(
+            conn, from_date, to_date
+        ):
+            insert_summary_stats_from_daily_measurements(
+                conn,
+                stats_table,
+                agg_name,
+                from_date,
+                to_date,
+                daily_measurements=station_measurements,
+            )
+        return
+
+    if daily_measurements["station_abbr"].nunique() > 1:
+        for station_measurements in _iter_daily_measurements_by_station(
+            conn,
+            from_date,
+            to_date,
+            daily_measurements=daily_measurements,
+        ):
+            insert_summary_stats_from_daily_measurements(
+                conn,
+                stats_table,
+                agg_name,
+                from_date,
+                to_date,
+                daily_measurements=station_measurements,
+            )
+        return
+
+    df = daily_measurements.copy()
 
     # Apply time_slicer to get time slice dimension.
     df["time_slice"] = stats_table.time_slicer(df)
